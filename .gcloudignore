@@ -1,0 +1,22 @@
+# Controls what `gcloud run deploy --source` uploads to Cloud Build.
+# Keep node_modules/dist/secrets out; keep everything the Docker build needs.
+.git
+.github
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+
+# secrets / env (NEVER upload)
+**/.env
+**/.env.*
+
+# not needed to build the image
+contracts/lib
+contracts/out
+contracts/cache
+deck
+plan
+mock/*.html
+mock/README.md
+mock/index.html
+.vscode
