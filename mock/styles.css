@@ -36,7 +36,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
@@ -90,7 +90,7 @@ a:hover { text-decoration: underline; }
 }
 .wallet-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 
-.main { flex: 1; width: 100%; max-width: 1440px; margin: 0 auto; padding: 30px 28px 72px; }
+.main { flex: 1; width: min(94vw, 2280px); margin: 0 auto; padding: 32px clamp(20px, 2.5vw, 48px) 80px; }
 
 /* ---------- Step / breadcrumb ---------- */
 .steps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
@@ -103,12 +103,12 @@ a:hover { text-decoration: underline; }
 .step.done { color: var(--accent); border-color: #1d4a3f; }
 
 /* ---------- Headings ---------- */
-.page-head { margin-bottom: 22px; }
-.page-head h1 { margin: 0 0 6px; font-size: 26px; }
-.page-head p { margin: 0; color: var(--muted); max-width: 860px; }
-.eyebrow { color: var(--brand); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.page-head { margin-bottom: 24px; }
+.page-head h1 { margin: 0 0 6px; font-size: 30px; }
+.page-head p { margin: 0; color: var(--muted); max-width: 920px; font-size: 16px; }
+.eyebrow { color: var(--brand); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 
-h2.section { font-size: 15px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 28px 0 12px; }
+h2.section { font-size: 16px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 32px 0 14px; }
 
 /* ---------- Cards / grid ---------- */
 .grid { display: grid; gap: var(--gap); }
@@ -124,8 +124,8 @@ h2.section { font-size: 15px; text-transform: uppercase; letter-spacing: 0.6px; 
   padding: 22px;
 }
 .card.pad-lg { padding: 26px; }
-.card h3 { margin: 0 0 10px; font-size: 17px; }
-.card .desc { color: var(--muted); font-size: 14.5px; margin: 0 0 12px; }
+.card h3 { margin: 0 0 10px; font-size: 18px; }
+.card .desc { color: var(--muted); font-size: 15px; margin: 0 0 12px; }
 
 .nav-card { cursor: pointer; transition: border-color .15s, transform .15s; display: block; color: var(--text); }
 .nav-card:hover { border-color: var(--brand); transform: translateY(-2px); text-decoration: none; }
