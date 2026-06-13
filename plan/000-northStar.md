@@ -6,7 +6,7 @@ IntentOSはAIAgentによる取引の課題を
 
 ## 解決する課題
 
-### 課題１：Agentによるチャンス獲得と暴走のはざまの問題を解決する
+### 課題１：Agentによるチャンス獲得と、Agentの暴走による損失のバランス問題を解決する
 
 ```
 寝ている間にチャンスが来る。
@@ -18,7 +18,7 @@ IntentOSはAIAgentによる取引の課題を
 - でもAgentにwalletの全権を渡すのは危険すぎます。
 - IntentOSは、毎回承認と白紙委任の間にあります。
   - OwnerはIntentを定義し、Executor AgentはそのIntentの内側で機会を取りに行きます。
-  - EIP-7702 ExecutionContractがHard Limitを強制し、Watcher Agentは将来の権限をtighten / freezeすることだけができます。
+  - EIP-7702 delegated contactとしてEOAに作成したContractがHard Limitを強制し、Watcher Agentは将来の権限をtighten / freezeすることだけができます。
   - つまりOwnerがオフラインでもAgentは動ける。でもOwnerの境界の外には出られません。
 
 ### 課題２：チャンス獲得＝TaxableEventの増加
@@ -57,5 +57,7 @@ Agentが機会を取りに行くほど、取引は増える。
 > ExecutionContract は事前に通すか止める。
 > Watcher Agent は締めることしかできない。
 > 緩められるのは Owner だけ。
+
+IntentOS は、資金OwnerのIntent を LLM経由で AI Agent / AI Agentの実行環境 / ExecutionContract として 準EIP-7702 Hard Guard と WatcherAI Semantic Guard によって、Owner の資金を守りながら Agent に自律実行させる protocol である。
 
 
