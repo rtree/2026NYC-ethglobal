@@ -10,6 +10,7 @@ import { dirname, join, normalize, resolve } from "node:path";
 import {
   createExecutor,
   createWatcher,
+  fundGas,
   getState,
   ownerResume,
   reset,
@@ -54,16 +55,18 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 }
 
 // Write-path handlers receive the authenticated uid and the (already-parsed) request body, so the
-// create endpoints can use the caller's FIXed Agent Package (intentId) instead of a hardcoded one.
-type WriteBody = { intentId?: string };
+// create/trade/resume/reset endpoints use the caller's FIXed Agent Package (intentId) instead of a
+// hardcoded one. Gas funding takes an explicit lane.
+type WriteBody = { intentId?: string; lane?: "executor" | "watcher" };
 const API: Record<string, (uid: string, body: WriteBody) => Promise<unknown>> = {
   "POST /api/executor/create": (uid, b) => createExecutor({ uid, intentId: b.intentId }),
   "POST /api/watcher/create": (uid, b) => createWatcher({ uid, intentId: b.intentId }),
-  "POST /api/trade": () => trade(),
+  "POST /api/gas/fund": (uid, b) => fundGas(b.lane === "watcher" ? "watcher" : "executor", { uid, intentId: b.intentId }),
+  "POST /api/trade": (uid, b) => trade({ uid, intentId: b.intentId }),
   "POST /api/watcher/freeze": () => watcherFreeze(),
   "POST /api/watcher/tighten": () => watcherTighten(),
-  "POST /api/owner/resume": () => ownerResume(),
-  "POST /api/reset": () => reset(),
+  "POST /api/owner/resume": (uid, b) => ownerResume({ uid, intentId: b.intentId }),
+  "POST /api/reset": (uid, b) => reset({ uid, intentId: b.intentId }),
 };
 
 async function serveStatic(res: ServerResponse, urlPath: string) {

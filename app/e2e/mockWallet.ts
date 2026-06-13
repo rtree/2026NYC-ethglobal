@@ -6,7 +6,14 @@ export const MOCK_ADDRESS = "0x078383c4c20b4e9732Ac0c30A68b8123D53ea6C9";
 export const injectMockWallet = `(${function () {
   const ADDR = "0x078383c4c20b4e9732Ac0c30A68b8123D53ea6C9";
   const listeners: Record<string, ((...a: unknown[]) => void)[]> = {};
-  let connected = false;
+  // Persist "connected" across reloads (this init script re-runs on every navigation), so wagmi's
+  // reconnectOnMount re-authorizes the site — emulating how a real wallet stays connected on refresh.
+  const KEY = "mock:connected";
+  let connected = sessionStorage.getItem(KEY) === "1";
+  const setConnected = (v: boolean) => {
+    connected = v;
+    try { v ? sessionStorage.setItem(KEY, "1") : sessionStorage.removeItem(KEY); } catch (e) { void e; }
+  };
   const provider = {
     isMetaMask: true,
     isConnected: () => true,
@@ -15,12 +22,12 @@ export const injectMockWallet = `(${function () {
         case "eth_chainId":
           return "0x2105"; // 8453
         case "eth_requestAccounts":
-          connected = true;
+          setConnected(true);
           return [ADDR];
         case "eth_accounts":
           return connected ? [ADDR] : [];
         case "wallet_requestPermissions":
-          connected = true;
+          setConnected(true);
           return [{ parentCapability: "eth_accounts" }];
         case "wallet_getPermissions":
           return connected ? [{ parentCapability: "eth_accounts" }] : [];

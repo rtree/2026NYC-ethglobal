@@ -51,11 +51,12 @@ export interface ChatResponse {
 export const api = {
   createExecutor: (intentId?: string) => postJson<ApiResult>("/api/executor/create", { intentId }),
   createWatcher: (intentId?: string) => postJson<ApiResult>("/api/watcher/create", { intentId }),
-  trade: () => post("/api/trade"),
+  fundGas: (lane: "executor" | "watcher", intentId?: string) => postJson<ApiResult & { lane?: string }>("/api/gas/fund", { lane, intentId }),
+  trade: (intentId?: string) => postJson<ApiResult>("/api/trade", { intentId }),
   watcherFreeze: () => post("/api/watcher/freeze"),
   watcherTighten: () => post("/api/watcher/tighten"),
-  ownerResume: () => post("/api/owner/resume"),
-  reset: () => post("/api/reset"),
+  ownerResume: (intentId?: string) => postJson<ApiResult>("/api/owner/resume", { intentId }),
+  reset: (intentId?: string) => postJson<ApiResult>("/api/reset", { intentId }),
 
   // IntentBuilder + per-wallet store (plan/010 §16/§18)
   intentChat: (text: string, intentId?: string) =>

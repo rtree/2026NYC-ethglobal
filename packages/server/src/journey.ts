@@ -367,14 +367,17 @@ export async function createWatcher(opts?: CreateOpts) {
   return { tokenId: r.tokenId.toString(), txHash: r.txHash };
 }
 
-export async function trade() {
+export async function trade(opts?: CreateOpts) {
   const c = await ctx();
-  await ensureSetup();
+  const { slug, executor } = await loadDrafts(opts);
+  // Use the caller's FIXed Executor guard (not a demo fallback) when available, and bind the request
+  // to this intent's id so the on-chain evidence references the real intent (not a hardcoded one).
+  await ensureSetup(executor, executor?.packageHash);
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
   const quoted = await quoteExactInputSingle(c.pub, TOKENS.USDC, TOKENS.WETH, AMOUNT_IN);
   const reason = `BUY 0.001 USDC->WETH (Executor #${session.executorTokenId ?? "?"})`.slice(0, 200);
   const req = buildExecutionRequest({
-    intentId,
+    intentId: intentIdHash(slug),
     executorTokenId: BigInt(session.executorTokenId ?? "1"),
     action: Action.BUY,
     tokenIn: TOKENS.USDC,
@@ -423,18 +426,35 @@ export async function watcherTighten() {
   return { txHash, newAmountCap: patch.amountCapPerTx.toString() };
 }
 
-export async function ownerResume() {
+export async function ownerResume(opts?: CreateOpts) {
   const c = await ctx();
+  const { executor } = await loadDrafts(opts);
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
-  const txHash = await ownerUpdateGuard(c.wallet, c.pub, c.owner, DEMO_GUARD(guard.bindingNonce, false));
+  // Resume restores the caller's FIXed guard (unfrozen) when available, else the demo guard.
+  const target = guardFromDraft(executor, guard.bindingNonce);
+  const txHash = await ownerUpdateGuard(c.wallet, c.pub, c.owner, target);
   logAction({ at: Date.now(), action: "Owner resume (unfreeze + restore caps)", txHash, ok: true });
   return { txHash };
 }
 
-export async function reset() {
+/** Fund a gas-vault lane explicitly (Gas Funding step). lane: "executor" | "watcher". */
+export async function fundGas(lane: "executor" | "watcher", _opts?: CreateOpts) {
+  const c = await ctx();
+  const isWatcher = lane === "watcher";
+  const amount = isWatcher ? parseEther("0.0008") : parseEther("0.001");
+  const tx = await fundGasVault(c.wallet, c.pub, c.owner, isWatcher, amount);
+  logAction({ at: Date.now(), action: `fund ${lane} gas vault lane`, txHash: tx, ok: true });
+  return { txHash: tx, lane };
+}
+
+export async function reset(opts?: CreateOpts) {
+  // Mark the off-chain intent stopped + unlink agents (so history is honest), then clear the session.
+  if (opts?.uid && opts?.intentId) {
+    await linkIntent(opts, { status: "stopped" });
+  }
   session.executorTokenId = null;
   session.watcherTokenId = null;
-  const r = await ownerResume();
+  const r = await ownerResume(opts);
   logAction({ at: Date.now(), action: "demo reset", txHash: r.txHash, ok: true });
   return r;
 }

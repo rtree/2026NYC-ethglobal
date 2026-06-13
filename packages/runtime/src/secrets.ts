@@ -53,7 +53,8 @@ const PUBLIC_BASE_RPCS = [
 /**
  * An ORDERED, de-duplicated list of Base mainnet RPC URLs for a viem fallback() transport, so a single
  * endpoint failing (rate-limit, 5xx, the Infura "no access" blip we hit) auto-fails over to the next.
- * Order: explicit override(s) in INTENTOS_RPC (comma/space separated) -> the Infura secret -> public
+ * Order: explicit override(s) in INTENTOS_RPC (comma/space separated) -> the keyed providers in the
+ * `base-rpc-urls` secret (Alchemy, Infura, ...) -> the legacy single `base-rpc-url` secret -> public
  * RPCs. Secrets/keys never get logged. Returns at least one URL.
  */
 export async function getBaseRpcUrls(): Promise<string[]> {
@@ -67,16 +68,26 @@ export async function getBaseRpcUrls(): Promise<string[]> {
   if (process.env.INTENTOS_RPC) {
     for (const u of process.env.INTENTOS_RPC.split(/[\s,]+/)) push(u);
   }
-  // 2) the keyed Infura (or other) secret, if present
+  // 2) keyed providers list (Alchemy + Infura + ...), newline/comma separated, ordered by preference
+  try {
+    const [v] = await sm.accessSecretVersion({
+      name: "projects/ethglobal-nyc2026-rtree/secrets/base-rpc-urls/versions/latest",
+    });
+    const blob = v.payload?.data?.toString() ?? "";
+    for (const u of blob.split(/[\s,]+/)) push(u);
+  } catch {
+    /* secret not set */
+  }
+  // 3) the legacy single keyed secret (kept for back-compat)
   try {
     const [v] = await sm.accessSecretVersion({
       name: "projects/ethglobal-nyc2026-rtree/secrets/base-rpc-url/versions/latest",
     });
     push(v.payload?.data?.toString());
   } catch {
-    /* secret not set yet */
+    /* secret not set */
   }
-  // 3) public RPCs (always appended so there is always a fallback)
+  // 4) public RPCs (always appended so there is always a fallback)
   for (const u of PUBLIC_BASE_RPCS) push(u);
 
   return urls.length ? urls : ["https://mainnet.base.org"];

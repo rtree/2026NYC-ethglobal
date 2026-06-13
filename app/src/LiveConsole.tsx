@@ -23,6 +23,9 @@ export function LiveConsole() {
     api.listIntents().then((r) => setHistory(r.intents)).catch(() => {});
   }, []);
 
+  // The active Intent for this session (its FIXed guard/draft is what trade/resume/reset bind to).
+  const activeIntentId = history.find((i) => i.status === "live")?.intentId ?? history.find((i) => i.executorTokenId)?.intentId;
+
   return (
     <div className="app">
       <TopBar status={status} />
@@ -107,8 +110,8 @@ export function LiveConsole() {
               <div>
                 <div className="card" style={{ marginBottom: 20 }}>
                   <div className="card-head"><h3>Owner controls</h3><span className="pill role-exec">EXECUTOR</span></div>
-                  <ActionButton label="Execute guarded trade (0.001 USDC → WETH)" className="btn primary block" run={api.trade} />
-                  <ActionButton label="Resume / unfreeze (Owner only)" className="btn block" run={api.ownerResume} />
+                  <ActionButton label="Execute guarded trade (0.001 USDC → WETH)" className="btn primary block" run={() => api.trade(activeIntentId)} />
+                  <ActionButton label="Resume / unfreeze (Owner only)" className="btn block" run={() => api.ownerResume(activeIntentId)} />
                   <p className="spec-ref">Signed by the Executor SessionKey (KMS) and relayed. Only the Owner can loosen / unfreeze.</p>
                 </div>
                 <div className="card" style={{ marginBottom: 20 }}>

@@ -16,7 +16,31 @@ interface Session {
   exp: number; // epoch ms
 }
 
-let session: Session | null = null;
+// Persist the session in sessionStorage so a page reload / navigation keeps the user signed in within
+// the tab (otherwise every refresh bounces back to onboarding). Cleared on tab close or sign-out.
+const SESSION_KEY = "intentos:auth";
+
+function loadSession(): Session | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as Session;
+    return s && s.exp > Date.now() ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+let session: Session | null = loadSession();
+
+function persist() {
+  try {
+    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 export function authState(): { uid: string; address: string } | null {
   return session ? { uid: session.uid, address: session.address } : null;
@@ -30,6 +54,7 @@ export async function bearer(): Promise<string | null> {
       await refresh();
     } catch {
       session = null;
+      persist();
       return null;
     }
   }
@@ -38,6 +63,7 @@ export async function bearer(): Promise<string | null> {
 
 export function signOut() {
   session = null;
+  persist();
   window.dispatchEvent(new CustomEvent("intentos:auth"));
 }
 
@@ -73,6 +99,7 @@ export async function signInWithWallet(address: Address, signMessageAsync: SignM
   if (!FIREBASE_API_KEY) {
     // Auth is off on the server side (dev): record a local session so the UI shows "signed in".
     session = { uid, address: addr, idToken: "", refreshToken: "", exp: Date.now() + 3_600_000 };
+    persist();
     window.dispatchEvent(new CustomEvent("intentos:auth"));
     return;
   }
@@ -93,6 +120,7 @@ export async function signInWithWallet(address: Address, signMessageAsync: SignM
     refreshToken: tok.refreshToken,
     exp: Date.now() + Number(tok.expiresIn) * 1000,
   };
+  persist();
   window.dispatchEvent(new CustomEvent("intentos:auth"));
 }
 
@@ -111,4 +139,5 @@ async function refresh(): Promise<void> {
     refreshToken: tok.refresh_token,
     exp: Date.now() + Number(tok.expires_in) * 1000,
   };
+  persist();
 }

@@ -98,7 +98,7 @@ export function LaunchFlow() {
             {step === "intent" && <IntentStep intent={intent} setIntent={setIntent} />}
             {step === "executor" && <ExecutorStep state={state} fixed={execFixed} pkg={intent?.packages.executor} intentId={intent?.intentId} />}
             {step === "watcher" && <WatcherStep state={state} fixed={watchFixed} hasExecutor={hasExecutor} pkg={intent?.packages.watcher} intentId={intent?.intentId} />}
-            {step === "funding" && <FundingStep state={state} />}
+            {step === "funding" && <FundingStep state={state} intentId={intent?.intentId} />}
             {step === "start" && <StartStep state={state} intent={intent} setIntent={setIntent} />}
           </div>
         </div>
@@ -288,7 +288,7 @@ function WatcherStep({ state, fixed, hasExecutor, pkg, intentId }: { state: Chai
 }
 
 // ---------- ④ Gas Funding ----------
-function FundingStep({ state }: { state: ChainState | null }) {
+function FundingStep({ state, intentId }: { state: ChainState | null; intentId?: string }) {
   return (
     <div className="grid cols-2">
       <div className="card pad-lg">
@@ -305,7 +305,11 @@ function FundingStep({ state }: { state: ChainState | null }) {
         <div className="guard"><span className="g-name" style={{ fontFamily: "var(--sans)" }}>Executor lane</span><span className="g-val">{state ? eth(state.execVault) : "—"}</span></div>
         <div className="guard"><span className="g-name" style={{ fontFamily: "var(--sans)" }}>Watcher lane</span><span className="g-val">{state ? eth(state.watcherVault) : "—"}</span></div>
         <p className="desc" style={{ marginTop: 12 }}>Cumulative spent {state ? usdc(state.cumulativeSpent) : "—"} of {state?.guard ? usdc(state.guard.cumulativeCap) : "—"} cap.</p>
-        <p className="spec-ref">The executor lane is seeded in initialize(); the Watcher lane is topped up on Watcher creation. No action needed unless a lane runs low.</p>
+        <p className="spec-ref">The executor lane is seeded in initialize(); the Watcher lane is topped up on Watcher creation. Top up a lane here if it runs low.</p>
+        <div style={{ marginTop: 12 }}>
+          <ActionButton label="Top up Executor lane (+0.001 ETH)" className="btn block" run={() => api.fundGas("executor", intentId)} />
+          <ActionButton label="Top up Watcher lane (+0.0008 ETH)" className="btn block" run={() => api.fundGas("watcher", intentId)} />
+        </div>
       </div>
     </div>
   );
