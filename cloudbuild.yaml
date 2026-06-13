@@ -1,0 +1,27 @@
+# Cloud Build: build the container with the PUBLIC Firebase web config baked into the Vite bundle at
+# build time (it must be present then, not at Cloud Run runtime). The key values are passed as
+# substitutions at submit time (from a local gitignored env file) so they never enter source control.
+# The Firebase web API key is public-by-design and restricted to identitytoolkit + securetoken only.
+substitutions:
+  _VITE_FIREBASE_API_KEY: ""
+  _VITE_FIREBASE_PROJECT_ID: "ethglobal-nyc2026-rtree"
+  _VITE_WORLDID_APP_ID: ""
+  _VITE_WORLDID_ACTION: "intentos-onboarding"
+  _IMAGE: "us-central1-docker.pkg.dev/ethglobal-nyc2026-rtree/cloud-run-source-deploy/intentos-panel:firebase"
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=VITE_FIREBASE_API_KEY=${_VITE_FIREBASE_API_KEY}
+      - --build-arg=VITE_FIREBASE_PROJECT_ID=${_VITE_FIREBASE_PROJECT_ID}
+      - --build-arg=VITE_WORLDID_APP_ID=${_VITE_WORLDID_APP_ID}
+      - --build-arg=VITE_WORLDID_ACTION=${_VITE_WORLDID_ACTION}
+      - -t
+      - ${_IMAGE}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args: [push, "${_IMAGE}"]
+images:
+  - "${_IMAGE}"
+options:
+  machineType: E2_HIGHCPU_8

@@ -62,7 +62,7 @@ export function WalletButton({ block }: { block?: boolean }) {
         </button>
         {authErr && (
           <span className="pill fund-exhausted" style={{ marginLeft: 8 }} title={authErr}>
-            sign-in failed
+            sign-in failed: {authErr.slice(0, 96)}
           </span>
         )}
       </>

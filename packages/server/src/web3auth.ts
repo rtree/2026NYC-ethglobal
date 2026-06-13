@@ -2,10 +2,26 @@
 // mint a Firebase custom token (firebaseAuth.ts) so the browser can sign into Firebase Auth.
 // uid = CAIP-10 `eip155:<chainId>:<lowercased address>` (plan/010 §17).
 import { randomBytes } from "node:crypto";
-import { verifyMessage, type Address } from "viem";
+import { createPublicClient, fallback, http, type Address, type PublicClient } from "viem";
+import { base } from "viem/chains";
+import { getBaseRpcUrls } from "@intentos/runtime";
 import { mintCustomToken } from "./firebaseAuth.js";
 
 const CHAIN_ID = 8453;
+
+// A Base public client used to verify signatures. CRITICAL: we use the CLIENT verifyMessage (not the
+// standalone one) so it handles smart-account signatures — ERC-1271 (contract wallets) and ERC-6492
+// (pre-deploy), AND EIP-7702-delegated EOAs (MetaMask Smart Account etc.). The standalone verifyMessage
+// only does EOA ecrecover and FAILS for those wallets ("invalid signature").
+let _verifyClient: PublicClient | null = null;
+async function verifyClient(): Promise<PublicClient> {
+  if (_verifyClient) return _verifyClient;
+  const rpcs = await getBaseRpcUrls();
+  const transport = fallback(rpcs.map((u) => http(u, { retryCount: 2, retryDelay: 500 })));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _verifyClient = createPublicClient({ chain: base, transport }) as any;
+  return _verifyClient!;
+}
 
 // nonce store: address -> { nonce, exp }. In-memory is fine (short TTL, single demo instance).
 const nonces = new Map<string, { nonce: string; exp: number }>();
@@ -57,7 +73,17 @@ export async function verifyAndMint(message: string, signature: `0x${string}`): 
   }
   if (rec.nonce !== nonceInMsg) throw new Error("nonce mismatch");
 
-  const ok = await verifyMessage({ address: address as Address, message, signature });
+  // Verify via the public client so smart-account / 7702 signatures (ERC-1271/6492) are accepted, not
+  // just plain EOA ecrecover. If RPC is unreachable, fall back to a local EOA check so plain EOAs still
+  // work offline.
+  let ok = false;
+  try {
+    const client = await verifyClient();
+    ok = await client.verifyMessage({ address: address as Address, message, signature });
+  } catch {
+    const { verifyMessage: verifyEoa } = await import("viem");
+    ok = await verifyEoa({ address: address as Address, message, signature }).catch(() => false);
+  }
   if (!ok) throw new Error("invalid signature");
 
   // single-use nonce
