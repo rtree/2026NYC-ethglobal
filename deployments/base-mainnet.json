@@ -37,5 +37,11 @@
   "contracts": {
     "executionDelegate7702Impl": "0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1",
     "agentNFT": "0x82b70553c4b7b4506cb39032c91e94c49d613fee"
+  },
+  "demo": {
+    "secretsRef": "base-rpc-url (Infura) in Secret Manager — never in source/chat",
+    "ownerDelegated7702": true,
+    "sampleSwapTx": "0x07e43c013fdf219a17675b4fc070ede0c54322267783adc6774b1fe769ad2404",
+    "note": "M1 proven on Base mainnet: guarded USDC->WETH via EIP-7702 + KMS SessionKey + relayer, EvidenceCommitted emitted."
   }
 }

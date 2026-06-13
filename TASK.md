@@ -129,3 +129,20 @@ facts). GCP project switched to `ethglobal-nyc2026-rtree`.
 - Platform wallet `0x078383c4c20b4e9732Ac0c30A68b8123D53ea6C9` — send ~0.005 Base ETH (deploy + relay gas).
 - A fresh Owner test wallet (to be generated) — 0.001 USDC + ~0.003 Base ETH (setup gas + gas-vault backing).
 - Optional: Alchemy Base URL via `BASE_RPC_URL` (store in Secret Manager / gitignored .env, never in chat).
+
+### M1 DONE — real Base mainnet execution proven
+- Funded by user. Infura Base RPC stored in Secret Manager `base-rpc-url` (read via `getBaseRpcUrl()`).
+- `ExecutionDelegate7702` impl `0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1`, `AgentNFT`
+  `0x82b70553c4b7b4506cb39032c91e94c49d613fee` deployed on Base mainnet.
+- Owner EOA `0xeEa9c291…0f01` is EIP-7702-delegated (code `0xef0100…`) + initialized; executor gas
+  vault funded; **real guarded USDC->WETH swaps executed** (cumulativeSpent up to 0.004 USDC, WETH
+  received), each emitting `EvidenceCommitted`. Sample tx
+  `0x07e43c013fdf219a17675b4fc070ede0c54322267783adc6774b1fe769ad2404`.
+- Runner `packages/runtime/scripts/m1-run.ts` is resumable and runs on fork (`INTENTOS_FORK=1`) or
+  mainnet. Setup merged into one 7702 tx (initialize seeds the gas vault) to respect Base's
+  1-in-flight-tx limit on delegated accounts.
+
+### Next
+- **M3 — watcher slice** (fork-testable now): WatcherRuntime read evidence -> judge -> vote_tighten /
+  vote_freeze (quorum=1) -> contract narrows / freezes -> next executor request reverts.
+- **M2 — frontend**: wire mocks to live chain reads (EvidenceCommitted timeline, guard state, vaults).

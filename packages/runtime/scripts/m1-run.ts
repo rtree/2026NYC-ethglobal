@@ -182,10 +182,11 @@ async function main() {
   if (!pre.ok) throw new Error(`preview guard rejected: ${pre.reason}`);
 
   const sig = await signExecutionRequest(owner.address, req);
-  const wethBefore = (await pub.readContract({ address: TOKENS.WETH, abi: erc20, functionName: "balanceOf", args: [owner.address] })) as bigint;
   const txHash = await relaySubmitExecution(wallet, pub, owner.address, req, reason, sig, platform);
   const rcpt = await pub.waitForTransactionReceipt({ hash: txHash });
-  const wethAfter = (await pub.readContract({ address: TOKENS.WETH, abi: erc20, functionName: "balanceOf", args: [owner.address] })) as bigint;
+  // Pin both reads to the receipt block so a load-balanced RPC can't return inconsistent state.
+  const wethBefore = (await pub.readContract({ address: TOKENS.WETH, abi: erc20, functionName: "balanceOf", args: [owner.address], blockNumber: rcpt.blockNumber - 1n })) as bigint;
+  const wethAfter = (await pub.readContract({ address: TOKENS.WETH, abi: erc20, functionName: "balanceOf", args: [owner.address], blockNumber: rcpt.blockNumber })) as bigint;
 
   let evidence = false;
   for (const log of rcpt.logs) {
