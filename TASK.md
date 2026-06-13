@@ -251,6 +251,21 @@ architecture** and making the launch pieces real.
   the public a free LLM proxy. Graceful fallback to the scripted conversation when Vertex is
   unreachable, so the demo never hard-fails. Toggle `INTENTOS_LLM=vertex|mock`. Called via the
   existing GCP ADC (REST + google-auth), no model key in the repo.
+  - **⚠️ SECURITY — the two "Gemini" APIs must not be confused (user-flagged 2026-06-13, verified vs
+    Firebase docs updated 2026-06-12):** there are TWO distinct Gemini APIs.
+    | API | service name | auth | our stance |
+    |-----|------|------|-----------|
+    | **Gemini Developer API** ("Google AI"/AI Studio) | `generativelanguage.googleapis.com` | **API key** | **MUST STAY DISABLED** — never use |
+    | **Vertex AI Gemini** | `aiplatform.googleapis.com` | **OAuth/ADC** (service account) | the one we use, backend-only |
+    The disaster mode: if `generativelanguage.googleapis.com` is enabled AND the public Firebase Web
+    API key has "Generative Language API" in its allowlist, anyone can scrape the browser key and run
+    **unlimited Gemini queries billed to us**. Firebase's own doc: *"never include the Gemini Developer
+    API in the allowlist for a publicly accessible API key."* Our Vertex path uses ADC (no API-key
+    auth path at all), so it is immune — BUT we must enforce: (1) keep `generativelanguage.googleapis.com`
+    **disabled** (verified off 2026-06-13); (2) restrict the browser Web API key to ONLY
+    `identitytoolkit` + `securetoken` (never Generative Language API); (3) do NOT run the Firebase
+    "AI Logic" setup wizard — it can enable the Gemini Developer API + mint a Gemini key. Enable Vertex
+    via plain `gcloud services enable aiplatform.googleapis.com` only.
 - **D3 Delivery = full build, single review** (user choice). Build it all, then one review pass.
 - **D4 Auth = Web3 login → Firebase Auth (Custom Token).** User's idea (2026-06-13): make the wallet a
   real Firebase Auth user. The wallet signature (SIWE / EIP-4361 message) is the primary credential;
@@ -290,13 +305,22 @@ architecture** and making the launch pieces real.
 ### M5 infra to provision (GCP project ethglobal-nyc2026-rtree)
 - Enable APIs: `identitytoolkit.googleapis.com` (Firebase Auth / GCIP), `firestore.googleapis.com`,
   `aiplatform.googleapis.com` (Vertex), `iamcredentials.googleapis.com` (signJwt).
+  - **DO NOT enable `generativelanguage.googleapis.com` (Gemini Developer API).** It is currently
+    DISABLED (verified 2026-06-13) and must stay that way — see the D2 security box. We use Vertex
+    (`aiplatform`) via ADC, which needs no API key.
 - Initialize **Firebase Auth** (GCIP) on the project + ensure custom-token sign-in is on (may need a
-  one-time console "Get started" click — flag to user).
-- Create a **Web API Key** (restricted to identitytoolkit + securetoken) → expose to the browser as
-  `VITE_FIREBASE_API_KEY` (non-secret) + `VITE_FIREBASE_PROJECT_ID`.
+  one-time console "Get started" click — flag to user). **Decline / skip any "Firebase AI Logic" or
+  "Gemini in Firebase" step in the wizard** — it enables the Gemini Developer API and mints a public
+  Gemini key (the exact disaster D2 warns about).
+- Create a **Web API Key** (browser): **API restrictions = ONLY `identitytoolkit.googleapis.com` +
+  `securetoken.googleapis.com`**. Never add "Generative Language API". Expose to the browser as
+  `VITE_FIREBASE_API_KEY` (non-secret) + `VITE_FIREBASE_PROJECT_ID`. (Defense-in-depth: even if the
+  Gemini Dev API were ever enabled, this key can't call it.)
 - Create **Firestore** database (Native mode, us-central1 or nam5).
 - Grant Cloud Run SA `intentos-panel@…`: `roles/iam.serviceAccountTokenCreator` (on itself, for
   signJwt), `roles/datastore.user` (Firestore), `roles/aiplatform.user` (Vertex).
+- Optional hardening (post-MVP): Firebase App Check on the browser; tighten `identitytoolkit` quota;
+  Vertex per-minute quota cap as a billing circuit-breaker.
 
 ### Open decisions (revisit as needed — user: "必要に応じて議論継続しよう")
 - True per-wallet on-chain isolation (each user their own 7702 Owner) — deferred to PRODUCT mode.
