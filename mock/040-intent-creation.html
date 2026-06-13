@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>040 · Intent Creation — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <div class="wallet-chip"><span class="dot"></span>0x9A3f…b21c</div>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">040 · Intent creation · IntentBuilder</div>
+      <h1>Describe what your funds should do</h1>
+      <p>You speak purpose and limits — not contract arguments. The IntentBuilder compiles the
+        conversation into an Agent Package: enforceable <b>Hard Guardrails</b> and after-the-fact
+        <b>Semantic Guardrails</b>.</p>
+    </div>
+
+    <div class="grid cols-2">
+      <!-- Left: chat -->
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Conversation</h3><span class="pill role-exec">EXECUTOR</span></div>
+        <div class="chat">
+          <div class="bubble owner">I want to swap USDC into ETH little by little.</div>
+          <div class="bubble agent">Got it — recurring small BUYs on the USDC↔WETH pair. What size per trade, and a total ceiling?</div>
+          <div class="bubble owner">Max 5 USDC per trade, 100 USDC total. Stop on big price swings.</div>
+          <div class="bubble agent">I'll set a per-tx cap and a cumulative cap, with a slippage limit. Avoid unnatural routes and stale quotes?</div>
+          <div class="bubble owner">Yes. And on failure, fall back to stable (USDC).</div>
+          <div class="bubble agent">Done. Review the Agent Package on the right, then mint the Executor Agent.</div>
+        </div>
+        <div class="field" style="margin-top:14px">
+          <textarea placeholder="Refine your intent…"></textarea>
+        </div>
+        <button class="btn primary block">Regenerate Agent Package</button>
+      </div>
+
+      <!-- Right: package preview -->
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Agent Package preview</h3><span class="pill mono" style="font-size:11px">packageHash 0x7c…e2</span></div>
+
+        <p class="muted" style="font-size:12px;margin:0 0 6px"><span class="inline">SUMMARY.md</span></p>
+        <div class="note" style="margin-bottom:14px">DCA 5 USDC→WETH per tick up to 100 USDC total; halt on
+          volatility; recover to USDC on failure.</div>
+
+        <p class="muted" style="font-size:12px;margin:0 0 6px">Hard Guardrails → <span class="inline">CONSTRAINTS.json</span> → ExecutionContract</p>
+        <div class="guard hard"><span class="g-name">tokenPair</span><span class="g-val">USDC / WETH</span></div>
+        <div class="guard hard"><span class="g-name">amountCapPerTx</span><span class="g-val">5.00 USDC</span></div>
+        <div class="guard hard"><span class="g-name">cumulativeCap</span><span class="g-val">100.00 USDC</span></div>
+        <div class="guard hard"><span class="g-name">slippageCapBps</span><span class="g-val">50 (0.5%)</span></div>
+        <div class="guard hard"><span class="g-name">expiry</span><span class="g-val">+7 days</span></div>
+        <div class="guard hard"><span class="g-name">frozen</span><span class="g-val">false</span></div>
+
+        <p class="muted" style="font-size:12px;margin:16px 0 6px">Semantic Guardrails → Watcher reads after execution</p>
+        <div class="guard sem"><span class="g-name">route naturalness</span><span class="g-val">avoid unnatural</span></div>
+        <div class="guard sem"><span class="g-name">quote freshness</span><span class="g-val">reject stale</span></div>
+        <div class="guard sem"><span class="g-name">recovery preference</span><span class="g-val">→ USDC on fail</span></div>
+
+        <div class="divider"></div>
+        <button class="btn accent block">Mint Executor Agent NFT</button>
+        <p class="spec-ref" style="margin-top:10px">Hard fields fixed in
+          <a href="../plan/010-interfaces.md">010 §9</a>; burned 1:1 into HardGuardState at initialize.</p>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:22px">
+      <a class="btn accent" href="050-agent-identity.html">Continue → Identity</a>
+      <a class="btn ghost" href="030-launch-dashboard.html">Back</a>
+    </div>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>

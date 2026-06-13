@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IntentOS — Screen Mocks</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS <small>&nbsp;mock</small></div>
+    <div class="spacer"></div>
+    <a class="pill-link" href="../plan/010-interfaces.md">Seam Freeze ↗</a>
+    <a class="pill-link" href="../plan/000-northStar-en.md">North Star ↗</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">MVP "B" · Executor + single Watcher · USDC↔WETH · Base mainnet</div>
+      <h1>Screen mocks</h1>
+      <p>Owner Natural Intent → Executor Agent guarded-executes inside Hard Guardrails → a single
+        Watcher Agent reads the evidence and can only tighten / freeze. The only thing on the Owner's
+        local PC is this browser.</p>
+    </div>
+
+    <h2 class="section">Setup flow</h2>
+    <div class="grid cols-4">
+      <a class="card nav-card" href="010-onboarding.html">
+        <div class="card-head"><span class="num">010</span><span class="arrow">→</span></div>
+        <h3>Onboarding</h3><p class="desc">Wallet connect + World ID human-proof gate.</p>
+      </a>
+      <a class="card nav-card" href="020-intent-list.html">
+        <div class="card-head"><span class="num">020</span><span class="arrow">→</span></div>
+        <h3>Intent List</h3><p class="desc">One active Intent + history.</p>
+      </a>
+      <a class="card nav-card" href="030-launch-dashboard.html">
+        <div class="card-head"><span class="num">030</span><span class="arrow">→</span></div>
+        <h3>Launch Dashboard</h3><p class="desc">Card-grid hub of setup steps.</p>
+      </a>
+      <a class="card nav-card" href="040-intent-creation.html">
+        <div class="card-head"><span class="num">040</span><span class="arrow">→</span></div>
+        <h3>Intent Creation</h3><p class="desc">IntentBuilder → Agent Package → mint.</p>
+      </a>
+      <a class="card nav-card" href="050-agent-identity.html">
+        <div class="card-head"><span class="num">050</span><span class="arrow">→</span></div>
+        <h3>Agent Identity</h3><p class="desc">tokenId · ENS · ERC-8004 registration.</p>
+      </a>
+      <a class="card nav-card" href="060-runtime-funding.html">
+        <div class="card-head"><span class="num">060</span><span class="arrow">→</span></div>
+        <h3>Runtime &amp; Funding</h3><p class="desc">Capsule + ExecutionGasVault.</p>
+      </a>
+      <a class="card nav-card" href="070-watcher-creation.html">
+        <div class="card-head"><span class="num">070</span><span class="arrow">→</span></div>
+        <h3>Watcher Creation</h3><p class="desc">Optional · quorum=1 circuit breaker.</p>
+      </a>
+      <a class="card nav-card" href="080-start.html">
+        <div class="card-head"><span class="num">080</span><span class="arrow">→</span></div>
+        <h3>Start</h3><p class="desc">Preconditions + launch.</p>
+      </a>
+    </div>
+
+    <h2 class="section">Runtime &amp; result</h2>
+    <div class="grid cols-3">
+      <a class="card nav-card" href="090-owner-dashboard.html">
+        <div class="card-head"><span class="num">090</span><span class="arrow">→</span></div>
+        <h3>Owner Dashboard</h3><p class="desc">AgentLoop log · guardrails · shared execution timeline.</p>
+      </a>
+      <a class="card nav-card" href="100-watcher-dashboard.html">
+        <div class="card-head"><span class="num">100</span><span class="arrow">→</span></div>
+        <h3>Watcher Dashboard</h3><p class="desc">Evidence review · report / vote / tighten / freeze.</p>
+      </a>
+      <a class="card nav-card" href="110-result.html">
+        <div class="card-head"><span class="num">110</span><span class="arrow">→</span></div>
+        <h3>Result / Performance</h3><p class="desc">Terminal state · USDC delta · cost.</p>
+      </a>
+    </div>
+
+    <h2 class="section">Canonical terminal states</h2>
+    <div class="card">
+      <div class="btn-row">
+        <span class="pill running"><span class="dot"></span>running</span>
+        <span class="pill tightened"><span class="dot"></span>tightened</span>
+        <span class="pill frozen"><span class="dot"></span>frozen</span>
+        <span class="pill self-stopped"><span class="dot"></span>self-stopped</span>
+        <span class="pill owner-stopped"><span class="dot"></span>owner-stopped</span>
+        <span class="pill fund-exhausted"><span class="dot"></span>fund-exhausted</span>
+        <span class="pill transferred"><span class="dot"></span>transferred</span>
+      </div>
+      <p class="spec-ref" style="margin-top:12px">These exact strings are shared by contract state, events, and UI.
+        See <a href="../plan/010-interfaces.md">010-interfaces.md §13</a>.</p>
+    </div>
+
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026 · static mocks, no build step</p>
+  </div>
+</div>
+</body>
+</html>

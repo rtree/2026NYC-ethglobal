@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>020 · Intent List — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <div class="wallet-chip"><span class="dot"></span>0x9A3f…b21c</div>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">020 · Intent List</div>
+      <h1>Your Intents</h1>
+      <p>One active Intent per Owner. A running Intent returns you to its Runtime Dashboard; past
+        Intents are reviewable on the Result screen.</p>
+    </div>
+
+    <h2 class="section">Active</h2>
+    <a class="card nav-card" href="090-owner-dashboard.html">
+      <div class="card-head">
+        <h3>Dollar-cost average USDC → WETH</h3>
+        <span class="pill running"><span class="dot"></span>running</span>
+      </div>
+      <table class="kv">
+        <tr><td class="k">Intent ID</td><td class="v">intent-abc</td></tr>
+        <tr><td class="k">Executor Agent</td><td class="v">#123 · agent-123.intentos.base.eth</td></tr>
+        <tr><td class="k">Watcher Agent</td><td class="v">#124 · quorum 1</td></tr>
+        <tr><td class="k">Gas vault (exec)</td><td class="v">0.0092 ETH</td></tr>
+      </table>
+      <div class="btn-row" style="margin-top:14px"><span class="btn primary">Open Runtime Dashboard →</span></div>
+    </a>
+
+    <h2 class="section">New</h2>
+    <div class="card">
+      <div class="card-head"><h3>Run a new Intent</h3><span class="pill optional">disabled while 1 active</span></div>
+      <p class="desc">Enabled only when there is no active Intent. (Shown enabled here for the mock flow.)</p>
+      <a class="btn accent" href="030-launch-dashboard.html">+ New Intent</a>
+    </div>
+
+    <h2 class="section">History</h2>
+    <div class="grid cols-2">
+      <a class="card nav-card" href="110-result.html">
+        <div class="card-head"><h3>Rotate into WETH on dips</h3><span class="pill tightened"><span class="dot"></span>tightened</span></div>
+        <p class="desc mono">intent-z88 · Executor #119 · net +0.41 USDC</p>
+      </a>
+      <a class="card nav-card" href="110-result.html">
+        <div class="card-head"><h3>Stable-hedge swing</h3><span class="pill owner-stopped"><span class="dot"></span>owner-stopped</span></div>
+        <p class="desc mono">intent-z71 · Executor #102 · net −0.12 USDC</p>
+      </a>
+    </div>
+
+    <p class="spec-ref" style="margin-top:20px">Spec: <a href="../plan/010-interfaces.md">010-interfaces.md</a>
+      §13 (Intent lifecycle, terminal states), §15 (screen 020)</p>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>

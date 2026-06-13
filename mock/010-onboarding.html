@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>010 · Onboarding — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">010 · Owner onboarding</div>
+      <h1>Connect &amp; prove you're human</h1>
+      <p>World ID is a human-proof gate, not World Chain. Each Agent spins up a real OpenClaw Runtime
+        on Cloud Run, so a wallet alone can't create Runtimes — that would let bots mass-produce them
+        and blow up compute / model / indexer cost.</p>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card pad-lg">
+        <div class="card-head"><h3>1 · Connect wallet</h3><span class="pill ok"><span class="dot"></span>connected</span></div>
+        <p class="desc">The Owner keeps the private key. Funds stay in this EOA; EIP-7702 only bolts
+          guarded code onto it.</p>
+        <div class="wallet-chip"><span class="dot"></span>0x9A3f…b21c · Base 8453</div>
+        <div class="divider"></div>
+        <table class="kv">
+          <tr><td class="k">Network</td><td class="v">Base mainnet · 8453</td></tr>
+          <tr><td class="k">USDC balance</td><td class="v">128.40</td></tr>
+          <tr><td class="k">WETH balance</td><td class="v">0.0000</td></tr>
+          <tr><td class="k">ETH (gas)</td><td class="v">0.014</td></tr>
+        </table>
+      </div>
+
+      <div class="card pad-lg">
+        <div class="card-head"><h3>2 · Verify with World ID</h3><span class="pill required">required gate</span></div>
+        <p class="desc">Scan with the World App to prove personhood before any Runtime can be created.</p>
+        <div class="center" style="padding:14px 0">
+          <div style="width:150px;height:150px;margin:0 auto;border-radius:12px;background:
+            repeating-conic-gradient(#0c1119 0 25%, #1a2230 0 50%) 50% / 22px 22px;border:1px solid var(--border-2)"></div>
+          <p class="spec-ref" style="margin-top:10px">IDKit widget · simulated QR</p>
+        </div>
+        <button class="btn primary block">Verify with World ID</button>
+        <p class="note" style="margin-top:14px">After verification, the Owner enters the Intent List.
+          Active Agent NFT count per user can be capped by policy.</p>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:22px">
+      <a class="btn accent" href="020-intent-list.html">Continue →</a>
+      <a class="btn ghost" href="index.html">Cancel</a>
+    </div>
+
+    <p class="spec-ref" style="margin-top:18px">Spec: <a href="../plan/010-interfaces.md">010-interfaces.md</a>
+      §1 (World ID), §15 (screen 010) · North Star §2 Owner onboarding</p>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>
