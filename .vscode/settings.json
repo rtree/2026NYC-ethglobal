@@ -44,6 +44,14 @@
     "/^forge test 2>&1 \\| grep -vE \"asm-keccak256\\|inline assembly\\|getfoundry\\.sh\\|\\^\\\\s\\*\\\\\\|\" \\| tail -60$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^gcloud kms keyrings create intentos --location=us-central1 2>&1 \\| tail -2; for k in executor-session-key watcher-session-key; do gcloud kms keys create \"\\$k\" --location=us-central1 --keyring=intentos --purpose=asymmetric-signing --default-algorithm=ec-sign-secp256k1-sha256 --protection-level=software 2>&1 \\| tail -2; done; echo \"--- keys ---\"; gcloud kms keys list --location=us-central1 --keyring=intentos --format=\"value\\(name,purpose,versionTemplate\\.algorithm\\)\" 2>&1$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^for k in executor-session-key watcher-session-key; do gcloud kms keys create \"\\$k\" --location=us-central1 --keyring=intentos --purpose=asymmetric-signing --default-algorithm=ec-sign-secp256k1-sha256 --protection-level=hsm 2>&1 \\| tail -2; done; echo \"--- keys ---\"; gcloud kms keys list --location=us-central1 --keyring=intentos --format=\"value\\(name,versionTemplate\\.algorithm,versionTemplate\\.protectionLevel\\)\" 2>&1$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }
