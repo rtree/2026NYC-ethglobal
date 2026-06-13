@@ -278,3 +278,201 @@ Agent identity setup:
 }
 ```
 
+## 3. Intent を Runtime で実行するまで（ガードレールの動作方法付き）
+
+この節は、Owner の Natural Intent が Agent Package になり、Runtime Capsule に注入され、Hard / Semantic 両ガードレールの下で onchain 実行されるまでを一続きで述べる。
+
+### 3.1 Agent Package の生成
+
+IntentBuilder は、Owner の Natural Intent から OpenClaw Runtime に投入する Agent Package を生成する。
+
+```text
+Natural Intent
+  -> IntentBuilder
+  -> Agent Package
+  -> OpenClaw Runtime
+  -> Bounded Onchain Execution
+```
+
+このAgent Package は、AI Agent の行動・価値観・道具・記憶・証跡・停止条件・オンチェーン制約をまとめた設定ファイル群である。
+- Agent NFT は、この Agent Package の manifest hash を持つ。
+- Runtime Registry は tokenId から Agent Package を引き、OpenClaw Runtime Capsule に注入する。
+- Owner-created Watcher Agent package は、Executor Agent package を再利用するのではなく、監視専用の role / tools / stop policy を持つ別 package である。
+- ただし、対象 Executor Agent の tokenId、intentId、executorPackageHash、Hard Guardrails、Semantic Guardrails を immutable context として含める。
+
+```text
+agent-package/
+  manifest.json
+  SUMMARY.md
+  AGENTS.md
+  SOUL.md
+  TOOLS.md
+  MEMORY.md
+  EVIDENCE.md
+  STOP.md
+  CONSTRAINTS.json
+```
+
+`manifest.json` は package 全体の親 hash を持つ。
+Agent NFT、Runtime Registry、evidence timeline はこの hash を参照する。
+
+```json
+{
+  "packageVersion": "0.1",
+  "agentRole": "EXECUTOR",
+  "agentTokenId": "123",
+  "intentId": "intent-abc",
+  "packageHash": "0x...",
+  "files": {
+    "SUMMARY.md": "0x...",
+    "AGENTS.md": "0x...",
+    "SOUL.md": "0x...",
+    "TOOLS.md": "0x...",
+    "MEMORY.md": "0x...",
+    "EVIDENCE.md": "0x...",
+    "STOP.md": "0x...",
+    "CONSTRAINTS.json": "0x..."
+  }
+}
+```
+
+### 3.2 Agent Package のファイル構成
+
+`SUMMARY.md` は Owner 向けの短い要約である。
+`AGENTS.md` は Agent の role、goal、allowed actions、never rules、default behavior を書く。
+`SOUL.md` は risk posture、priority、default instinct、recovery preference を書く。
+`TOOLS.md` は OpenClaw が見せる道具の説明を書く。
+`MEMORY.md` は working memory に保存するものと保存しないものを書く。
+`EVIDENCE.md` は tick ごとに記録する evidence と hash commitment を書く。
+`STOP.md` は stop / hold / self-stop の条件を書く。
+`CONSTRAINTS.json` は EIP-7702 ExecutionContract に登録する Hard Guardrails を持つ。
+
+`TOOLS.md` は Agent への説明であり、enforcement そのものではない。
+実際の tool allowlist は OpenClaw config、IntentOS plugin、Runtime adapter、ExecutionContract が enforce する。
+
+```text
+AGENTS.md / SOUL.md:
+  OpenClaw の system prompt / operating rules
+
+TOOLS.md:
+  tool の意味と使い方
+
+OpenClaw config / IntentOS plugin:
+  実際の tool allowlist enforcement
+
+EVIDENCE.md:
+  Watcher Agent が読む evidence contract
+
+STOP.md:
+  Runtime stop policy
+
+CONSTRAINTS.json:
+  EIP-7702 ExecutionContract に登録される Hard Guardrails
+```
+
+### 3.3 ガードレールの動作方法
+
+Hard Guardrails は、EIP-7702 ExecutionContract が同期的に enforce する制約である。
+target、selector、token pair、amount cap、spender cap、slippage cap、expiry、freeze state、nonce などを含む。
+contract state としては typed hard guard state に落ちる。
+
+Semantic Guardrails は、contract がその場で読み切れない期待である。
+route freshness、risk posture、simulation adequacy、recovery preference、unnatural route avoidance などを含む。
+Watcher Agent は実行後に evidence を読み、この Semantic Guardrails に照らして report / vote する。
+
+```text
+Agent Package
+  -> OpenClaw Runtime Instructions
+  -> Tool Policy
+  -> Memory Policy
+  -> Evidence Policy
+  -> Stop Policy
+  -> Hard Guardrails
+  -> Semantic Guardrails
+
+Hard Guardrails
+  -> EIP-7702 ExecutionContract
+
+Semantic Guardrails
+  -> Optional Watcher Agent Semantic Guard
+```
+
+### 3.4 Runtime Registry と Runtime Capsule
+
+Runtime は AgentLoop を動かす常時起動の実行環境である。
+- IntentOS の MVP では、Agent NFT ごとに OpenClaw Runtime Capsule を Cloud Run Service 上に生成する。
+- Runtime Registry は、Agent NFT と Runtime Capsule の対応を管理する Backend の source of truth である。
+
+```text
+RuntimeRecord:
+  tokenId
+  runtimeId
+  runtimeOwner
+  bindingNonce
+  runtimeStatus
+  cloudRunService
+  runtimeManifestHash
+  kmsKeyRef
+  executionGasVaultRef
+  lastHeartbeatAt
+```
+
+Runtime 起動要求が来ると、Runtime Registry は `ownerOf(tokenId)` と `runtimeOwner` を比較する。
+
+```text
+runtime が存在しない:
+  -> 新規 Runtime Capsule を作成
+
+runtimeOwner == ownerOf(tokenId):
+  -> 既存 Runtime Capsule を再利用
+
+runtimeOwner != ownerOf(tokenId):
+  -> old Runtime Binding は invalid
+  -> old Runtime の authority-bearing operation は reject
+  -> new owner は新しい Runtime Binding を作成
+```
+
+Runtime Capsule には Runtime 専用の SessionKey が渡される。
+- SessionKey は Owner の資金を自由に動かす鍵ではない。
+- ExecutionContract に ExecutionRequest を出すための request capability である。
+- SessionKey / IntentOS tool adapter / ExecutionGasVault / ExecutionContract / Watcher vote contract は、Runtime Binding が current owner に紐づいていることを確認する。
+- したがって old Runtime が自律的に動き続けても、Transfer 後に意味のある onchain interaction はできない。
+
+### 3.5 ExecutionGasVault と gas の後精算
+
+ExecutionGasVault は standalone gas sponsor ではない。
+- Owner の EIP-7702 delegated account code 内に置かれる gas reimbursement lane である。
+- Runtime / relayer が transaction gas を先に払い、delegated account 内の ExecutionGasVault から後で精算する。
+
+```text
+Owner EOA delegated account:
+  ExecutionContract
+  Hard Guardrails
+  Executor ExecutionGasVault
+  Watcher ExecutionGasVault
+```
+
+Executor Agent 向けの gas budget は Owner が fund する。
+したがって Owner の delegated account 内に置き、Owner の制御下にあることを明確にする。
+
+Watcher Agent 向けの gas budget も Owner が fund する。
+ただし Executor Agent の execution budget とは別 lane に置き、Watcher Agent が実行資金や execution capability に触れないことを明確にする。
+
+```text
+Runtime substrate:
+  Cloud Run Service
+
+Runtime unit:
+  1 Executor Agent NFT / 1 ExecutorRuntime Capsule
+  1 Watcher Agent NFT / 1 WatcherRuntime Capsule
+
+Runtime access:
+  Web3 wallet login + World ID proof が必須
+  user ごとの active Agent NFT 数は policy で制限できる
+```
+
+World ID は human proof gate であり、World Chain を使うという意味ではない。
+Cloud Run 上の本物 OpenClaw Runtime Capsule を bot / sybil が量産すると、運営側の compute / model / indexer cost が破綻するため、World ID proof が Runtime 作成前の abuse gate になる。
+
+---
+
