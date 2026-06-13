@@ -368,6 +368,10 @@ What OpenClaw can and cannot do is clearly separated.
 - The final authority over fund movement remains not with OpenClaw, but with the IntentOS adapter and
   the EIP-7702 ExecutionContract / Hard Guardrails.
 
+The principle is: **requests flow from the upper layers down, but authority stays in the Chain layer.**
+Even if the upper layers (LLM / adapter / SessionKey) are compromised, the lower layers
+(ExecutionContract and Hard Guardrails) protect the funds.
+
 So the whole thing is a one-directional pipeline: the IntentBuilder generates an Agent Package from a
 Natural Intent, the Runtime Registry injects it into the OpenClaw Runtime, OpenClaw runs the AgentLoop
 and calls IntentOS typed tools, and the ExecutionContract checks against the Hard Guardrails and
@@ -464,8 +468,8 @@ They include route freshness, risk posture, simulation adequacy, recovery prefer
 avoidance, etc.
 The Watcher Agent reads evidence after execution and reports / votes against these Semantic Guardrails.
 
-```text
-Agent Package
+The same "staleness" is stopped by different layers: expiry is mechanically judged by the Hard Guard,
+while quote freshness is semantically judged by the Semantic Guard.
   -> OpenClaw Runtime Instructions
   -> Tool Policy
   -> Memory Policy
