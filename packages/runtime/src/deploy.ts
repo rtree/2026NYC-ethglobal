@@ -15,7 +15,7 @@ function artifact(name: string): { abi: unknown; bytecode: Hex } {
   return { abi: j.abi, bytecode: j.bytecode.object as Hex };
 }
 
-function deployedAddress(receipt: { status: "success" | "reverted"; contractAddress: Address | null }, what: string): Address {
+function deployedAddress(receipt: { status: "success" | "reverted"; contractAddress?: Address | null }, what: string): Address {
   if (receipt.status !== "success" || !receipt.contractAddress) throw new Error(`${what} deployment failed`);
   return receipt.contractAddress;
 }

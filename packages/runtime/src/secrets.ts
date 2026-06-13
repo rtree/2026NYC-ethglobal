@@ -44,7 +44,6 @@ export async function getBaseRpcUrl(): Promise<string> {
 // Well-known public Base mainnet RPCs used as fallbacks (no key). Ordered roughly by reliability.
 const PUBLIC_BASE_RPCS = [
   "https://mainnet.base.org",
-  "https://base.llamarpc.com",
   "https://base-rpc.publicnode.com",
   "https://base.drpc.org",
   "https://1rpc.io/base",

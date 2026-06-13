@@ -222,6 +222,7 @@ async function main() {
       try {
         json(res, 200, (await API[key](uid, body)) ?? { ok: true });
       } catch (e) {
+        console.error(`[api] ${key} failed:`, e instanceof Error ? e.message : e);
         json(res, 500, { error: e instanceof Error ? e.message : String(e) });
       }
       return;
