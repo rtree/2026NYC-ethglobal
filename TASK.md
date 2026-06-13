@@ -107,6 +107,25 @@ facts). GCP project switched to `ethglobal-nyc2026-rtree`.
   - NOTE: minor extension to 010 §9 — `ExecutionRequest.reasonHash` binds the evidence `reason` string
     to the signature; submit takes `(r, reason, sig)`. (Strengthens evidence integrity.)
   - TODO(M0): Base fork test for a real Uniswap USDC/WETH swap — needs a Base RPC (see open question).
+  - DONE: Base fork smoke test passing (`ExecutionDelegate7702.fork.t.sol`).
 
-- **M1 — runtime slice**: next.
+- **M1 — runtime slice (core proven, IN PROGRESS)**
+  - `packages/shared` — TS mirror of frozen structs, request-digest builder, **GCP KMS Ethereum signer**
+    (derives addresses + signs; validated vs HSM keys), config, contract ABIs. Typechecks clean.
+  - GCP infra: project `ethglobal-nyc2026-rtree`; APIs enabled; KMS keyring `intentos` with HSM
+    secp256k1 keys (executor/watcher SessionKeys); platform wallet key in Secret Manager. Addresses in
+    `deployments/base-mainnet.json` (no keys).
+  - `packages/runtime` — clients, quote (Uniswap QuoterV2), buildRequest+KMS sign, relayer submit,
+    Secret Manager platform-account loader. Typechecks clean.
+  - **M1 fork e2e PASSING** (`packages/runtime/test/m1-fork-e2e.ts`): on an anvil Base fork, a
+    KMS-signed ExecutionRequest is accepted by ExecutionDelegate7702, swaps 0.001 USDC->WETH via real
+    Uniswap, emits EvidenceCommitted, reimburses the relayer. Whole slice with the real signer + real
+    Uniswap, no real money.
+  - TODO(M1): bounded executor loop (decideSignal + guard->LLM feedback §12) + registry-lite; then the
+    single REAL Base mainnet execution (needs funding — see below).
 - **M2 — frontend**, **M3 — watcher**: pending.
+
+### Funding needed for the real Base mainnet execution
+- Platform wallet `0x078383c4c20b4e9732Ac0c30A68b8123D53ea6C9` — send ~0.005 Base ETH (deploy + relay gas).
+- A fresh Owner test wallet (to be generated) — 0.001 USDC + ~0.003 Base ETH (setup gas + gas-vault backing).
+- Optional: Alchemy Base URL via `BASE_RPC_URL` (store in Secret Manager / gitignored .env, never in chat).

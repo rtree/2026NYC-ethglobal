@@ -15,6 +15,25 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  packages/runtime:
+    dependencies:
+      '@google-cloud/secret-manager':
+        specifier: ^5.6.0
+        version: 5.6.0
+      '@intentos/shared':
+        specifier: workspace:*
+        version: link:../shared
+      viem:
+        specifier: ^2.21.0
+        version: 2.52.2(typescript@5.9.3)
+    devDependencies:
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   packages/shared:
     dependencies:
       '@google-cloud/kms':
@@ -194,6 +213,10 @@ packages:
 
   '@google-cloud/kms@4.5.0':
     resolution: {integrity: sha512-i2vC0DI7bdfEhQszqASTw0KVvbB7HsO2CwTBod423NawAu7FWi+gVVa7NLfXVNGJaZZayFfci2Hu+om/HmyEjQ==}
+    engines: {node: '>=14.0.0'}
+
+  '@google-cloud/secret-manager@5.6.0':
+    resolution: {integrity: sha512-0daW/OXQEVc6VQKPyJTQNyD+563I/TYQ7GCQJx4dq3lB666R9FUPvqHx9b/o/qQtZ5pfuoCbGZl3krpxgTSW8Q==}
     engines: {node: '>=14.0.0'}
 
   '@grpc/grpc-js@1.14.4':
@@ -758,6 +781,13 @@ snapshots:
     optional: true
 
   '@google-cloud/kms@4.5.0':
+    dependencies:
+      google-gax: 4.6.1
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
+  '@google-cloud/secret-manager@5.6.0':
     dependencies:
       google-gax: 4.6.1
     transitivePeerDependencies:

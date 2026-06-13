@@ -56,6 +56,14 @@
     "/^cd /home/araki/2026NYC-ethglobal && pnpm install 2>&1 \\| tail -3 && echo \"--- deriving KMS addresses ---\" && pnpm exec tsx packages/shared/scripts/print-kms-address\\.ts 2>&1 \\| tail -15$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^cd /home/araki/2026NYC-ethglobal/packages/runtime && pnpm exec tsx test/m1-fork-e2e\\.ts 2>&1 \\| tail -30$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^cd /home/araki/2026NYC-ethglobal && pnpm --filter @intentos/runtime typecheck 2>&1 \\| tail -15 && echo \"TYPECHECK_EXIT=\\$\\?\"$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }
