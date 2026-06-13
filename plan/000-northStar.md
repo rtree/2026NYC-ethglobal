@@ -74,7 +74,7 @@ Intent
        Hard Guardrails:
          EIP-7702 ExecutionContract
        Optional Semantic Guardrails:
-         WatcherAI Agent NFTs
+         Watcher Agent Agent NFTs
 ```
 
 なお、Executor AgentもWatcher AgentいずれもSessionKeyとしていわゆるWalletを保有しますが、資金は一切保有しません。資金は常に Owner のアドレスに残り、OwnerのSelf Custodyは失われません。また、Gas代もOwnerのEOAのdelegated contract内部にあるExecutionGasVaultから供給されます。
@@ -92,7 +92,7 @@ Intent
        Hard Guardrails:
          EIP-7702 ExecutionContract
        Optional Semantic Guardrails:
-         WatcherAI Agent NFTs
+         Watcher Agent Agent NFTs
 ```
 
 なお、Executor AgentもWatcher AgentいずれもSessionKeyとしていわゆるWalletを保有しますが、資金は一切保有しません。資金は常に Owner のアドレスに残り、OwnerのSelf Custodyは失われません。また、Gas代もOwnerのEOAのdelegated contract内部にあるExecutionGasVaultから供給されます。
@@ -113,7 +113,7 @@ EIP-7702 によって、Owner の EOA そのものに「契約コード」を後
 
 実行の流れ（誰が何の鍵を持つか）
 ```
-① ExecutorAI(OpenClaw)  : 「BUY 0.05 USDC」というシグナルを出すだけ。鍵は持たない
+① Executor Agent(OpenClaw)  : 「BUY 0.05 USDC」というシグナルを出すだけ。鍵は持たない
 ② IntentOS adapter      : quote/simulate して typed ExecutionRequest を組む
 ③ SessionKey(KMS)       : その ExecutionRequest の digest を「署名するだけ」
                            └─ 資金を動かせない鍵。保有が0 ETH のまま。送信もしない
@@ -159,3 +159,19 @@ Relayer(Platform): 立替分が戻る                                      [ETH 
   ※ Executor lane と Watcher lane は別 gasVaultBalance に分離
   ※ clamp 超過分(spent > gasPerTxCap)は信頼前提で Platform 持ち出し
 ```
+
+## 1. Intent から Agent NFT が動き出すまで
+
+1. Intent から Agent NFT が動き出すまで
+一連の流れはこの形です。
+```
+Intent
+  -> Agent Package
+  -> Agent NFT (mint)
+  -> OpenClaw Runtime
+  -> Guarded Execution
+       Hard Guard:     EIP-7702 ExecutionContract
+       Semantic Guard: WatcherAI (optional)
+```
+
+
