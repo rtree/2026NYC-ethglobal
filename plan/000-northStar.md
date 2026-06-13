@@ -166,6 +166,14 @@ Intent
 
 画面は、Agent NFT が mint され、Runtime が動き、Guarded Execution が見えることを中心に組む。
 
+> 実装メモ (M5): 下記のコンセプトは不変だが、実アプリは **3つの認証済みデスティネーション** で実現する
+> — Onboarding (`#/`)、Intents ハブ + 履歴 (`#/intents`)、**1画面の master/detail Launch ウィザード**
+> (`#/launch`: Intent & Agent Packages → Executor → Watcher → Gas Funding → Start Conditions)、
+> Owner + Watcher + Result + 履歴を統合した **Live Console** (`#/console`)。IntentBuilder は Executor と
+> Watcher 両方の Agent Package を作り、mint 前に各 package を FIX する。ウォレット単位のデータと LLM は
+> Web3→Firebase Auth サインイン（ウォレット署名で Firebase custom token を発行）でゲートする。詳細は
+> [010-interfaces.md](010-interfaces.md) §15.1/§16/§17/§18 と [TASK.md](../TASK.md) M5。
+
 - Owner onboarding
   - Owner がサイトにアクセスする
   - wallet を接続する

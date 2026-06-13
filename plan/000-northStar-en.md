@@ -238,6 +238,15 @@ and the Watcher Agent watch the same timeline and confirm how far the Agent stay
 The screens are organized around the Agent NFT being minted, the Runtime running, and Guarded
 Execution being visible.
 
+> Implementation note (M5): the conceptual journey below is unchanged, but the live app realizes it
+> as **3 authenticated destinations** — Onboarding (`#/`), Intents hub + history (`#/intents`), a
+> **single-screen master/detail Launch wizard** (`#/launch`: Intent & Agent Packages → Executor →
+> Watcher → Gas Funding → Start Conditions), and a merged **Live Console** (`#/console`: Owner +
+> Watcher + Result + history). The IntentBuilder authors BOTH the Executor and Watcher Agent Packages
+> and the user FIXes each before minting. Per-wallet data + the LLM are gated by a Web3→Firebase Auth
+> sign-in (the wallet signature mints a Firebase custom token). See
+> [010-interfaces.md](010-interfaces.md) §15.1/§16/§17/§18 and [TASK.md](../TASK.md) M5.
+
 - Owner onboarding
   - The Owner visits the site
   - Connects a wallet
