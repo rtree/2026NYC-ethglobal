@@ -197,7 +197,7 @@ test("launch wizard: Start Conditions has real loop period + TTL + summary", asy
 test("live console: merged Owner + Watcher controls + timeline + history", async ({ page }) => {
   await passGate(page);
   await page.goto("/#/console");
-  await expect(page.getByText("Live Console · Owner + Watcher · LIVE")).toBeVisible();
+  await expect(page.getByText("Live Console · Owner + Watcher · Control Panel")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Owner controls" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Watcher controls" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Shared execution timeline" })).toBeVisible();

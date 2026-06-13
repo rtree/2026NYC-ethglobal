@@ -172,9 +172,9 @@ test("Start runtime button posts intentId to /api/runtime/start", async ({ page 
   });
   await page.goto("/#/launch");
   await page.getByText("Start Conditions", { exact: true }).first().click();
-  await page.getByRole("button", { name: /Start runtime/ }).click();
+  await page.getByRole("button", { name: /Save runtime schedule/ }).click();
   await expect.poll(() => startBody).toEqual({ intentId: ACTIVE_INTENT.intentId });
-  await expect(page.getByText(/runtime armed/)).toBeVisible();
+  await expect(page.getByText(/runtime schedule saved/)).toBeVisible();
 });
 
 test("Intent List active card should render current intent API values", async ({ page }) => {
