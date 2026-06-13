@@ -104,6 +104,10 @@
     "/^pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.tsx\\?\\\\\\(\" \\| head -20; echo \"exit=\\$\\{PIPESTATUS\\[0\\]\\} done\"$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^cd /home/araki/2026NYC-ethglobal/packages/server && node -e \"try\\{console\\.log\\('google-auth-library OK:', require\\.resolve\\('google-auth-library'\\)\\)\\}catch\\(e\\)\\{console\\.log\\('MISSING from server'\\)\\}\"; ls /home/araki/2026NYC-ethglobal/node_modules/\\.pnpm \\| grep -iE \"\\^google-auth-library@\\|\\^gaxios@\\|\\^google-gax@\" \\| head$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }

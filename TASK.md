@@ -237,15 +237,71 @@ architecture** and making the launch pieces real.
    controls (freeze/tighten). After stop it **becomes** the Result view. Must include a **history
    list of past Intents** so prior runs are reachable.
 
-### Open decisions (BLOCKER until user confirms — fill in when answered)
-- **D1 Data store**: where AgentPackages (pre-mint drafts), conversation transcripts, per-intent
-  metadata, and **history** live. Candidates: Firestore (GCP-native, persistent) / server in-memory +
-  on-chain timeline / SQLite. → DECISION: __TBD__.
-- **D2 IntentBuilder LLM**: real conversation → compiles to Executor+Watcher AgentPackages. Candidates:
-  Vertex AI Gemini (GCP-native, ADC, graceful fallback to scripted mock) / Anthropic|OpenAI via
-  Secret Manager key / keep mock for now. → DECISION: __TBD__.
-- **D3 Delivery cadence**: ship per-screen (intents → launch → console) vs one big reveal.
-  → DECISION: __TBD__.
+### Decisions (locked 2026-06-13)
+- **D1 Data store = Firestore, but ON-CHAIN IS PRIMARY.** The chain is the only source of truth for
+  money state (guard, vaults, balances, cumulativeSpent, EvidenceCommitted/GuardTightened/GuardFrozen
+  timeline). Firestore holds ONLY what cannot live on-chain: pre-mint AgentPackage drafts, the
+  IntentBuilder conversation transcript, each agent's AGENTS.md text, Start config (loop period +
+  Cloud Run TTL), and a lightweight **per-wallet index of intents** so the history list works.
+  Firestore docs are scoped `users/{address}/intents/{intentId}`. On reconnect we reconcile: chain
+  wins, Firestore annotates. Toggle `INTENTOS_STORE=memory|firestore` (memory for dev/e2e).
+- **D2 IntentBuilder LLM = Vertex AI Gemini, BACKEND-ONLY.** The browser NEVER calls Vertex. The
+  server exposes `POST /api/intent/chat` (turn) and `POST /api/intent/compile` (transcript ->
+  Executor+Watcher AgentPackages). These are **session-gated (D4) + rate-limited** so we never hand
+  the public a free LLM proxy. Graceful fallback to the scripted conversation when Vertex is
+  unreachable, so the demo never hard-fails. Toggle `INTENTOS_LLM=vertex|mock`. Called via the
+  existing GCP ADC (REST + google-auth), no model key in the repo.
+- **D3 Delivery = full build, single review** (user choice). Build it all, then one review pass.
+- **D4 Auth = Web3 login → Firebase Auth (Custom Token).** User's idea (2026-06-13): make the wallet a
+  real Firebase Auth user. The wallet signature (SIWE / EIP-4361 message) is the primary credential;
+  the server verifies it and mints a Firebase **custom token**, so the browser signs into Firebase
+  Auth. This gives a per-wallet identity that BOTH Firestore Security Rules (`request.auth.uid`) and
+  our backend trust, and the same Firebase **ID token** gates the Vertex endpoint (no open LLM proxy).
+  - Flow: connect wallet → `GET /api/auth/nonce` (server stores nonce, short TTL) → wallet signs the
+    SIWE message (domain + nonce + chainId) → `POST /api/auth/web3 {message, signature}` → server
+    verifies signature (viem `verifyMessage`) + nonce + domain → mints custom token → browser
+    `signInWithCustomToken` (REST) → Firebase ID token (+ refresh). Protected `/api/*` require a valid
+    ID token (Bearer); the verified address scopes Firestore.
+  - **uid = `eip155:8453:<lowercased address>`** (CAIP-10; chain-explicit, future-proof). Custom
+    claims `{ address, chainId }`.
+  - **Key-less minting (supply-chain policy):** the custom token is a JWT (alg RS256, iss=sub=Cloud
+    Run SA email, aud=`https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit`,
+    exp ≤ iat+3600, uid). We sign it via the **IAM Credentials `signJwt`** REST API using ADC — NO
+    service-account JSON key in the repo. Cloud Run SA needs `roles/iam.serviceAccountTokenCreator`
+    on itself (`iam.serviceAccounts.signJwt`).
+  - **No Firebase SDKs:** browser calls Identity Toolkit REST `accounts:signInWithCustomToken?key=WEB_API_KEY`
+    directly (Web API Key is NOT a secret — it ships in every Firebase web app) and refreshes via
+    `securetoken.googleapis.com/v1/token`. Server verifies Firebase ID tokens by fetching Google's
+    `securetoken@system.gserviceaccount.com` x509 certs and checking RS256 + aud=projectId +
+    iss=`https://securetoken.google.com/<projectId>` + exp (node crypto; no firebase-admin).
+  - Toggle `INTENTOS_AUTH=firebase|off` (off for dev/e2e). Basic auth stays the venue-door perimeter;
+    Firebase Auth is the per-wallet locker.
+  - **Demo compromise (unchanged):** ONE shared on-chain demo Owner EOA (judges can't 7702-delegate
+    real funds) → everyone shares the single on-chain Intent; the OFF-chain layer (drafts / transcript
+    / history) is per-wallet via the Firebase uid. PRODUCT mode (future, North Star): the connected
+    wallet IS its own 7702 Owner.
+- Implementation note: Firestore + Vertex + IAM signJwt are accessed **server-side via REST +
+  `google-auth-library` ADC** (promote it to a direct `@intentos/server` dep — already in the pnpm
+  store at 9.15.1 via @google-cloud/secret-manager, so no new download; avoids the heavy
+  @google-cloud/{firestore,vertexai} + firebase / firebase-admin packages). Verify Firebase ID tokens
+  with node crypto against the securetoken x509 certs. Hand-roll the SIWE message; verify with viem
+  `verifyMessage`.
+
+### M5 infra to provision (GCP project ethglobal-nyc2026-rtree)
+- Enable APIs: `identitytoolkit.googleapis.com` (Firebase Auth / GCIP), `firestore.googleapis.com`,
+  `aiplatform.googleapis.com` (Vertex), `iamcredentials.googleapis.com` (signJwt).
+- Initialize **Firebase Auth** (GCIP) on the project + ensure custom-token sign-in is on (may need a
+  one-time console "Get started" click — flag to user).
+- Create a **Web API Key** (restricted to identitytoolkit + securetoken) → expose to the browser as
+  `VITE_FIREBASE_API_KEY` (non-secret) + `VITE_FIREBASE_PROJECT_ID`.
+- Create **Firestore** database (Native mode, us-central1 or nam5).
+- Grant Cloud Run SA `intentos-panel@…`: `roles/iam.serviceAccountTokenCreator` (on itself, for
+  signJwt), `roles/datastore.user` (Firestore), `roles/aiplatform.user` (Vertex).
+
+### Open decisions (revisit as needed — user: "必要に応じて議論継続しよう")
+- True per-wallet on-chain isolation (each user their own 7702 Owner) — deferred to PRODUCT mode.
+- Firestore security rules vs. backend-only access (currently backend-only via ADC; browser never
+  touches Firestore directly).
 
 ### Done in this session
 - Intent List (`#/intents`): session-scoped active state; empty-state has no stray button (entry
