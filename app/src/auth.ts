@@ -46,6 +46,34 @@ export function authState(): { uid: string; address: string } | null {
   return session ? { uid: session.uid, address: session.address } : null;
 }
 
+// Whether the SERVER gates /api/* with Firebase auth. This is the single source of truth (the client
+// must NOT decide from its own VITE_FIREBASE_API_KEY, or the two can disagree — AUTH-002). Cached after
+// first fetch; falls back to the client key heuristic only if /api/config is unreachable.
+let serverAuthRequired: boolean | null = null;
+let authConfigPromise: Promise<boolean> | null = null;
+
+export function authRequiredCached(): boolean {
+  return serverAuthRequired ?? !!FIREBASE_API_KEY;
+}
+
+export async function fetchAuthRequired(): Promise<boolean> {
+  if (serverAuthRequired !== null) return serverAuthRequired;
+  if (!authConfigPromise) {
+    authConfigPromise = fetch("/api/config")
+      .then((r) => (r.ok ? (r.json() as Promise<{ authRequired?: boolean }>) : Promise.reject(new Error(String(r.status)))))
+      .then((c) => {
+        serverAuthRequired = !!c.authRequired;
+        window.dispatchEvent(new CustomEvent("intentos:auth"));
+        return serverAuthRequired;
+      })
+      .catch(() => {
+        serverAuthRequired = !!FIREBASE_API_KEY; // fall back so dev/e2e still work without /api/config
+        return serverAuthRequired;
+      });
+  }
+  return authConfigPromise;
+}
+
 /** Bearer for /api/*, refreshing if near expiry. Null when not signed in. */
 export async function bearer(): Promise<string | null> {
   if (!session) return null;
@@ -97,7 +125,16 @@ export async function signInWithWallet(address: Address, signMessageAsync: SignM
 
   // 4) exchange custom token for a Firebase ID token (Identity Toolkit REST)
   if (!FIREBASE_API_KEY) {
-    // Auth is off on the server side (dev): record a local session so the UI shows "signed in".
+    // No client Firebase key. Only safe when the SERVER also has auth off — otherwise we'd create an
+    // empty-token "signed in" session that 401s every write (AUTH-002). Ask the server and fail loudly
+    // on the misconfiguration instead of pretending to be signed in.
+    const required = await fetchAuthRequired();
+    if (required) {
+      throw new Error(
+        "This deployment requires sign-in, but the app was built without VITE_FIREBASE_API_KEY. Rebuild the app with the Firebase web config.",
+      );
+    }
+    // server auth is OFF (dev): an empty local session is accepted because the server ignores tokens
     session = { uid, address: addr, idToken: "", refreshToken: "", exp: Date.now() + 3_600_000 };
     persist();
     window.dispatchEvent(new CustomEvent("intentos:auth"));
