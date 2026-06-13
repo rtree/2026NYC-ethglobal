@@ -279,6 +279,7 @@ export async function createWatcher() {
   });
   session.watcherTokenId = r.tokenId.toString();
   logAction({ at: Date.now(), action: `mint Watcher Agent NFT #${r.tokenId} (quorum 1)`, txHash: r.txHash, ok: true });
+  await ensureWatcherVault();
   return { tokenId: r.tokenId.toString(), txHash: r.txHash };
 }
 
@@ -316,6 +317,7 @@ export async function trade() {
 
 export async function watcherFreeze() {
   const c = await ctx();
+  await ensureWatcherVault();
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
   const txHash = await voteFreeze(c.wallet, c.pub, c.delegate, guard.bindingNonce, c.platform);
   logAction({ at: Date.now(), action: "Watcher VOTE_FREEZE (quorum 1)", txHash, ok: true });
@@ -324,6 +326,7 @@ export async function watcherFreeze() {
 
 export async function watcherTighten() {
   const c = await ctx();
+  await ensureWatcherVault();
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
   const patch: GuardPatch = {
     amountCapPerTx: guard.amountCapPerTx > 1n ? guard.amountCapPerTx / 2n : 1n,
