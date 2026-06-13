@@ -126,4 +126,33 @@ EIP-7702 によって、Owner の EOA そのものに「契約コード」を後
 だから「Agent が custody を持つ」のではなく、Agent は Owner アカウントに対して制約付きの『実行要求』を出せるだけ。資金は常に Owner のもので、契約のガードが最終的な栓になっています。
 cap を越えた要求は adapter で握りつぶさず、契約が AmountTooLarge で revert し、その却下理由を LLM に返して境界内に再要求させます。
 
+### どうやって Gas 代を他人に払わせて Transaction を出すのか
 
+ここではPlarform、つまり我々IntentOS構築者が作った Relayer が主役です。ポイントは 「署名する人(SessionKey)」と「tx を送って gas を払う人(Relayer)」を分離することです。
+
+```
+[事前] Owner EOA の契約 : fundGasVault() で ETH を prefund   [Owner ETH → vault lane]
+                          gasVaultBalance に gas budget を積む
+        ▼
+SessionKey(KMS)  : (r) を digest 署名 → sig                         [0 ETH]
+        │ (r, sig) を adapter 経由で Relayer に渡す
+        ▼
+Relayer(Platform): writeContract(submitExecutionRequest, [r, sig]) を送信
+                   tx の gas を自分の ETH で先払い                   [ETH 減る]
+        ▼
+Owner EOA の契約 : ① 署名検証 + Guardrails 照合
+                   ② Owner の USDC を transfer                       [USDC 減る]
+                   ③ gas 実費を計測: spent = usedGas * tx.gasprice
+                   ④ gasCap で clamp: spent = min(spent, gasPerTxCap)
+                   ⑤ vault 残高確認: spent <= gasVaultBalance か      [枯渇なら revert]
+                   ⑥ ExecutionGasVault lane から精算
+                      gasVaultBalance -= spent
+                      address(this)(=Owner ETH) → Relayer へ送金      [vault lane 減る]
+        ▼
+Relayer(Platform): 立替分が戻る                                      [ETH ほぼ回収]
+
+  ※ ⑥の vault は別口座ではなく、address(this)==Owner EOA の ETH を
+    delegated account code が gasVaultBalance 勘定で管理する lane
+  ※ Executor lane と Watcher lane は別 gasVaultBalance に分離
+  ※ clamp 超過分(spent > gasPerTxCap)は信頼前提で Platform 持ち出し
+```
