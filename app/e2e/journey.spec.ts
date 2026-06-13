@@ -2,11 +2,45 @@ import { test, expect } from "@playwright/test";
 import { injectMockWallet } from "./mockWallet";
 
 // Full-journey UI e2e. Injects a mock wallet, walks every route, and asserts render + transitions +
-// gate behavior. Read/nav fully automated. Money write-paths (trade/freeze) are covered by the API
-// test (server) and exercised live separately; here we assert the buttons exist and are wired.
+// gate behavior. /api/state is mocked with a deterministic fixture so screens render instantly and
+// independently of the live RPC (the real chain path is covered by the contract + server API tests).
+
+const STATE_FIXTURE = {
+  chainId: 8453,
+  delegate: "0xeEa9c291544d02397FD8078e3162a3549ADa0f01",
+  agentNft: "0x3da4947a9b5e255219fa39c52a68219da8f9a7ec",
+  sessionKey: "0x86bA13f74C5f2AC469eeb6e0010A6AFfd49298eE",
+  watcherKey: "0xEe1Dc2f082612D6d510D7E3b3EEd26cE385E9D38",
+  delegated: true,
+  guard: {
+    tokenA: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    tokenB: "0x4200000000000000000000000000000000000006",
+    amountCapPerTx: "2000",
+    cumulativeCap: "100000",
+    slippageCapBps: 300,
+    expiry: "9999999999",
+    frozen: false,
+    bindingNonce: "1",
+  },
+  cumulativeSpent: "8000",
+  execVault: "1991000000000000",
+  watcherVault: "800000000000000",
+  usdc: "970996",
+  weth: "4770000000000",
+  timeline: [
+    { kind: "evidence", title: "EvidenceCommitted", reason: "BUY 0.001 USDC->WETH (Executor #1)", txHash: "0x6f5323999cef2563ae641f05be1bd100597bb1a92486145bf5347db390a6fecc", blockNumber: "47281172" },
+    { kind: "freeze", title: "Watcher · VOTE_FREEZE", reason: "Execution frozen", txHash: "0xd80139c4de5f9da7bca3c9725799fa26d1d832e9e25ffad43760555d4bfc5836", blockNumber: "47281100" },
+  ],
+  session: { executorTokenId: "1", watcherTokenId: "2" },
+  actions: [
+    { at: Date.now(), action: "guarded trade executed (USDC->WETH)", txHash: "0x6f5323999cef2563ae641f05be1bd100597bb1a92486145bf5347db390a6fecc", ok: true },
+  ],
+};
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(injectMockWallet);
+  // Deterministic, instant state for the dashboards (no live RPC in UI tests).
+  await page.route("**/api/state", (route) => route.fulfill({ json: STATE_FIXTURE }));
 });
 
 test("010 onboarding gate blocks entry until wallet + World ID", async ({ page }) => {
@@ -72,15 +106,15 @@ test("050 Agent Identity shows ENS name + ERC-8004 registration JSON", async ({ 
   await page.goto("/#/launch/identity");
   await expect(page.getByText("050 · Agent Identity")).toBeVisible();
   await expect(page.getByText("erc8004-agent-registration")).toBeVisible();
-  await expect(page.getByText(/\.intentos\.base\.eth/)).toBeVisible();
+  await expect(page.getByText(/\.intentos\.base\.eth/).first()).toBeVisible();
 });
 
 test("060 Runtime & funding shows binding + gas vault lanes", async ({ page }) => {
   await passGate(page);
   await page.goto("/#/launch/runtime");
   await expect(page.getByText("060 · Runtime & Funding")).toBeVisible();
-  await expect(page.getByText("Executor lane")).toBeVisible();
-  await expect(page.getByText("Watcher lane")).toBeVisible();
+  await expect(page.getByText("Executor lane").first()).toBeVisible();
+  await expect(page.getByText("Watcher lane").first()).toBeVisible();
 });
 
 test("070 Watcher creation shows immutable context + create button", async ({ page }) => {

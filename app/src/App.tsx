@@ -10,7 +10,6 @@ import { Start } from "./Start";
 import { OwnerDashboard } from "./OwnerDashboard";
 import { WatcherDashboard } from "./WatcherDashboard";
 import { ResultScreen } from "./ResultScreen";
-import { useGate } from "./gate";
 
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash || "#/");
@@ -24,14 +23,11 @@ function useHashRoute() {
 
 export function App() {
   const hash = useHashRoute();
-  const { passed } = useGate();
 
-  // Onboarding gate: "#/" is onboarding until both gates pass, then it forwards to the Intent List.
+  // "#/" is the onboarding screen. It owns its own gates and an explicit "Enter" that navigates to
+  // "#/intents". We intentionally do NOT auto-redirect here, so the verified state + Enter step are
+  // visible and testable (the gate is honest about both steps).
   if (hash === "#/" || hash === "") {
-    if (passed) {
-      window.location.hash = "#/intents";
-      return <IntentList />;
-    }
     return <Onboarding />;
   }
 

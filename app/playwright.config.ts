@@ -4,8 +4,8 @@ import { defineConfig } from "@playwright/test";
 // Start both before running: see app/e2e/README note. CI-friendly: set E2E_BASE_URL.
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 60_000,
-  expect: { timeout: 15_000 },
+  timeout: 20_000,
+  expect: { timeout: 8_000 },
   fullyParallel: false,
   retries: 0,
   reporter: [["list"]],

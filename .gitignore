@@ -7,6 +7,10 @@ build/
 coverage/
 .cache/
 
+# --- Playwright ---
+app/test-results/
+app/playwright-report/
+
 # --- Foundry ---
 contracts/out/
 contracts/cache/
