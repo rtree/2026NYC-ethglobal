@@ -95,6 +95,12 @@ const EMPTY_STATE = {
   session: { executorTokenId: null, watcherTokenId: null },
 };
 
+// Executor exists (so the Start-runtime button is enabled) but vaults still reflect API values.
+const EMPTY_STATE_WITH_EXECUTOR = {
+  ...API_STATE,
+  session: { executorTokenId: "77", watcherTokenId: null },
+};
+
 async function setupApi(page: Page, state = API_STATE) {
   await page.addInitScript(injectMockWallet);
   await page.route("**/api/state", (route) => route.fulfill({ json: state }));
@@ -220,7 +226,6 @@ test("Intent List reset should send the current intentId", async ({ page }) => {
 });
 
 test("protected IntentBuilder calls should include a Firebase Bearer token", async ({ page }) => {
-  test.fail(true, "AUTH-002: when VITE_FIREBASE_API_KEY is absent, UI creates an empty-token local session and backend returns missing bearer token.");
   await setupApi(page);
   await passGate(page);
 
