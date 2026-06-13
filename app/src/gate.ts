@@ -3,14 +3,9 @@
 // ID is mocked in dev (clearly labeled) and uses real IDKit when VITE_WORLDID_APP_ID is set.
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import { authState, FIREBASE_API_KEY } from "./auth";
+import { authState, authRequiredCached, fetchAuthRequired } from "./auth";
 
 const WORLDID_KEY = "intentos:worldid";
-
-// When a Firebase Web API key is configured, the backend gates /api/* with a Firebase ID token, so the
-// user MUST complete the Web3->Firebase sign-in before entering (otherwise every API call 401s). In
-// dev (no key) sign-in is a no-op and not required.
-export const AUTH_REQUIRED = !!FIREBASE_API_KEY;
 
 export function worldIdVerified(): boolean {
   return sessionStorage.getItem(WORLDID_KEY) === "1";
@@ -25,15 +20,22 @@ export function setWorldIdVerified(v: boolean) {
 export const WORLDID_APP_ID = import.meta.env.VITE_WORLDID_APP_ID ?? "";
 export const WORLDID_ACTION = import.meta.env.VITE_WORLDID_ACTION ?? "intentos-onboarding";
 
-/** Combined gate: wallet connected (+ signed in to Firebase via SIWE) + World ID verified. */
+/** Combined gate: wallet connected (+ signed in to Firebase via SIWE) + World ID verified.
+ *  Whether sign-in is REQUIRED comes from the SERVER (/api/config), not the client build key, so the
+ *  client and server can never disagree (AUTH-002). */
 export function useGate() {
   const { isConnected, address } = useAccount();
   const [verified, setVerified] = useState(worldIdVerified());
   const [signedIn, setSignedIn] = useState(!!authState());
+  const [authRequired, setAuthRequired] = useState(authRequiredCached());
 
   useEffect(() => {
+    fetchAuthRequired().then(setAuthRequired).catch(() => {});
     const onGate = () => setVerified(worldIdVerified());
-    const onAuth = () => setSignedIn(!!authState());
+    const onAuth = () => {
+      setSignedIn(!!authState());
+      setAuthRequired(authRequiredCached());
+    };
     window.addEventListener("intentos:gate", onGate);
     window.addEventListener("intentos:auth", onAuth);
     return () => {
@@ -42,6 +44,6 @@ export function useGate() {
     };
   }, []);
 
-  const authOk = !AUTH_REQUIRED || signedIn;
-  return { isConnected, address, verified, signedIn, authRequired: AUTH_REQUIRED, passed: isConnected && authOk && verified };
+  const authOk = !authRequired || signedIn;
+  return { isConnected, address, verified, signedIn, authRequired, passed: isConnected && authOk && verified };
 }

@@ -41,6 +41,8 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(injectMockWallet);
   // Deterministic, instant state for the dashboards (no live RPC in UI tests).
   await page.route("**/api/state", (route) => route.fulfill({ json: STATE_FIXTURE }));
+  // Server reports auth is required, so the client demands sign-in (single source of truth, AUTH-002).
+  await page.route("**/api/config", (route) => route.fulfill({ json: { authRequired: true } }));
   // Auth handshake: nonce + web3 are stubbed, and the Firebase REST exchange (signInWithCustomToken /
   // securetoken refresh) is mocked too, so the Web3->Firebase sign-in completes headlessly and the
   // onboarding gate (which now requires sign-in when VITE_FIREBASE_API_KEY is set) passes.

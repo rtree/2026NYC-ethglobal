@@ -104,6 +104,7 @@ const EMPTY_STATE_WITH_EXECUTOR = {
 async function setupApi(page: Page, state = API_STATE) {
   await page.addInitScript(injectMockWallet);
   await page.route("**/api/state", (route) => route.fulfill({ json: state }));
+  await page.route("**/api/config", (route) => route.fulfill({ json: { authRequired: true } }));
   await page.route("**/api/auth/nonce**", (route) =>
     route.fulfill({ json: { nonce: "testnonce", message: "localhost wants you to sign in\nNonce: testnonce" } }),
   );
