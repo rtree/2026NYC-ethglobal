@@ -443,7 +443,17 @@ Runtime Capsule には Runtime 専用の SessionKey が渡される。
 - SessionKey / IntentOS tool adapter / ExecutionGasVault / ExecutionContract / Watcher vote contract は、Runtime Binding が current owner に紐づいていることを確認する。
 - したがって old Runtime が自律的に動き続けても、Transfer 後に意味のある onchain interaction はできない。
 
-### 3.6 ExecutionGasVault と gas の後精算
+### 3.6 Runtime Injection（Agent Package を OpenClaw context に載せる）
+
+OpenClaw は workspace files を system prompt / project context に注入する runtime である。OpenClaw が native に読むのは主に `AGENTS.md` / `SOUL.md` / `TOOLS.md` であり、Agent Package の残りのファイル（`SUMMARY` / `MEMORY` / `EVIDENCE` / `STOP` / `CONSTRAINTS`）は IntentOS 側で runtime context に載せる必要がある。
+
+注入方式は2段階で考える。
+- MVP: Runtime Registry が Agent Package を workspace に materialize し、`AGENTS.md` に `SUMMARY` / `MEMORY` / `EVIDENCE` / `STOP` / `CONSTRAINTS` の要約と file path を埋め込む。
+- Better: IntentOS OpenClaw plugin が before_prompt_build hook で Agent Package 全体を注入する。
+
+spawn / resume 時、Runtime Registry は `ownerOf(tokenId)` と Owner の Web3 login / World ID proof を確認し、Agent Package を取得して packageHash を検証してから Runtime Capsule を起動する。ExecutorRuntime と WatcherRuntime は同じ OpenClaw image を使ってよいが、workspace / agent id / session store / tool policy / gas vault lane は分離する。
+
+### 3.7 ExecutionGasVault と gas の後精算
 
 ExecutionGasVault は standalone gas sponsor ではない。
 - Owner の EIP-7702 delegated account code 内に置かれる gas reimbursement lane である。
@@ -582,7 +592,21 @@ Concrete tool surfaces:
   Executor Agent <-> Watcher Agent chat
 ```
 
-任意 shell、任意 URL fetch、任意 contract call は有効にしない。
+`intentos.submit_execution_request` は任意 calldata submitter ではない。args を validate し、quote / simulation / evidence hash を bind し、typed ExecutionRequest を組み立て、SessionKey / KMS で署名して EIP-7702 delegated account に送る typed tool である。
+
+OpenClaw に渡さない authority は明示的に固定する。
+
+```text
+OpenClaw に渡さない:
+  任意 shell
+  任意 URL fetch
+  任意 contract call
+  任意 calldata 生成
+  private key export
+  policy loosen
+  delegate contract change
+  ExecutionGasVault 差し替え
+```
 
 
 ---
