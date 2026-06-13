@@ -9,12 +9,12 @@ math: false
 
 <!--
 IntentOS — ULTRA-SHORT deck（2 slides, engineer-friendly）
-狙い: エンジニアが「読んでそのまま喋れる」2枚。詩的コピーをやめ、技術フックを面に出す。
-  Slide 1 = The Problem → The Shift（なぜ難しい→3層アライメントの構え）
-  Slide 2 = How it works（EIP-7702 / session key 0 ETH / Relayer / Watcherは締めるだけ）+ 背骨 + デモ予告
+狙い: エンジニアが「読んでそのまま喋れる」2枚。断定・事実先行、弁明調なし。
+  Slide 1 = Problem & Solution（課題 → 解決方法＝3層アライメント）
+  Slide 2 = Architecture & Implementation（技術構成図 + 実行フロー＝誰が署名/relay/照合するか）+ 背骨 + デモ予告
 録画: 2枚ともデモ前に見せる → Slide 2 を言い切ったら product へ切替（唯一の切替）→ ライブデモ
       → デモ後は Slide 2 に戻り keycopy「alignment, not trust」で締める。
-台本: 各スライド末尾の HTML コメント = presenter note（自然な口語の EN 原稿。記号区切りなし）。
+台本: 各スライド末尾の HTML コメント = presenter note（自然な口語の EN 原稿。断定調・記号区切りなし）。
 ブランド: pitch.md と同一の明るい light 基調（bg #EAEEF7）+ mint=整合/安全, blue=技術, coral=リスク。
 書き出し:
   npx @marp-team/marp-cli deck/pitch-short.md -o deck/pitch-short.pdf
@@ -85,17 +85,40 @@ a{color:var(--accent2);}
 .spec .v{font-size:22px;line-height:1.35;}
 .spec .v code{background:var(--card);border:1px solid var(--line2);border-radius:7px;padding:2px 8px;font-size:19px;}
 .note{margin-top:18px;font-size:18px;color:var(--muted);}
+.mono2{font-family:"SFMono-Regular",ui-monospace,"JetBrains Mono","Menlo",monospace;}
+/* architecture two-column: stack diagram + execution flow */
+.arch{display:grid;grid-template-columns:1.05fr 1fr;gap:30px;margin-top:24px;}
+.archlab{font-size:14px;letter-spacing:2px;text-transform:uppercase;font-weight:800;color:var(--accent2);margin-bottom:12px;}
+.stack{display:flex;flex-direction:column;gap:10px;}
+.box{background:var(--card);border:1px solid var(--line2);border-radius:12px;padding:12px 16px;}
+.box .bt{font-weight:800;font-size:19px;}
+.box .bd{font-size:15px;color:var(--muted);line-height:1.35;margin-top:2px;}
+.box.eoa{border-color:#7FD8B8;background:#E6F7F0;}
+.box.eoa .bt{color:#0B8C62;}
+.box.nest{margin-left:20px;}
+.box.off{background:#EEF1F8;}
+.steps{counter-reset:s;margin:0;padding:0;list-style:none;}
+.steps li{position:relative;padding-left:42px;margin:0 0 14px;font-size:18px;line-height:1.38;}
+.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--accent2);color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;}
+.steps code{background:var(--card);border:1px solid var(--line2);border-radius:6px;padding:1px 7px;font-size:15px;}
+.steps b{font-weight:800;}
+.steps .ok{color:#0B8C62;font-weight:800;}
+.steps .no{color:var(--danger);font-weight:800;}
+.tag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);background:var(--card);border:1px solid var(--line2);border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:middle;}
+/* dense slide 2 fits in 16:9 */
+section.howitworks{padding:60px 88px;}
+section.howitworks h2{font-size:38px;margin-bottom:6px;}
 </style>
 
 <!-- _class: opener -->
 
-<div class="kicker">ETHGlobal NYC · 2026 — IntentOS</div>
+<div class="kicker">ETHGlobal NYC · 2026 — IntentOS · ① Problem &amp; Solution</div>
 
 ## You want an agent to trade <span class="mono">USDC↔WETH</span> while you sleep.<br/>The risk isn't a rogue AI — it's <span class="bad">a wrong intent, optimized perfectly.</span>
 
 <div class="split">
 <div class="col bad-col">
-<div class="lab">Today you pick one</div>
+<div class="lab">The problem · today you pick one</div>
 <ul class="pain">
 <li>Approve every tx by hand → you miss the opportunity.</li>
 <li>Hand the agent your keys → you lose custody &amp; control.</li>
@@ -103,57 +126,71 @@ a{color:var(--accent2);}
 </ul>
 </div>
 <div class="col good-col">
-<div class="lab">IntentOS — align at every layer</div>
+<div class="lab">The solution · align at every layer</div>
 <ul class="layers">
-<li class="layer"><span class="lk">Initial</span><span class="lv"><b>Intent Builder</b> compiles intent → a typed <b>Constitution</b>.</span></li>
-<li class="layer"><span class="lk">Mechanical</span><span class="lv"><b>EIP-7702</b> enforces hard limits on every tx.</span></li>
-<li class="layer"><span class="lk">Semantic</span><span class="lv"><b>Watcher Agent</b> re-reads intent &amp; can only tighten.</span></li>
+<li class="layer"><span class="lk">Initial</span><span class="lv"><b>Intent Builder</b> — compile intent into a typed <b>Constitution</b>.</span></li>
+<li class="layer"><span class="lk">Mechanical</span><span class="lv"><b>EIP-7702</b> — enforce hard limits on every tx, on your own EOA.</span></li>
+<li class="layer"><span class="lk">Semantic</span><span class="lv"><b>Watcher Agent</b> — re-read intent over time; tighten-only.</span></li>
 </ul>
 </div>
 </div>
 
-<div class="footer">Autonomy without authority</div>
+<div class="footer">Autonomy without authority — align it, don't trust it</div>
 
 <!--
-EN presenter note (natural, conversational — read it like you'd explain to another engineer):
+EN presenter note (assertive, fact-first — explain it to another engineer, no hedging):
 
-"Okay, the setup. You want an agent to grow your ETH — trade USDC and WETH for you while you're asleep. The scary part isn't some rogue AI going evil. It's subtler: you give it a goal, it optimizes that goal perfectly, and it does exactly what you said instead of what you meant.
+"The setup. You want an agent to grow your ETH — trade USDC and WETH while you sleep. The real risk isn't a rogue AI. It's subtler and worse: you give it a goal, it optimizes that goal perfectly, and it does exactly what you said instead of what you meant.
 
-And today you're stuck picking one of two bad options. Either you approve every transaction by hand — and you miss the move — or you hand the agent your keys and you've given up custody. Static spend limits don't save you either, because a fixed cap can't tell 'buy the dip' apart from 'catch a falling knife.'
+Today you only get two options, and both are bad. Approve every transaction by hand, and you miss the move. Or hand the agent your keys, and you've given up custody. Static spend limits don't fix it either — a fixed cap can't tell 'buy the dip' from 'catch a falling knife.'
 
-So IntentOS doesn't ask you to trust the agent. We align it at three layers. First, initial alignment: an Intent Builder interviews you and compiles your intent into a typed Constitution. Second, mechanical alignment: with EIP-7702 those limits are enforced on your own account, on every transaction. Third, semantic alignment: a Watcher Agent re-reads your original intent over time — and it can only tighten, never loosen. That's the whole pitch — let me show you how it actually works."
+IntentOS solves it by aligning the agent at three layers. Initial: an Intent Builder compiles your intent into a typed Constitution. Mechanical: EIP-7702 enforces hard limits on every transaction, on your own account. Semantic: a Watcher Agent re-reads your intent over time and can only tighten. Next slide — the architecture, then we run it live."
 -->
 
 ---
 
 <!-- _class: howitworks -->
 
-<div class="kicker">How it works · the demo you're about to see</div>
+<div class="kicker">② Architecture &amp; Implementation · the demo you're about to see</div>
 
-## Your intent becomes an agent that executes — <span class="hl">without ever holding your funds.</span>
+## The agent executes on your behalf — <span class="hl">without ever holding your funds.</span>
 
-<div class="spec">
-<div class="row"><div class="k">Custody</div><div class="v"><b>EIP-7702</b> attaches contract code to <b>your own EOA</b>. Funds never move — you keep self-custody.</div></div>
-<div class="row"><div class="k">Agent key</div><div class="v">Runtime holds a <b>session key with <code>0 ETH</code></b> — it can <i>request</i> execution, never move money.</div></div>
-<div class="row"><div class="k">Gas</div><div class="v">A <b>Relayer</b> fronts gas; it's repaid from an in-account <b>GasVault</b>. The agent has zero custody.</div></div>
-<div class="row"><div class="k">Hard guard</div><div class="v">Contract checks every request: <code>token</code> · <code>amount</code> · <code>slippage</code> · <code>expiry</code> → inside = execute, outside = <b>revert</b>.</div></div>
-<div class="row"><div class="k">Semantic guard</div><div class="v"><b>Watcher Agent</b> reads on-chain evidence &amp; can <b>tighten / freeze</b> — <span class="hl">never loosen. Only you can.</span></div></div>
+<div class="arch">
+<div>
+<div class="archlab">Components</div>
+<div class="stack">
+<div class="box eoa"><div class="bt">Owner EOA <span class="tag">EIP-7702</span></div><div class="bd">Funds stay here. Contract code is delegated onto your own account.</div></div>
+<div class="box eoa nest"><div class="bt">ExecutionContract + Hard Guardrails</div><div class="bd">Typed limits: token · amount · slippage · expiry · freeze.</div></div>
+<div class="box eoa nest"><div class="bt">ExecutionGasVault</div><div class="bd">Owner-prefunded gas lane. Executor / Watcher lanes are separate.</div></div>
+<div class="box off"><div class="bt">Cloud Run Runtime + SessionKey <span class="tag mono2">0 ETH</span></div><div class="bd">OpenClaw agent. Holds a request key (KMS), never fund custody.</div></div>
+<div class="box off"><div class="bt">Relayer + Watcher Agent</div><div class="bd">Relayer fronts gas; Watcher reads on-chain evidence, tighten-only.</div></div>
+</div>
+</div>
+<div>
+<div class="archlab">Execution flow — per tick</div>
+<ol class="steps">
+<li><b>Executor</b> emits a signal: <code>swap 50 USDC→WETH</code> (no keys).</li>
+<li>Adapter quotes + simulates → builds a <b>typed ExecutionRequest</b>.</li>
+<li><b>SessionKey (KMS)</b> signs the request digest — <span class="mono2">0 ETH</span>, can't send.</li>
+<li><b>Relayer</b> submits <code>(req, sig)</code> &amp; fronts gas.</li>
+<li><b>Contract</b> verifies sig + Hard Guardrails → <span class="ok">inside: execute</span> / <span class="no">outside: revert</span>.</li>
+<li>Settle gas from <b>GasVault</b>; emit <code>EvidenceCommitted</code> for the Watcher.</li>
+</ol>
+</div>
 </div>
 
-<div class="keycopy" style="margin-top:24px;">Autonomous agents need <span class="hl">alignment</span>, not trust.</div>
+<div class="keycopy" style="margin-top:18px;">Autonomous agents need <span class="hl">alignment</span>, not trust.</div>
 
 <div class="footer">IntentOS · ETHGlobal NYC 2026 — next: live demo on Base mainnet</div>
 
 <!--
-EN presenter note (natural, conversational — this is the slide you cut from into the live demo):
+EN presenter note (assertive, fact-first — this is the slide you cut from into the live demo):
 
-"Here's the architecture, then we go straight to the live product. The trick is custody. We do NOT move your money into some new smart-contract wallet. With EIP-7702 we attach contract code to your own EOA — your funds literally never move, you keep self-custody the whole time.
+"Here's the architecture, then we run it live. The core trick is custody. We don't move your money into a new contract wallet. With EIP-7702 we delegate contract code onto your own EOA — funds stay put, self-custody holds the whole time. Inside that account live three things: the ExecutionContract with the hard guardrails, and a gas vault you prefund. Off-chain, on Cloud Run, the agent runs with a session key worth zero ETH and a relayer that fronts gas.
 
-The agent's runtime only holds a session key worth zero ETH. It can request an execution, but it can't move a cent on its own. Gas? A relayer fronts it and gets paid back from a gas vault that lives inside your account — so again, the agent never holds funds.
+Now the flow, per tick. The executor emits a signal — swap fifty USDC to WETH — it holds no keys. The adapter quotes, simulates, and builds a typed ExecutionRequest. The session key in KMS signs the request digest; it has zero ETH and can't even send the transaction. The relayer submits the request plus signature and fronts the gas. The contract verifies the signature and checks the hard guardrails — token, amount, slippage, expiry. Inside the limits, it executes; outside, it reverts. Then gas is settled from the vault, and it emits an EvidenceCommitted event for the Watcher to audit.
 
-Every request hits a hard guard in the contract: it checks the token pair, the amount, slippage, expiry — inside the limits it executes, outside it just reverts. That's mechanical. Then on top, an optional Watcher Agent reads the on-chain evidence and can tighten or freeze the limits over time — but here's the key invariant: it can only tighten, never loosen. Even a compromised watcher can only make you safer. Only you, the owner, can loosen.
-
-So the one line to remember is: autonomous agents need alignment, not trust. Let me show you — this is running on Base mainnet."
+So authority never leaves your account. The one line: autonomous agents need alignment, not trust. Let me show you — live on Base mainnet."
 
 🔀 ここで画面共有を product に切替（唯一の切替）。デモ後はこのスライドに戻り、keycopy で締める。
 -->
