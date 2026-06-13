@@ -41,6 +41,46 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(injectMockWallet);
   // Deterministic, instant state for the dashboards (no live RPC in UI tests).
   await page.route("**/api/state", (route) => route.fulfill({ json: STATE_FIXTURE }));
+  // Auth handshake (server runs INTENTOS_AUTH=off in tests): nonce + web3 are stubbed so the wallet
+  // sign-in flow completes without hitting Firebase.
+  await page.route("**/api/auth/nonce**", (route) =>
+    route.fulfill({ json: { nonce: "testnonce", message: "localhost wants you to sign in\nNonce: testnonce" } }),
+  );
+  await page.route("**/api/auth/web3", (route) =>
+    route.fulfill({ json: { customToken: "", uid: "eip155:8453:0xtest", address: "0xtest" } }),
+  );
+  // IntentBuilder + store (memory) — return a deterministic draft so the wizard renders packages.
+  const draftPkg = (role: "EXECUTOR" | "WATCHER") => ({
+    role,
+    summary: role === "EXECUTOR" ? "DCA USDC->WETH in small guarded buys." : "Tighten/freeze on violations.",
+    agents: `# ${role}\nObjective: demo.`,
+    soul: "conservative",
+    constraints: { tokenA: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", tokenB: "0x4200000000000000000000000000000000000006", poolFee: 500, amountCapPerTx: "2000", cumulativeCap: "100000", slippageCapBps: 300, expiry: "9999999999" },
+    semantic: ["route naturalness", "quote freshness"],
+    fixed: false,
+  });
+  const INTENT_FIXTURE = {
+    intentId: "intent-test",
+    title: "DCA USDC -> WETH",
+    status: "draft",
+    createdAt: Date.now(),
+    executorTokenId: null,
+    watcherTokenId: null,
+    packages: { executor: draftPkg("EXECUTOR"), watcher: draftPkg("WATCHER") },
+    startConfig: { loopPeriodSec: 5, ttlMinutes: 10, watcherEnabled: true },
+    transcript: [],
+  };
+  await page.route("**/api/intents", (route) => route.fulfill({ json: { intents: [] } }));
+  await page.route("**/api/intents/*", (route) => route.fulfill({ json: INTENT_FIXTURE }));
+  await page.route("**/api/intent/chat", (route) =>
+    route.fulfill({ json: { intentId: "intent-test", reply: "Got it — small guarded buys.", packages: INTENT_FIXTURE.packages, llm: "mock" } }),
+  );
+  await page.route("**/api/intent/fix", (route) =>
+    route.fulfill({ json: { intentId: "intent-test", role: "EXECUTOR", packageHash: "0xabc123", packages: INTENT_FIXTURE.packages } }),
+  );
+  await page.route("**/api/intent/start-config", (route) =>
+    route.fulfill({ json: { intentId: "intent-test", startConfig: { loopPeriodSec: 7, ttlMinutes: 15, watcherEnabled: true } } }),
+  );
 });
 
 test("010 onboarding gate blocks entry until wallet + World ID", async ({ page }) => {
@@ -93,87 +133,68 @@ test("020 empty: no active intent until an Executor is created this session", as
   await expect(page.getByText("running")).toHaveCount(0);
 });
 
-test("030 Launch Dashboard renders the card hub with live completion", async ({ page }) => {
+test("launch wizard: single screen, 5 steps, IntentBuilder + dual package + FIX", async ({ page }) => {
   await passGate(page);
   await page.goto("/#/launch");
-  await expect(page.getByText("030 · Intent Launch Dashboard")).toBeVisible();
-  // 8 cards present.
-  for (const t of ["Intent creation", "Agent Identity", "Human Proof", "Gas Funding", "Runtime Preview", "Watcher Guard", "Start Conditions"]) {
-    await expect(page.getByRole("heading", { name: t })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Launch an Intent" })).toBeVisible();
+  // 5 step-nav entries
+  for (const t of ["Intent & Agent Packages", "Executor Agent", "Watcher Agent", "Gas Funding", "Start Conditions"]) {
+    await expect(page.getByText(t, { exact: true }).first()).toBeVisible();
   }
+  // IntentBuilder sends a message -> dual package preview appears
+  await page.getByPlaceholder("Describe purpose & limits…").fill("DCA USDC into ETH, small and careful");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Executor Agent Package" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Watcher Agent Package" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "FIX this package" }).first()).toBeVisible();
 });
 
-test("040 Intent creation: conversation + agent package preview + create button", async ({ page }) => {
+test("launch wizard: Executor step shows mint button + inline identity", async ({ page }) => {
   await passGate(page);
-  await page.goto("/#/launch/intent");
-  await expect(page.getByText("040 · Intent creation · IntentBuilder")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Agent Package preview" })).toBeVisible();
-  // advance the scripted conversation to reveal the action buttons
-  for (let i = 0; i < 5; i++) {
-    const cont = page.getByRole("button", { name: "Continue conversation" });
-    if (await cont.isVisible().catch(() => false)) await cont.click();
-  }
-  await expect(page.getByRole("button", { name: /Create Executor Agent/ })).toBeVisible();
-});
-
-test("050 Agent Identity shows ENS name + ERC-8004 registration JSON", async ({ page }) => {
-  await passGate(page);
-  await page.goto("/#/launch/identity");
-  await expect(page.getByText("050 · Agent Identity")).toBeVisible();
-  await expect(page.getByText("erc8004-agent-registration")).toBeVisible();
+  await page.goto("/#/launch");
+  await page.getByText("Executor Agent", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Create Executor Agent" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agent identity" })).toBeVisible();
   await expect(page.getByText(/\.intentos\.base\.eth/).first()).toBeVisible();
 });
 
-test("060 Runtime & funding shows binding + gas vault lanes", async ({ page }) => {
+test("launch wizard: Watcher step shows mint button + inline identity", async ({ page }) => {
   await passGate(page);
-  await page.goto("/#/launch/runtime");
-  await expect(page.getByText("060 · Runtime & Funding")).toBeVisible();
+  await page.goto("/#/launch");
+  await page.getByText("Watcher Agent", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Create Watcher Agent" })).toBeVisible();
+  await expect(page.getByText("watchedExecutor")).toBeVisible();
+});
+
+test("launch wizard: Gas Funding has lanes and NO skip-to-start", async ({ page }) => {
+  await passGate(page);
+  await page.goto("/#/launch");
+  await page.getByText("Gas Funding", { exact: true }).first().click();
   await expect(page.getByText("Executor lane").first()).toBeVisible();
   await expect(page.getByText("Watcher lane").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /Skip to Start/ })).toHaveCount(0);
 });
 
-test("070 Watcher creation shows immutable context + create button", async ({ page }) => {
+test("launch wizard: Start Conditions has real loop period + TTL + summary", async ({ page }) => {
   await passGate(page);
-  await page.goto("/#/launch/watcher");
-  await expect(page.getByText("070 · Watcher Agent (optional)")).toBeVisible();
-  await expect(page.getByText("watchedExecutorTokenId")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Create Watcher Agent/ })).toBeVisible();
+  await page.goto("/#/launch");
+  await page.getByText("Start Conditions", { exact: true }).first().click();
+  await expect(page.getByText("AgentLoop period (seconds)")).toBeVisible();
+  await expect(page.getByText(/Auto-stop after \(minutes\)/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Launch summary" })).toBeVisible();
 });
 
-test("080 Start shows preconditions checklist", async ({ page }) => {
+test("live console: merged Owner + Watcher controls + timeline + history", async ({ page }) => {
   await passGate(page);
-  await page.goto("/#/launch/start");
-  await expect(page.getByText("080 · Start")).toBeVisible();
-  await expect(page.getByText("Wallet connected")).toBeVisible();
-  await expect(page.getByText("World ID human-proof")).toBeVisible();
-  await expect(page.getByText("Executor gas vault funded")).toBeVisible();
-});
-
-test("090 Owner dashboard shows live guard + timeline + controls", async ({ page }) => {
-  await passGate(page);
-  await page.goto("/#/dashboard");
-  await expect(page.getByText("090 · Owner Runtime Dashboard · LIVE")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Current Hard Guardrails" })).toBeVisible();
+  await page.goto("/#/console");
+  await expect(page.getByText("Live Console · Owner + Watcher · LIVE")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Owner controls" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Watcher controls" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Shared execution timeline" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Execute guarded trade/ })).toBeVisible();
-  // live data: cumulative spent value present
-  await expect(page.getByText(/USDC/).first()).toBeVisible();
-});
-
-test("100 Watcher dashboard shows evidence + vote buttons", async ({ page }) => {
-  await passGate(page);
-  await page.goto("/#/watcher");
-  await expect(page.getByText("100 · Watcher Runtime Dashboard · LIVE")).toBeVisible();
   await expect(page.getByRole("button", { name: /VOTE_TIGHTEN/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /VOTE_FREEZE/ })).toBeVisible();
-});
-
-test("110 Result shows terminal state + performance", async ({ page }) => {
-  await passGate(page);
-  await page.goto("/#/result");
-  await expect(page.getByText("110 · Result / Performance · LIVE")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Outcome" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Performance" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your past Intents" })).toBeVisible();
 });
 
 test("no console errors while walking the whole journey", async ({ page }) => {
@@ -182,7 +203,7 @@ test("no console errors while walking the whole journey", async ({ page }) => {
     if (m.type() === "error") errors.push(m.text());
   });
   await passGate(page);
-  for (const r of ["#/intents", "#/launch", "#/launch/intent", "#/launch/identity", "#/launch/runtime", "#/launch/watcher", "#/launch/start", "#/dashboard", "#/watcher", "#/result"]) {
+  for (const r of ["#/intents", "#/launch", "#/console"]) {
     await page.goto("/" + r);
     await page.waitForTimeout(400);
   }

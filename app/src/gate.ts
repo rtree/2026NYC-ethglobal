@@ -3,6 +3,7 @@
 // real IDKit when VITE_WORLDID_APP_ID is set. The flag persists for the session.
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
+import { authState } from "./auth";
 
 const WORLDID_KEY = "intentos:worldid";
 
@@ -19,16 +20,22 @@ export function setWorldIdVerified(v: boolean) {
 export const WORLDID_APP_ID = import.meta.env.VITE_WORLDID_APP_ID ?? "";
 export const WORLDID_ACTION = import.meta.env.VITE_WORLDID_ACTION ?? "intentos-onboarding";
 
-/** Combined gate: wallet connected + World ID verified. */
+/** Combined gate: wallet connected (+ signed in to Firebase via SIWE) + World ID verified. */
 export function useGate() {
   const { isConnected, address } = useAccount();
   const [verified, setVerified] = useState(worldIdVerified());
+  const [signedIn, setSignedIn] = useState(!!authState());
 
   useEffect(() => {
     const onGate = () => setVerified(worldIdVerified());
+    const onAuth = () => setSignedIn(!!authState());
     window.addEventListener("intentos:gate", onGate);
-    return () => window.removeEventListener("intentos:gate", onGate);
+    window.addEventListener("intentos:auth", onAuth);
+    return () => {
+      window.removeEventListener("intentos:gate", onGate);
+      window.removeEventListener("intentos:auth", onAuth);
+    };
   }, []);
 
-  return { isConnected, address, verified, passed: isConnected && verified };
+  return { isConnected, address, verified, signedIn, passed: isConnected && verified };
 }

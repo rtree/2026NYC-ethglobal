@@ -27,9 +27,7 @@ export function Nav() {
   const items: [string, string][] = [
     ["#/intents", "Intents"],
     ["#/launch", "Launch"],
-    ["#/dashboard", "Owner"],
-    ["#/watcher", "Watcher"],
-    ["#/result", "Result"],
+    ["#/console", "Live Console"],
   ];
   const here = window.location.hash || "#/";
   return (

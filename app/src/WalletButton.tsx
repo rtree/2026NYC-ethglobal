@@ -1,14 +1,38 @@
-import { useState } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useEffect, useState } from "react";
+import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
 import { shortAddr, addrUrl } from "./format";
+import { authState, signInWithWallet, signOut } from "./auth";
 
 // A wallet button that lists every discovered connector (EIP-6963 + injected fallback) so the user
 // can pick MetaMask / Coinbase / etc. explicitly. Surfaces connect errors instead of failing silently.
+// After connecting, it runs the SIWE -> Firebase sign-in handshake (plan/010 §17) so per-wallet data
+// (drafts, history) is scoped to the signed-in address.
 export function WalletButton({ block }: { block?: boolean }) {
   const { address, isConnected } = useAccount();
   const { connectors, connect, error, isPending, variables } = useConnect();
   const { disconnect } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
   const [open, setOpen] = useState(false);
+  const [authErr, setAuthErr] = useState<string | null>(null);
+  const [signing, setSigning] = useState(false);
+
+  // Run the SIWE handshake once the wallet is connected and we don't yet have a session.
+  useEffect(() => {
+    if (!isConnected || !address || authState() || signing) return;
+    let cancelled = false;
+    setSigning(true);
+    setAuthErr(null);
+    signInWithWallet(address, signMessageAsync)
+      .catch((e) => {
+        if (!cancelled) setAuthErr(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setSigning(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, address, signMessageAsync, signing]);
 
   if (isConnected && address) {
     return (
@@ -16,10 +40,16 @@ export function WalletButton({ block }: { block?: boolean }) {
         <a className="wallet-chip" href={addrUrl(address)} target="_blank" rel="noreferrer">
           <span className="dot" />
           {shortAddr(address)}
+          {signing ? " · signing…" : authState() ? "" : ""}
         </a>
-        <button className="pill-link" onClick={() => disconnect()}>
+        <button className="pill-link" onClick={() => { signOut(); disconnect(); }}>
           Disconnect
         </button>
+        {authErr && (
+          <span className="pill fund-exhausted" style={{ marginLeft: 8 }} title={authErr}>
+            sign-in failed
+          </span>
+        )}
       </>
     );
   }

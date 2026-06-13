@@ -1,15 +1,8 @@
 import { useEffect, useState } from "react";
 import { Onboarding } from "./Onboarding";
 import { IntentList } from "./IntentList";
-import { LaunchDashboard } from "./LaunchDashboard";
 import { LaunchFlow } from "./LaunchFlow";
-import { AgentIdentity } from "./AgentIdentity";
-import { RuntimeFunding } from "./RuntimeFunding";
-import { WatcherCreation } from "./WatcherCreation";
-import { Start } from "./Start";
-import { OwnerDashboard } from "./OwnerDashboard";
-import { WatcherDashboard } from "./WatcherDashboard";
-import { ResultScreen } from "./ResultScreen";
+import { LiveConsole } from "./LiveConsole";
 
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash || "#/");
@@ -35,23 +28,20 @@ export function App() {
     case "#/intents":
       return <IntentList />;
     case "#/launch":
-      return <LaunchDashboard />;
-    case "#/launch/intent":
       return <LaunchFlow />;
+    case "#/console":
+      return <LiveConsole />;
+    // Legacy deep links → fold into the new single-screen wizard / console.
+    case "#/launch/intent":
     case "#/launch/identity":
-      return <AgentIdentity />;
     case "#/launch/runtime":
-      return <RuntimeFunding />;
     case "#/launch/watcher":
-      return <WatcherCreation />;
     case "#/launch/start":
-      return <Start />;
+      return <LaunchFlow />;
     case "#/dashboard":
-      return <OwnerDashboard />;
     case "#/watcher":
-      return <WatcherDashboard />;
     case "#/result":
-      return <ResultScreen />;
+      return <LiveConsole />;
     default:
       return <IntentList />;
   }

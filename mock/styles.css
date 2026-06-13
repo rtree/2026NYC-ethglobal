@@ -251,3 +251,26 @@ pre.code {
 .progress { height: 7px; background: var(--surface-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
 .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), var(--accent)); }
 .footer-note { margin-top: 40px; color: var(--faint); font-size: 15px; text-align: center; }
+
+/* M5 launch wizard (master/detail) + standalone form controls */
+.launch-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .launch-grid { grid-template-columns: 1fr; } }
+.step-nav {
+  display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left;
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+  color: var(--text); padding: 12px; cursor: pointer; margin-bottom: 4px; font-family: var(--sans);
+}
+.step-nav:hover { background: var(--surface-2); }
+.step-nav.active { background: var(--brand-dim); border-color: #34507e; }
+.step-nav .step-num {
+  flex: 0 0 auto; width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--surface-2); border: 1px solid var(--border-2); font-size: 15px; font-weight: 600;
+}
+.step-nav.active .step-num { background: var(--brand); border-color: var(--brand); color: #fff; }
+.step-nav .step-text { display: flex; flex-direction: column; gap: 2px; }
+.input {
+  width: 100%; background: var(--surface-2); border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm); color: var(--text); padding: 11px 14px; font-family: var(--sans); font-size: 17px;
+}
+.field > span { display: block; font-size: 15px; color: var(--muted); margin-bottom: 6px; }
+

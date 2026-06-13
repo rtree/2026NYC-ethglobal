@@ -1,113 +1,371 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useChainState, activeStatus, type ChainState } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
-import { ADDR } from "./config";
-import { shortAddr, addrUrl } from "./format";
 import { ActionButton } from "./ActionButton";
-import { api } from "./api";
+import { api, type ChatResponse } from "./api";
+import { authState } from "./auth";
+import { shortAddr, addrUrl, usdc, eth } from "./format";
+import type { AgentPackageDraft, IntentDoc } from "./intentTypes";
 
-const SCRIPT: { who: "owner" | "agent"; text: string }[] = [
-  { who: "owner", text: "I want to swap USDC into ETH little by little." },
-  { who: "agent", text: "Got it — recurring small BUYs on USDC↔WETH. What size per trade, and a total ceiling?" },
-  { who: "owner", text: "Max 0.002 USDC per trade, 0.01 USDC total. Stop on big swings." },
-  { who: "agent", text: "I'll set a per-tx cap and a cumulative cap with a slippage limit. Avoid unnatural routes and stale quotes?" },
-  { who: "owner", text: "Yes. And on failure, fall back to USDC." },
-  { who: "agent", text: "Done. Review the Agent Package on the right, then mint the Executor and delegate via EIP-7702." },
+// 030/040/050/060/070/080 collapsed into ONE master/detail screen (plan/010 §15.1). Left = step nav,
+// right = the controls for the selected step. No route hops. The IntentBuilder authors BOTH Agent
+// Packages; minting happens in the Executor/Watcher steps; identity is inline; Start sets the real
+// AgentLoop period + Cloud Run TTL.
+
+type StepId = "intent" | "executor" | "watcher" | "funding" | "start";
+
+const STEPS: { id: StepId; n: string; title: string; sub: string }[] = [
+  { id: "intent", n: "①", title: "Intent & Agent Packages", sub: "speak intent → Executor + Watcher packages → FIX" },
+  { id: "executor", n: "②", title: "Executor Agent", sub: "mint + EIP-7702 delegate + initialize + identity" },
+  { id: "watcher", n: "③", title: "Watcher Agent", sub: "mint + bind (quorum 1) + identity" },
+  { id: "funding", n: "④", title: "Gas Funding", sub: "executor / watcher gas-vault lanes" },
+  { id: "start", n: "⑤", title: "Start Conditions", sub: "AgentLoop period + Cloud Run TTL" },
 ];
 
-const STEPS = [
-  ["Intent creation", "IntentBuilder → Agent Package → packageHash", true],
-  ["Executor Agent mint", "AgentNFT (ERC-721 / ERC-8004)", true],
-  ["EIP-7702 delegate + initialize", "burn HardGuardState into the Owner EOA", true],
-  ["Gas vault funding", "seed the executor lane (in initialize)", true],
-  ["Agent identity", "agent-<tokenId>.intentos.base.eth + registration", false],
-  ["Watcher Agent (optional)", "quorum=1 semantic circuit breaker", false],
-  ["Start", "begin the bounded AgentLoop", true],
-] as const;
-
 export function LaunchFlow() {
-  const [shown, setShown] = useState(2);
+  const { state } = useChainState();
+  const [step, setStep] = useState<StepId>("intent");
+  const [intent, setIntent] = useState<IntentDoc | null>(null);
+
+  const hasExecutor = !!state?.session.executorTokenId;
+  const hasWatcher = !!state?.session.watcherTokenId;
+  const execFixed = !!intent?.packages.executor.fixed;
+  const watchFixed = !!intent?.packages.watcher.fixed;
+
+  // Load the latest draft intent (this wallet) so re-entering the wizard resumes.
+  useEffect(() => {
+    let active = true;
+    api
+      .listIntents()
+      .then((r) => {
+        if (!active) return;
+        const draft = r.intents.find((i) => i.status === "draft") ?? r.intents[0] ?? null;
+        if (draft) return api.getIntent(draft.intentId).then((full) => { if (active) setIntent(full); });
+      })
+      .catch(() => {/* not signed in / store empty */});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const done: Record<StepId, boolean> = {
+    intent: execFixed && watchFixed,
+    executor: hasExecutor,
+    watcher: hasWatcher,
+    funding: (state?.execVault ?? 0n) > 0n,
+    start: false,
+  };
+  const requiredMet = done.intent && done.executor && done.funding;
 
   return (
     <div className="app">
-      <TopBar />
+      <TopBar status={activeStatus(state)} />
       <main className="main">
         <Nav />
         <div className="page-head" style={{ marginTop: 20 }}>
-          <div className="eyebrow">040 · Intent creation · IntentBuilder</div>
-          <h1>Describe what your funds should do</h1>
-          <p>
-            Speak purpose and limits — not contract arguments. The IntentBuilder compiles the
-            conversation into an Agent Package: enforceable Hard Guardrails + after-the-fact Semantic
-            Guardrails. The demo Owner is already deployed on Base mainnet.
-          </p>
+          <div className="eyebrow">Launch · single-screen wizard</div>
+          <h1>Launch an Intent</h1>
+          <p>Author both Agent Packages, mint the Executor (and optional Watcher), fund the gas vault, set the loop — all on one screen. Real Base mainnet transactions.</p>
         </div>
 
-        <div className="grid cols-2">
-          <div className="card pad-lg">
-            <div className="card-head">
-              <h3>IntentBuilder</h3>
-              <span className="pill role-exec">EXECUTOR</span>
-            </div>
-            <div className="chat">
-              {SCRIPT.slice(0, shown).map((m, i) => (
-                <div key={i} className={`bubble ${m.who}`}>{m.text}</div>
-              ))}
-            </div>
-            {shown < SCRIPT.length ? (
-              <button className="btn block" style={{ marginTop: 14 }} onClick={() => setShown((s) => Math.min(SCRIPT.length, s + 1))}>
-                Continue conversation
+        <div className="launch-grid">
+          {/* left: step nav */}
+          <div className="card pad-lg" style={{ alignSelf: "start" }}>
+            {STEPS.map((s) => (
+              <button
+                key={s.id}
+                className={`step-nav ${step === s.id ? "active" : ""}`}
+                onClick={() => setStep(s.id)}
+              >
+                <span className="step-num">{done[s.id] ? "✓" : s.n}</span>
+                <span className="step-text">
+                  <strong>{s.title}</strong>
+                  <span className="muted" style={{ fontSize: 13 }}>{s.sub}</span>
+                </span>
               </button>
+            ))}
+            <div className="divider" />
+            <div className={`pill ${requiredMet ? "ok" : ""}`} style={{ width: "100%", justifyContent: "center" }}>
+              {requiredMet ? "required cards complete" : "complete required cards to start"}
+            </div>
+            <a className={`btn block ${requiredMet ? "primary" : ""}`} style={{ marginTop: 10 }} href={requiredMet ? "#/console" : undefined} aria-disabled={!requiredMet}>
+              {requiredMet ? "Go to Live Console →" : "Finish required steps"}
+            </a>
+          </div>
+
+          {/* right: detail pane */}
+          <div>
+            {step === "intent" && <IntentStep intent={intent} setIntent={setIntent} />}
+            {step === "executor" && <ExecutorStep state={state} fixed={execFixed} pkg={intent?.packages.executor} />}
+            {step === "watcher" && <WatcherStep state={state} fixed={watchFixed} hasExecutor={hasExecutor} pkg={intent?.packages.watcher} />}
+            {step === "funding" && <FundingStep state={state} />}
+            {step === "start" && <StartStep state={state} intent={intent} setIntent={setIntent} />}
+          </div>
+        </div>
+        <p className="footer-note">IntentOS · ETHGlobal NYC 2026 · launch</p>
+      </main>
+    </div>
+  );
+}
+
+// ---------- ① Intent & Agent Packages ----------
+function IntentStep({ intent, setIntent }: { intent: IntentDoc | null; setIntent: (d: IntentDoc) => void }) {
+  const [turns, setTurns] = useState<{ role: "owner" | "agent"; text: string }[]>([]);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [llm, setLlm] = useState<"vertex" | "mock" | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const pkgs = intent?.packages;
+  const scroller = useRef<HTMLDivElement>(null);
+
+  // hydrate transcript when an intent is loaded
+  useEffect(() => {
+    if (!intent) return;
+    api.getIntent(intent.intentId).then((full) => {
+      setTurns(full.transcript.map((t) => ({ role: t.role as "owner" | "agent", text: t.text })));
+    }).catch(() => {});
+  }, [intent?.intentId]);
+
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+  }, [turns]);
+
+  async function send() {
+    const text = draft.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setErr(null);
+    setTurns((t) => [...t, { role: "owner", text }]);
+    setDraft("");
+    try {
+      const res: ChatResponse = await api.intentChat(text, intent?.intentId);
+      setLlm(res.llm);
+      setTurns((t) => [...t, { role: "agent", text: res.reply }]);
+      const full = await api.getIntent(res.intentId);
+      setIntent(full);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function fix(role: "EXECUTOR" | "WATCHER") {
+    if (!intent) return;
+    try {
+      await api.fixPackage(intent.intentId, role);
+      const full = await api.getIntent(intent.intentId);
+      setIntent(full);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return (
+    <div className="grid cols-2">
+      <div className="card pad-lg">
+        <div className="card-head">
+          <h3>IntentBuilder</h3>
+          <span className="pill">{llm === "vertex" ? "Vertex AI" : llm === "mock" ? "scripted" : "chat"}</span>
+        </div>
+        <div className="chat" ref={scroller} style={{ maxHeight: 320, overflowY: "auto" }}>
+          {turns.length === 0 && <div className="bubble agent">Tell me what you want your funds to do. e.g. “DCA USDC into ETH, small and careful.”</div>}
+          {turns.map((m, i) => (
+            <div key={i} className={`bubble ${m.role === "owner" ? "owner" : "agent"}`}>{m.text}</div>
+          ))}
+          {busy && <div className="bubble agent">…thinking</div>}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <input
+            className="input"
+            style={{ flex: 1 }}
+            placeholder="Describe purpose & limits…"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && send()}
+          />
+          <button className="btn primary" onClick={send} disabled={busy}>Send</button>
+        </div>
+        {!authState() && <p className="spec-ref" style={{ marginTop: 8 }}>Sign in with your wallet (top-right) to save drafts to your account.</p>}
+        {err && <p className="pill fund-exhausted" style={{ marginTop: 8 }}>{err.slice(0, 80)}</p>}
+      </div>
+
+      <div>
+        <PackageCard title="Executor Agent Package" role="EXECUTOR" pkg={pkgs?.executor} onFix={() => fix("EXECUTOR")} />
+        <div style={{ height: 16 }} />
+        <PackageCard title="Watcher Agent Package" role="WATCHER" pkg={pkgs?.watcher} onFix={() => fix("WATCHER")} />
+      </div>
+    </div>
+  );
+}
+
+function PackageCard({ title, role, pkg, onFix }: { title: string; role: "EXECUTOR" | "WATCHER"; pkg?: AgentPackageDraft; onFix: () => void }) {
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h3 style={{ fontSize: 18 }}>{title}</h3>
+        <span className={`pill ${role === "EXECUTOR" ? "role-exec" : "role-watch"}`}>{role}</span>
+      </div>
+      {!pkg ? (
+        <p className="desc">Start the conversation to generate this package.</p>
+      ) : (
+        <>
+          <p className="desc" style={{ marginTop: 0 }}>{pkg.summary}</p>
+          <div className="guard hard"><span className="g-name">amountCapPerTx</span><span className="g-val">{usdc(BigInt(pkg.constraints.amountCapPerTx))}</span></div>
+          <div className="guard hard"><span className="g-name">cumulativeCap</span><span className="g-val">{usdc(BigInt(pkg.constraints.cumulativeCap))}</span></div>
+          <div className="guard hard"><span className="g-name">slippageCapBps</span><span className="g-val">{pkg.constraints.slippageCapBps}</span></div>
+          <details style={{ marginTop: 8 }}>
+            <summary className="spec-ref">AGENTS.md</summary>
+            <pre className="code" style={{ maxHeight: 160, whiteSpace: "pre-wrap" }}>{pkg.agents}</pre>
+          </details>
+          <div className="guard sem" style={{ marginTop: 6 }}><span className="g-name">semantic</span><span className="g-val" style={{ fontSize: 12 }}>{pkg.semantic.join(" · ")}</span></div>
+          <div style={{ marginTop: 12 }}>
+            {pkg.fixed ? (
+              <span className="pill ok"><span className="dot" />FIXED · {pkg.packageHash?.slice(0, 12)}…</span>
             ) : (
-              <div style={{ marginTop: 14 }}>
-                <ActionButton label="① Create Executor Agent (mint + EIP-7702 + initialize)" className="btn primary block" run={api.createExecutor} />
-                <ActionButton label="② Create Watcher Agent (mint + bind, quorum 1)" className="btn block" run={api.createWatcher} />
-                <p className="spec-ref">Real Base mainnet transactions. Then open the Owner dashboard to trade, and the Watcher dashboard to freeze.</p>
-              </div>
+              <button className="btn primary block" onClick={onFix}>FIX this package</button>
             )}
           </div>
+        </>
+      )}
+    </div>
+  );
+}
 
-          <div>
-            <div className="card" style={{ marginBottom: 20 }}>
-              <div className="card-head">
-                <h3>Agent Package preview</h3>
-                <span className="pill">packageHash 0x7c…e2</span>
-              </div>
-              <p className="desc">Hard Guardrails → CONSTRAINTS.json → ExecutionContract</p>
-              <div className="guard hard"><span className="g-name">tokenPair</span><span className="g-val">USDC / WETH</span></div>
-              <div className="guard hard"><span className="g-name">amountCapPerTx</span><span className="g-val">0.002 USDC</span></div>
-              <div className="guard hard"><span className="g-name">cumulativeCap</span><span className="g-val">0.01 USDC</span></div>
-              <div className="guard hard"><span className="g-name">slippageCapBps</span><span className="g-val">300 (3%)</span></div>
-              <p className="desc" style={{ marginTop: 14 }}>Semantic Guardrails → Watcher reads after execution</p>
-              <div className="guard sem"><span className="g-name">route naturalness</span><span className="g-val">avoid unnatural</span></div>
-              <div className="guard sem"><span className="g-name">quote freshness</span><span className="g-val">reject stale</span></div>
-              <div className="guard sem"><span className="g-name">recovery preference</span><span className="g-val">→ USDC on fail</span></div>
-            </div>
+// ---------- ② Executor Agent ----------
+function ExecutorStep({ state, fixed, pkg }: { state: ChainState | null; fixed: boolean; pkg?: AgentPackageDraft }) {
+  const execId = state?.session.executorTokenId;
+  const ensName = execId ? `agent-${execId}.intentos.base.eth` : "agent-<tokenId>.intentos.base.eth";
+  return (
+    <div className="grid cols-2">
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Create Executor Agent</h3><span className="pill role-exec">EXECUTOR</span></div>
+        <p className="desc">Mint the AgentNFT, delegate the Owner EOA via EIP-7702, and initialize the Hard Guardrails from the fixed package. One real transaction.</p>
+        {!fixed && <div className="note">FIX the Executor package in step ① first.</div>}
+        <ActionButton label="Create Executor (mint + EIP-7702 + initialize)" className="btn primary block" run={api.createExecutor} disabled={!fixed} />
+        <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
+      </div>
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Agent identity</h3><span className="pill ok">ENS · ERC-8004</span></div>
+        <table className="kv"><tbody>
+          <tr><td className="k">tokenId</td><td className="v">{execId ?? "—"}</td></tr>
+          <tr><td className="k">ENS / Basename</td><td className="v">{ensName}</td></tr>
+          <tr><td className="k">AgentNFT</td><td className="v">{state ? <a href={addrUrl(state.agentNft)} target="_blank" rel="noreferrer">{shortAddr(state.agentNft)}</a> : "—"}</td></tr>
+          <tr><td className="k">ExecutionContract</td><td className="v">{state ? <a href={addrUrl(state.delegate)} target="_blank" rel="noreferrer">{shortAddr(state.delegate)}</a> : "—"}</td></tr>
+          <tr><td className="k">SessionKey (KMS)</td><td className="v">{state ? shortAddr(state.sessionKey) : "—"}</td></tr>
+        </tbody></table>
+        <p className="spec-ref" style={{ marginTop: 10 }}>ERC-8004 registration is published to the subname's text records once minted.</p>
+      </div>
+    </div>
+  );
+}
 
-            <div className="card">
-              <div className="card-head">
-                <h3>Setup steps</h3>
-                <span className="pill ok">live on Base</span>
-              </div>
-              {STEPS.map(([title, sub, done]) => (
-                <div className="guard" key={title}>
-                  <span className="g-name" style={{ fontFamily: "var(--sans)" }}>
-                    {title}<br /><span className="muted" style={{ fontSize: 13 }}>{sub}</span>
-                  </span>
-                  <span className="g-val">{done ? "✓" : "—"}</span>
-                </div>
-              ))}
-              <p className="spec-ref" style={{ marginTop: 12 }}>
-                Demo Owner <a href={addrUrl(ADDR.owner)} target="_blank" rel="noreferrer">{shortAddr(ADDR.owner)}</a> is already delegated + initialized.
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="btn-row" style={{ marginTop: 20 }}>
-          <a className="btn" href="#/launch/identity">Next → Agent identity</a>
-          <a className="btn" href="#/launch">Back to hub</a>
-        </div>
-        <p className="footer-note">IntentOS · ETHGlobal NYC 2026 · launch flow</p>
-      </main>
+// ---------- ③ Watcher Agent ----------
+function WatcherStep({ state, fixed, hasExecutor, pkg }: { state: ChainState | null; fixed: boolean; hasExecutor: boolean; pkg?: AgentPackageDraft }) {
+  const watchId = state?.session.watcherTokenId;
+  return (
+    <div className="grid cols-2">
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Create Watcher Agent</h3><span className="pill role-watch">WATCHER · quorum 1</span></div>
+        <p className="desc">Mint the Watcher AgentNFT bound to the Executor. It can only tighten / freeze — never loosen, never move funds.</p>
+        {!hasExecutor && <div className="note">Create the Executor Agent (step ②) first.</div>}
+        {hasExecutor && !fixed && <div className="note">FIX the Watcher package in step ① first.</div>}
+        <ActionButton label="Create Watcher (mint + bind, quorum 1)" className="btn block" run={api.createWatcher} disabled={!hasExecutor || !fixed} />
+        <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
+      </div>
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Watcher identity</h3><span className="pill ok">ENS · ERC-8004</span></div>
+        <table className="kv"><tbody>
+          <tr><td className="k">tokenId</td><td className="v">{watchId ?? "—"}</td></tr>
+          <tr><td className="k">ENS / Basename</td><td className="v">{watchId ? `watcher-${watchId}.intentos.base.eth` : "watcher-<tokenId>.intentos.base.eth"}</td></tr>
+          <tr><td className="k">WatcherKey (KMS)</td><td className="v">{state ? shortAddr(state.watcherKey) : "—"}</td></tr>
+          <tr><td className="k">watchedExecutor</td><td className="v">{state?.session.executorTokenId ?? "—"}</td></tr>
+        </tbody></table>
+        <p className="spec-ref" style={{ marginTop: 10 }}>The Watcher is optional but recommended — it is the semantic circuit breaker.</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------- ④ Gas Funding ----------
+function FundingStep({ state }: { state: ChainState | null }) {
+  return (
+    <div className="grid cols-2">
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Runtime record</h3><span className={`pill ${state?.delegated ? "ok" : ""}`}>{state?.delegated ? "bound" : "unbound"}</span></div>
+        <table className="kv"><tbody>
+          <tr><td className="k">Executor tokenId</td><td className="v">{state?.session.executorTokenId ?? "—"}</td></tr>
+          <tr><td className="k">Runtime substrate</td><td className="v">Cloud Run (OpenClaw)</td></tr>
+          <tr><td className="k">Owner EOA (7702)</td><td className="v">{state ? <a href={addrUrl(state.delegate)} target="_blank" rel="noreferrer">{shortAddr(state.delegate)}</a> : "—"}</td></tr>
+          <tr><td className="k">bindingNonce</td><td className="v">{state?.guard ? String(state.guard.bindingNonce) : "—"}</td></tr>
+        </tbody></table>
+      </div>
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Gas vault lanes</h3><span className="pill ok">Owner-funded</span></div>
+        <div className="guard"><span className="g-name" style={{ fontFamily: "var(--sans)" }}>Executor lane</span><span className="g-val">{state ? eth(state.execVault) : "—"}</span></div>
+        <div className="guard"><span className="g-name" style={{ fontFamily: "var(--sans)" }}>Watcher lane</span><span className="g-val">{state ? eth(state.watcherVault) : "—"}</span></div>
+        <p className="desc" style={{ marginTop: 12 }}>Cumulative spent {state ? usdc(state.cumulativeSpent) : "—"} of {state?.guard ? usdc(state.guard.cumulativeCap) : "—"} cap.</p>
+        <p className="spec-ref">The executor lane is seeded in initialize(); the Watcher lane is topped up on Watcher creation. No action needed unless a lane runs low.</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------- ⑤ Start Conditions ----------
+function StartStep({ state, intent, setIntent }: { state: ChainState | null; intent: IntentDoc | null; setIntent: (d: IntentDoc) => void }) {
+  const cfg = intent?.startConfig ?? { loopPeriodSec: 5, ttlMinutes: 10, watcherEnabled: true };
+  const [loop, setLoop] = useState(cfg.loopPeriodSec);
+  const [ttl, setTtl] = useState(cfg.ttlMinutes);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoop(cfg.loopPeriodSec);
+    setTtl(cfg.ttlMinutes);
+  }, [intent?.intentId]);
+
+  async function save() {
+    if (!intent) return;
+    setErr(null);
+    try {
+      const r = await api.setStartConfig(intent.intentId, { loopPeriodSec: loop, ttlMinutes: ttl });
+      setIntent({ ...intent, startConfig: r.startConfig });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const pkg = intent?.packages.executor;
+  return (
+    <div className="grid cols-2">
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Start conditions</h3><span className="pill">bounded</span></div>
+        <label className="field"><span>AgentLoop period (seconds)</span>
+          <input className="input" type="number" min={2} max={60} value={loop} onChange={(e) => setLoop(Number(e.target.value))} />
+        </label>
+        <label className="field" style={{ marginTop: 12 }}><span>Auto-stop after (minutes) — Cloud Run TTL</span>
+          <input className="input" type="number" min={1} max={60} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} />
+        </label>
+        <p className="spec-ref" style={{ marginTop: 10 }}>The runtime is bounded: one tick per {loop}s, hard stop after {ttl} min. No infinite loops.</p>
+        <button className="btn primary block" style={{ marginTop: 12 }} onClick={save}>{saved ? "Saved ✓" : "Save start conditions"}</button>
+        {err && <p className="pill fund-exhausted" style={{ marginTop: 8 }}>{err.slice(0, 80)}</p>}
+      </div>
+      <div className="card pad-lg">
+        <div className="card-head"><h3>Launch summary</h3><span className="pill ok">live on Base</span></div>
+        <table className="kv"><tbody>
+          <tr><td className="k">Pair</td><td className="v">USDC / WETH</td></tr>
+          <tr><td className="k">Executor</td><td className="v">#{state?.session.executorTokenId ?? "—"}</td></tr>
+          <tr><td className="k">Watcher</td><td className="v">{state?.session.watcherTokenId ? `#${state.session.watcherTokenId} · quorum 1` : "none"}</td></tr>
+          <tr><td className="k">amountCapPerTx</td><td className="v">{pkg ? usdc(BigInt(pkg.constraints.amountCapPerTx)) : (state?.guard ? usdc(state.guard.amountCapPerTx) : "—")}</td></tr>
+          <tr><td className="k">cumulativeCap</td><td className="v">{pkg ? usdc(BigInt(pkg.constraints.cumulativeCap)) : (state?.guard ? usdc(state.guard.cumulativeCap) : "—")}</td></tr>
+          <tr><td className="k">Executor gas vault</td><td className="v">{state ? eth(state.execVault) : "—"}</td></tr>
+          <tr><td className="k">Loop / TTL</td><td className="v">{loop}s · {ttl} min</td></tr>
+          <tr><td className="k">Executor pkg</td><td className="v">{pkg?.packageHash ? `${pkg.packageHash.slice(0, 12)}…` : "— (fix)"}</td></tr>
+        </tbody></table>
+        <a className="btn primary block" style={{ marginTop: 12 }} href="#/console">Go to Live Console →</a>
+      </div>
     </div>
   );
 }

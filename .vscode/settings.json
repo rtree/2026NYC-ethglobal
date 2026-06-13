@@ -116,6 +116,14 @@
     "/^bash /tmp/smoke\\.sh$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.tsx\\?\\\\\\(\\|\\\\\\.ts\\\\\\(\" \\| head -20; echo \"types-exit=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.tsx\\?\\\\\\(\" \\| head -30; echo \"types-exit=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }

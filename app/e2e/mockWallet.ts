@@ -26,6 +26,12 @@ export const injectMockWallet = `(${function () {
           return connected ? [{ parentCapability: "eth_accounts" }] : [];
         case "net_version":
           return "8453";
+        case "personal_sign":
+        case "eth_sign":
+        case "secp256k1_sign":
+          // Return a syntactically-valid 65-byte signature. The server runs INTENTOS_AUTH=off in e2e
+          // and the /api/auth/* routes are mocked, so the value is never verified.
+          return "0x" + "11".repeat(64) + "1b";
         default:
           return null;
       }
