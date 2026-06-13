@@ -87,3 +87,26 @@ context and prevents the failure modes below.
 ### Next
 1. **Implementation** following SDD build order M0-M3 (contracts -> runtime slice -> frontend ->
    watcher). Scaffold the monorepo (pnpm workspace + Foundry) per `020-sdd-overview.md` §2.
+
+---
+
+## Implementation log
+
+Safety configured: `.npmrc` (ignore-scripts, audit, min-release-age=7d), `pnpm-workspace.yaml`
+(`minimumReleaseAge: 10080` = 7d, `trustPolicy: no-downgrade`, `onlyBuiltDependencies: []`),
+`.gitignore` (secrets/keys/env/ADC blocked), `.github/copilot-instructions.md` (policy + project
+facts). GCP project switched to `ethglobal-nyc2026-rtree`.
+
+- **M0 — contracts (DONE, Foundry, 27 tests passing)**
+  - `contracts/src/IntentOSTypes.sol` — frozen structs/errors/event (mirrors 010 §9/§11).
+  - `contracts/src/ExecutionDelegate7702.sol` — EIP-7702 delegate: initialize, submitExecutionRequest
+    (full §9 check order), previewGuard (eth_call feedback loop §12), gas-lane reimbursement,
+    watcherTighten/watcherFreeze (monotonic), ownerStop/ownerUpdateGuard/rotateBinding.
+  - `contracts/src/AgentNFT.sol` — ERC721 + ERC-8004 (Executor/Watcher roles).
+  - Tests cover every custom error + monotonic watcher + replay + reimbursement + cumulative invariant.
+  - NOTE: minor extension to 010 §9 — `ExecutionRequest.reasonHash` binds the evidence `reason` string
+    to the signature; submit takes `(r, reason, sig)`. (Strengthens evidence integrity.)
+  - TODO(M0): Base fork test for a real Uniswap USDC/WETH swap — needs a Base RPC (see open question).
+
+- **M1 — runtime slice**: next.
+- **M2 — frontend**, **M3 — watcher**: pending.

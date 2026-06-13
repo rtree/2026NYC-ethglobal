@@ -32,6 +32,18 @@
     "/^forge build 2>&1 \\| tail -30$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^forge build 2>&1 \\| tail -20$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^forge build 2>&1 \\| grep -iE \"error\\|warning:\\|compiler run\\|finished\\|successful\" \\| head -20; echo \"EXIT: \\$\\{PIPESTATUS\\[0\\]\\}\"; ls out/ExecutionDelegate7702\\.sol/ 2>&1$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^forge test 2>&1 \\| grep -vE \"asm-keccak256\\|inline assembly\\|getfoundry\\.sh\\|\\^\\\\s\\*\\\\\\|\" \\| tail -60$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }

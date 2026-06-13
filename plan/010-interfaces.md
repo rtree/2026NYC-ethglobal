@@ -54,7 +54,7 @@ App / chain
   WETH (Base)       : 0x4200000000000000000000000000000000000006
 
 Infra (target)
-  GCP project       : iossample (numeric 360614911271)
+  GCP project       : ethglobal-nyc2026-rtree (numeric 41929375451)
   GCP region        : us-central1
   KMS               : global / intentos / intent-decrypt
   OpenClaw image    : ghcr.io/openclaw/openclaw:latest
@@ -356,12 +356,15 @@ ExecutionRequest (assembled typed by the adapter; not arbitrary calldata):
   quoteHash
   simulationHash
   evidenceRoot
+  reasonHash        keccak256(bytes(reason)); binds the emitted evidence reason to the signature
   sessionSignature  SessionKey(KMS) signature
 ```
 
 The digest the SessionKey signs contains **no** natural-language Intent. It is
 `EIP-191( keccak256(chainId, contractAddress, ExecutionRequest) )` — a fingerprint of this one trade.
-Mixing in `chainId` and `contractAddress` prevents cross-chain / cross-contract replay.
+Mixing in `chainId` and `contractAddress` prevents cross-chain / cross-contract replay. The on-chain
+`submitExecutionRequest(r, reason, sig)` re-checks `keccak256(bytes(reason)) == r.reasonHash`, so the
+emitted evidence `reason` is authentic (not relayer-tamperable).
 
 Intent travels along two separated paths:
 
