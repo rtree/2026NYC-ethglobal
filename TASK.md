@@ -331,14 +331,28 @@ architecture** and making the launch pieces real.
 - Intent List (`#/intents`): session-scoped active state; empty-state has no stray button (entry
   moved into the right card); "Run a new Intent" disabled while an Intent is live; Reset kept.
 - Wallet connect: EIP-6963 connector **picker** (pick MetaMask), surfaces connect errors.
+- **Full M5 build shipped + deployed** (revision intentos-panel-00002+): single-screen Launch wizard,
+  Live Console, server auth/store/vertex modules, GCP infra provisioned, e2e green. Live-verified via
+  ADC: signJwt + Firestore + Vertex all PASS.
+- **Post-deploy fixes (from live feedback):**
+  1. **Removed HTTP Basic auth.** It does not attach to `fetch()`/XHR, so it caused repeated native
+     login popups + intermittent `/api/*` 401 (incl. `/api/state 401`, and a non-JSON "Authentica…"
+     body breaking the trade button). Now public = SPA + `/api/state` (read-only) + `/api/auth/*`; ALL
+     money-write endpoints are gated by Firebase ID token (`requireUid`). Deploy with `--clear-secrets`.
+  2. **Vertex confirmed backend-only** (browser → `/api/intent/chat` → server → Vertex via ADC). The
+     "missing bearer token" was sign-in not completing because Basic-auth blocked the handshake fetches;
+     fixed by (1) + a manual **"Sign in"** retry button on the wallet chip + reactive auth state.
+  3. **Live Console empty-state**: shows "No running Intent yet" until the session has an Executor
+     (`hasActiveIntent`) — previously it always rendered the SHARED demo Owner's timeline/history as if
+     it were the user's. e2e covers it.
 
-### Back-port checklist (do AFTER M5 ships; frees context now)
-- North Star §2 screen list → replace the 11-screen enumeration with the 3-destination IA above.
-- North Star: note that "active/running" is session/agent-scoped, not 7702-delegation-scoped.
-- SDD `050-sdd-frontend.md`: rewrite routes/data-sources for the master/detail Launch + Live Console.
-- SDD `040-sdd-runtime.md`: add the data store (D1) + IntentBuilder LLM (D2) + Start config
-  (loop period, Cloud Run TTL) to the runtime/server design.
-- SDD `020-sdd-overview.md`: update the end-to-end sequence for the merged Console + history.
+### Back-port checklist — DONE (2026-06-13)
+- ✅ North Star §2 (JP source + EN mirror): added the IA v2 implementation note (3 destinations).
+- ✅ interfaces.md: §15.1 (IA v2), §16 (store), §17 (auth), §18 (control-panel API + StartConfig).
+- ✅ SDD `050-sdd-frontend.md` §8 (routes/data-sources for wizard + console).
+- ✅ SDD `040-sdd-runtime.md` §9 (store + IntentBuilder LLM + StartConfig + bounded loop).
+- ☐ SDD `020-sdd-overview.md`: end-to-end sequence for merged Console + history (minor; pending).
 
 Safety reminders unchanged: tiny amounts only; bounded actions; keys only in KMS/Secret Manager;
-Basic auth in front; never log secrets.
+never log secrets. (Basic auth removed — Firebase Auth is the gate; Cloud Run is `--allow-unauthenticated`
+at the edge but `/api/*` writes require a Firebase ID token.)
