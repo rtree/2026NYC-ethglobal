@@ -16,6 +16,9 @@ import {
   watcherTighten,
 } from "./journey.js";
 import { getBasicAuth } from "./auth.js";
+import { issueNonce, siweMessage, verifyAndMint } from "./web3auth.js";
+import { requireUid, authEnabled, rateLimit } from "./authGate.js";
+import { intentChat, fixPackage, setStartConfig, listIntents, getIntentFull } from "./intent.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_DIST = process.env.APP_DIST ?? resolve(HERE, "../../../app/dist");
@@ -120,6 +123,89 @@ async function main() {
       return;
     }
 
+    // ---- Web3 login -> Firebase custom token (plan/010 §17) ----
+    if (path === "/api/auth/nonce" && req.method === "GET") {
+      const address = url.searchParams.get("address") ?? "";
+      if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+        json(res, 400, { error: "valid ?address= required" });
+        return;
+      }
+      const nonce = issueNonce(address);
+      const domain = req.headers.host ?? "intentos";
+      json(res, 200, { nonce, message: siweMessage(address, nonce, domain) });
+      return;
+    }
+    if (path === "/api/auth/web3" && req.method === "POST") {
+      const body = (await readBody(req)) as { message?: string; signature?: string };
+      try {
+        if (!body.message || !body.signature) throw new Error("message and signature required");
+        const out = await verifyAndMint(body.message, body.signature as `0x${string}`);
+        json(res, 200, out);
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+
+    // ---- IntentBuilder + per-wallet store (auth-gated; §16/§18) ----
+    if (path.startsWith("/api/intent") || path === "/api/intents" || path.startsWith("/api/intents/")) {
+      let uid: string;
+      try {
+        uid = await requireUid(req);
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      try {
+        if (path === "/api/intent/chat" && req.method === "POST") {
+          if (!rateLimit(uid)) {
+            json(res, 429, { error: "rate limited" });
+            return;
+          }
+          const body = (await readBody(req)) as { intentId?: string; text?: string };
+          json(res, 200, await intentChat(uid, body.intentId, body.text ?? ""));
+          return;
+        }
+        if (path === "/api/intent/fix" && req.method === "POST") {
+          const body = (await readBody(req)) as { intentId?: string; role?: "EXECUTOR" | "WATCHER" };
+          if (!body.intentId || !body.role) throw new Error("intentId and role required");
+          json(res, 200, await fixPackage(uid, body.intentId, body.role));
+          return;
+        }
+        if (path === "/api/intent/start-config" && req.method === "POST") {
+          const body = (await readBody(req)) as {
+            intentId?: string;
+            loopPeriodSec?: number;
+            ttlMinutes?: number;
+            watcherEnabled?: boolean;
+          };
+          if (!body.intentId) throw new Error("intentId required");
+          const { intentId, ...cfg } = body;
+          json(res, 200, await setStartConfig(uid, intentId, cfg));
+          return;
+        }
+        if (path === "/api/intents" && req.method === "GET") {
+          json(res, 200, { intents: await listIntents(uid) });
+          return;
+        }
+        const m = path.match(/^\/api\/intents\/([^/]+)$/);
+        if (m && req.method === "GET") {
+          const doc = await getIntentFull(uid, decodeURIComponent(m[1]));
+          if (!doc) {
+            json(res, 404, { error: "not found" });
+            return;
+          }
+          json(res, 200, doc);
+          return;
+        }
+      } catch (e) {
+        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      json(res, 404, { error: "not found" });
+      return;
+    }
+
     const key = `${req.method} ${path}`;
     if (API[key]) {
       await readBody(req); // drain
@@ -141,6 +227,9 @@ async function main() {
   server.listen(PORT, () => {
     console.log(`IntentOS control panel on :${PORT} (app dist: ${APP_DIST})`);
     console.log(`auth: ${expectedAuth ? "Basic (enabled)" : "DISABLED"}`);
+    console.log(
+      `toggles: AUTH=${authEnabled() ? "firebase" : "off"} STORE=${process.env.INTENTOS_STORE ?? "memory"} LLM=${process.env.INTENTOS_LLM ?? "mock"}`,
+    );
   });
 }
 
