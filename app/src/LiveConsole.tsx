@@ -34,11 +34,12 @@ export function LiveConsole() {
       <main className="main">
         <Nav />
         <div className="page-head" style={{ marginTop: 20 }}>
-          <div className="eyebrow">Live Console · Owner + Watcher · LIVE</div>
+          <div className="eyebrow">Live Console · Owner + Watcher · Control Panel</div>
           <h1>{consoleTitle}</h1>
           <p>
             One place for the running Intent: live guard, vaults, balances, the shared EvidenceCommitted
-            timeline, and both Owner and Watcher controls. After it stops, this is the Result.
+            timeline, and both Owner and Watcher controls. OpenClaw/Cloud Run AgentLoop execution is not
+            provisioned in this MVP; trades/votes are triggered by these controls.
           </p>
         </div>
 

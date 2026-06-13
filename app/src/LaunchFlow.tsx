@@ -306,7 +306,7 @@ function FundingStep({ state, intentId }: { state: ChainState | null; intentId?:
         <div className="card-head"><h3>Runtime record</h3><span className={`pill ${state?.delegated ? "ok" : ""}`}>{state?.delegated ? "bound" : "unbound"}</span></div>
         <table className="kv"><tbody>
           <tr><td className="k">Executor tokenId</td><td className="v">{state?.session.executorTokenId ?? "—"}</td></tr>
-          <tr><td className="k">Runtime substrate</td><td className="v">Cloud Run (OpenClaw)</td></tr>
+          <tr><td className="k">Runtime substrate</td><td className="v">Control panel only (OpenClaw not provisioned)</td></tr>
           <tr><td className="k">Owner EOA (7702)</td><td className="v">{state ? <a href={addrUrl(state.delegate)} target="_blank" rel="noreferrer">{shortAddr(state.delegate)}</a> : "—"}</td></tr>
           <tr><td className="k">bindingNonce</td><td className="v">{state?.guard ? String(state.guard.bindingNonce) : "—"}</td></tr>
         </tbody></table>
@@ -366,7 +366,10 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
         <label className="field" style={{ marginTop: 12 }}><span>Auto-stop after (minutes) — Cloud Run TTL</span>
           <input className="input" type="number" min={1} max={5} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} />
         </label>
-        <p className="spec-ref" style={{ marginTop: 10 }}>The runtime is bounded: one tick per {loop}s (min 5s), hard stop after {ttl} min (max 5m). No infinite loops.</p>
+        <p className="spec-ref" style={{ marginTop: 10 }}>
+          This arms a bounded runtime schedule only: one planned tick per {loop}s (min 5s), hard stop
+          after {ttl} min (max 5m). OpenClaw/Cloud Run AgentLoop provisioning is not wired in this MVP.
+        </p>
         <button className="btn primary block" style={{ marginTop: 12 }} onClick={save}>{saved ? "Saved ✓" : "Save start conditions"}</button>
         {err && <p className="pill fund-exhausted" style={{ marginTop: 8 }}>{err.slice(0, 80)}</p>}
       </div>
@@ -383,10 +386,12 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
           <tr><td className="k">Executor pkg</td><td className="v">{pkg?.packageHash ? `${pkg.packageHash.slice(0, 12)}…` : "— (fix)"}</td></tr>
         </tbody></table>
         {started ? (
-          <div className="pill ok" style={{ marginTop: 12 }}><span className="dot" />runtime armed · ≤{started.plannedTicks} ticks · autostop {new Date(started.autoStopAt).toLocaleTimeString()}</div>
+          <div className="pill ok" style={{ marginTop: 12 }}>
+            <span className="dot" />runtime schedule saved · ≤{started.plannedTicks} planned ticks · autostop {new Date(started.autoStopAt).toLocaleTimeString()}
+          </div>
         ) : (
           <ActionButton
-            label="Start runtime (arm bounded AgentLoop)"
+            label="Save runtime schedule (OpenClaw not provisioned)"
             className="btn primary block"
             disabled={!hasExecutor}
             run={async () => {
