@@ -76,3 +76,36 @@ Intent
 
 なお、Executor AgentもWatcher AgentいずれもSessionKeyとしていわゆるWalletを保有しますが、資金は一切保有しません。資金は常に Owner のアドレスに残り、OwnerのSelf Custodyは失われません。また、Gas代もOwnerのEOAのdelegated contract内部にあるExecutionGasVaultから供給されます。
 
+ここでAI Agentは2つ登場します。いずれも、Owner配下のEIP-7702のdelegated contractへのアクセス権の証明と、構築されたAI Agentの実行環境へのアクセス権の権利の象徴として、NFT(ERC-8004 / ERC-721)もmintされます。
+
+- **Executor Agent** は Owner の Intent を実現するための Agentです。OpenClaw Runtime 上で動き、EIP-7702 ExecutionContract に ExecutionRequest を出します。
+- **Watcher Agent** は Owner が Executor Agent とは別に準備する監視用のAgentです。Executor Agentの実行結果や外部の状況変化の情報を収集し、必要なら将来の実行範囲を締めためにExecutionContract内部のガードレール定義をよりRestrictiveな方向に修正します。
+
+```text
+Intent
+  -> AI Agent NFT
+  -> OpenClaw Runtime
+  -> Guarded Execution
+       Hard Guardrails:
+         EIP-7702 ExecutionContract
+       Optional Semantic Guardrails:
+         WatcherAI Agent NFTs
+```
+
+なお、Executor AgentもWatcher AgentいずれもSessionKeyとしていわゆるWalletを保有しますが、資金は一切保有しません。資金は常に Owner のアドレスに残り、OwnerのSelf Custodyは失われません。また、Gas代もOwnerのEOAのdelegated contract内部にあるExecutionGasVaultから供給されます。
+
+## Agent はどうやって Owner の資金を「代理執行」するのか
+
+ポイントは 「資金は一度も Agent に渡さない。Owner 自身のアカウントの中でだけ動く」 という点です。鍵になるのが EIP-7702 delegated account です。
+
+```
+Owner EOA（資金はここに残る）
+  └─ EIP-7702 で delegated account code を持つ
+        ├─ ExecutionContract（最終権限）
+        ├─ Hard Guardrails（型付き制約）
+        ├─ ExecutionGasVault (エージェントへのガス代供給用)
+```
+
+EIP-7702 によって、Owner の EOA そのものに「契約コード」を後付けします。資金は別口座に移さず、Owner の balance のまま。その Owner アカウントのコードの中に、ExecutionContract と Hard Guardrails が同居します。
+
+
