@@ -136,6 +136,10 @@
     "/^pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.tsx\\?\\\\\\(\" \\| head; echo \"types=\\$\\{PIPESTATUS\\[0\\]\\}\"; cd app && pnpm build 2>&1 \\| tail -4; echo \"build=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/server typecheck 2>&1 \\| grep -E \"error TS\" \\| head; echo \"srv=\\$\\{PIPESTATUS\\[0\\]\\}\"; pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\" \\| head; echo \"app=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }

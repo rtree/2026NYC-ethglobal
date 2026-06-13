@@ -97,8 +97,25 @@ export function signOut() {
 
 type SignMessage = (args: { account: Address; message: string }) => Promise<`0x${string}`>;
 
-/** Run the full handshake. `signMessageAsync` comes from wagmi's useSignMessage. */
-export async function signInWithWallet(address: Address, signMessageAsync: SignMessage): Promise<void> {
+// Dedupe concurrent sign-ins for the same address. Onboarding mounts TWO WalletButtons (TopBar + card),
+// and each could trigger sign-in; without this, two handshakes race, the server's per-address nonce is
+// overwritten by the second GET, and the first POST fails with "nonce mismatch". Concurrent callers
+// share one in-flight handshake.
+let inFlight: { address: string; promise: Promise<void> } | null = null;
+
+/** Run the full handshake (deduped per address). `signMessageAsync` comes from wagmi's useSignMessage. */
+export function signInWithWallet(address: Address, signMessageAsync: SignMessage): Promise<void> {
+  const key = address.toLowerCase();
+  if (inFlight && inFlight.address === key) return inFlight.promise;
+  if (authState()) return Promise.resolve();
+  const promise = doSignIn(address, signMessageAsync).finally(() => {
+    if (inFlight && inFlight.address === key) inFlight = null;
+  });
+  inFlight = { address: key, promise };
+  return promise;
+}
+
+async function doSignIn(address: Address, signMessageAsync: SignMessage): Promise<void> {
   // 1) nonce + the exact message to sign
   const nonceRes = await fetch(`/api/auth/nonce?address=${address}`);
   if (!nonceRes.ok) throw new Error(`nonce ${nonceRes.status}`);

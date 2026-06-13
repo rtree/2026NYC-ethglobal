@@ -23,13 +23,21 @@ async function verifyClient(): Promise<PublicClient> {
   return _verifyClient!;
 }
 
-// nonce store: address -> { nonce, exp }. In-memory is fine (short TTL, single demo instance).
-const nonces = new Map<string, { nonce: string; exp: number }>();
+// nonce store: address -> array of recent { nonce, exp }. We keep several outstanding nonces per
+// address (not just the latest) so retried / concurrent GET /api/auth/nonce calls don't invalidate a
+// message the wallet is still signing (which produced "nonce mismatch"). Single-use: consumed on verify.
+const nonces = new Map<string, { nonce: string; exp: number }[]>();
 const NONCE_TTL_MS = 10 * 60_000;
+const MAX_NONCES_PER_ADDR = 6;
 
 export function issueNonce(address: string): string {
   const nonce = randomBytes(16).toString("hex");
-  nonces.set(address.toLowerCase(), { nonce, exp: Date.now() + NONCE_TTL_MS });
+  const key = address.toLowerCase();
+  const now = Date.now();
+  const list = (nonces.get(key) ?? []).filter((n) => n.exp > now); // drop expired
+  list.push({ nonce, exp: now + NONCE_TTL_MS });
+  if (list.length > MAX_NONCES_PER_ADDR) list.splice(0, list.length - MAX_NONCES_PER_ADDR);
+  nonces.set(key, list);
   return nonce;
 }
 
@@ -65,13 +73,15 @@ export async function verifyAndMint(message: string, signature: `0x${string}`): 
   const nonceInMsg = extractField(message, "Nonce: ", "\n");
   if (!nonceInMsg) throw new Error("no nonce in message");
 
-  const rec = nonces.get(address.toLowerCase());
-  if (!rec) throw new Error("unknown or expired nonce; request a new one");
-  if (rec.exp < Date.now()) {
-    nonces.delete(address.toLowerCase());
-    throw new Error("nonce expired");
-  }
-  if (rec.nonce !== nonceInMsg) throw new Error("nonce mismatch");
+  const key = address.toLowerCase();
+  const now = Date.now();
+  const list = (nonces.get(key) ?? []).filter((n) => n.exp > now);
+  if (list.length === 0) throw new Error("unknown or expired nonce; request a new one");
+  const idx = list.findIndex((n) => n.nonce === nonceInMsg);
+  if (idx === -1) throw new Error("nonce mismatch");
+  // single-use: consume this nonce now (keep the rest so a parallel handshake can still complete)
+  list.splice(idx, 1);
+  nonces.set(key, list);
 
   // Verify via the public client so smart-account / 7702 signatures (ERC-1271/6492) are accepted, not
   // just plain EOA ecrecover. If RPC is unreachable, fall back to a local EOA check so plain EOAs still
@@ -85,9 +95,6 @@ export async function verifyAndMint(message: string, signature: `0x${string}`): 
     ok = await verifyEoa({ address: address as Address, message, signature }).catch(() => false);
   }
   if (!ok) throw new Error("invalid signature");
-
-  // single-use nonce
-  nonces.delete(address.toLowerCase());
 
   const uid = uidFor(address);
   const customToken = await mintCustomToken(uid, { address: address.toLowerCase(), chainId: CHAIN_ID });
