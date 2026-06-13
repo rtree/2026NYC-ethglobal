@@ -2,7 +2,8 @@
 # IntentOS North Star
 
 IntentOSはAIAgentによる取引の課題を
-統合により解決するレイヤープロトコルです
+EIP-7702によってOwnerのWalletでの資金保持・ガードレール設置を実現しつつ
+取引の監視を別Agentが行うことで解決するレイヤープロトコルです
 
 ## 解決する課題
 
