@@ -7,4 +7,5 @@ export * from "./executor.js";
 export * from "./watcher.js";
 export * from "./deploy.js";
 export * from "./setup7702.js";
+export * from "./agents.js";
 export * from "./secrets.js";

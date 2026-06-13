@@ -57,7 +57,7 @@ contract AgentNFT is ERC721, Ownable {
     {
         require(b.role == Role.EXECUTOR, "ROLE");
         tokenId = nextTokenId++;
-        _safeMint(to, tokenId);
+        _mint(to, tokenId);
         baseOf[tokenId] = b;
         executorOf[tokenId] = e;
         emit ExecutorMinted(tokenId, to, e.intentId, b.agentManifestHash);
@@ -70,7 +70,7 @@ contract AgentNFT is ERC721, Ownable {
     {
         require(b.role == Role.WATCHER, "ROLE");
         tokenId = nextTokenId++;
-        _safeMint(to, tokenId);
+        _mint(to, tokenId);
         baseOf[tokenId] = b;
         watcherOf[tokenId] = w;
         emit WatcherMinted(tokenId, to, w.watchedExecutorTokenId);

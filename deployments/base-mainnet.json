@@ -36,7 +36,7 @@
   },
   "contracts": {
     "executionDelegate7702Impl": "0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1",
-    "agentNFT": "0x82b70553c4b7b4506cb39032c91e94c49d613fee"
+    "agentNFT": "0x3da4947a9b5e255219fa39c52a68219da8f9a7ec"
   },
   "demo": {
     "secretsRef": "base-rpc-url (Infura) in Secret Manager — never in source/chat",

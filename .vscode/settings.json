@@ -72,6 +72,30 @@
     "/^pnpm install 2>&1 \\| tail -3 && git add -A && git commit -q -m \"chore: revert dep overrides — patched esbuild/uuid blocked by 7-day min-release-age; advisories are transitive dev/tooling, no exploit path \\(Renovate to pick up once aged\\)\" && git push -q origin main && echo PUSHED$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/server typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.ts\\\\\\(\" \\| head -20; echo \"exit=\\$\\{PIPESTATUS\\[0\\]\\} done\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm install 2>&1 \\| tail -6 && echo \"--- viem now ---\" && find node_modules/\\.pnpm -maxdepth 1 -name 'viem@2\\*' -printf '%f\\\\n' \\| sed 's/_\\.\\*//' \\| sort -u$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/server typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.ts\\\\\\(\" \\| head -10; echo \"server exit=\\$\\{PIPESTATUS\\[0\\]\\}\" && echo \"--- why viem 2\\.23\\.2 ---\" && pnpm why viem 2>&1 \\| grep -B1 \"viem 2\\.23\" \\| head -6$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/server typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.ts\\\\\\(\" \\| head -10; echo \"server-exit=\\$\\{PIPESTATUS\\[0\\]\\} done\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/runtime build >/dev/null 2>&1 && pnpm --filter @intentos/server build 2>&1 \\| grep -E \"error TS\" \\| head; echo \"server build done\" && pnpm --filter @intentos/app build 2>&1 \\| tail -4$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/app build 2>&1 \\| grep -iE \"error\\|fail\\|cannot\\|rollup\\|resolve\" \\| head -15$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }

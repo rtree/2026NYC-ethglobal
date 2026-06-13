@@ -10,7 +10,7 @@ export const ADDR = {
   // The demo Owner EOA (EIP-7702-delegated ExecutionDelegate7702).
   owner: "0xeEa9c291544d02397FD8078e3162a3549ADa0f01" as Address,
   delegateImpl: "0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1" as Address,
-  agentNft: "0x82b70553c4b7b4506cb39032c91e94c49d613fee" as Address,
+  agentNft: "0x3da4947a9b5e255219fa39c52a68219da8f9a7ec" as Address,
   usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address,
   weth: "0x4200000000000000000000000000000000000006" as Address,
 };

@@ -146,3 +146,47 @@ facts). GCP project switched to `ethglobal-nyc2026-rtree`.
 - **M3 — watcher slice** (fork-testable now): WatcherRuntime read evidence -> judge -> vote_tighten /
   vote_freeze (quorum=1) -> contract narrows / freezes -> next executor request reverts.
 - **M2 — frontend**: wire mocks to live chain reads (EvidenceCommitted timeline, guard state, vaults).
+
+---
+
+## M4 — Full Journey, live, on the public internet (Cloud Run)
+
+Goal (definition of done): from a browser at a public Cloud Run URL (behind Basic auth), a user can
+walk the North Star journey and SEE it happen on Base mainnet:
+1. Create an **Executor Agent** (mint AgentNFT + EIP-7702 delegate + initialize HardGuardState + fund
+   gas vault) — one click, real txs.
+2. Create a **Watcher Agent** (mint Watcher AgentNFT, bound to the executor; quorum=1).
+3. **Trade**: trigger a guarded USDC->WETH execution; watch EvidenceCommitted appear on the timeline.
+4. **Watcher stops it**: VOTE_FREEZE (or VOTE_TIGHTEN) -> next trade reverts (GuardIsFrozen /
+   AmountTooLarge). Owner can resume (loosen) — only the Owner.
+Then: World ID gate on onboarding.
+
+Architecture decision: the write-path (mint / 7702 / fund / KMS-signed execute / votes) needs the
+Owner private key + KMS + relayer, which must stay server-side (never in the browser). So we add a
+small **backend API** that performs these actions and the React app calls it. This matches the North
+Star (Runtime/Relayer are server-side; the browser only views + triggers).
+
+### Build steps
+1. `packages/server` (Node + a tiny HTTP layer, no heavy deps): endpoints
+   - `GET  /api/state`            -> live chain state (guard, vaults, balances, timeline)
+   - `POST /api/executor/create`  -> mint Executor AgentNFT + 7702 delegate + initialize + fund vault
+   - `POST /api/watcher/create`   -> mint Watcher AgentNFT (bound), set quorum=1
+   - `POST /api/trade`            -> one guarded USDC->WETH execution (quote->sign(KMS)->relay)
+   - `POST /api/watcher/freeze`   -> watcher VOTE_FREEZE (KMS watcher key -> relay)
+   - `POST /api/watcher/tighten`  -> watcher VOTE_TIGHTEN
+   - `POST /api/owner/resume`     -> owner unfreeze/loosen (only-owner path)
+   - `POST /api/reset`            -> rotateBinding / re-init so the demo can be re-run
+   - Reuses `@intentos/runtime` (deploy, setup7702, executor, watcher, KMS, secrets).
+2. Server also serves the built `app/dist` (single origin -> no CORS).
+3. **Basic auth** middleware (creds from Secret Manager `panel-basic-auth`).
+4. Control-panel UI: buttons on the Launch/Owner/Watcher screens call the API; the existing live
+   dashboards reflect results.
+5. **Local iteration**: run the whole journey against Base mainnet (tiny amounts) until smooth.
+6. **Containerize**: one Dockerfile (build app + server, run node). `.dockerignore`.
+7. **Cloud Run**: dedicated runtime service account with `roles/cloudkms.signerVerifier` on the keys
+   + `secretmanager.secretAccessor` on the secrets. Deploy. Bounded (no infinite loops).
+8. **Verify** the public URL: full journey over the internet behind Basic auth.
+9. **World ID gate** on onboarding (screen 010) — last.
+
+Safety reminders for M4: tiny amounts only (~0.001 USDC); bounded actions (no loops/spam); keys only
+in KMS/Secret Manager; Basic auth in front; never log secrets.
