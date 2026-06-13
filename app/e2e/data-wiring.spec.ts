@@ -154,6 +154,22 @@ test("write buttons send the current intentId to backend APIs", async ({ page })
   await expect.poll(() => tradeBody).toEqual({ intentId: ACTIVE_INTENT.intentId });
 });
 
+test("Start runtime button posts intentId to /api/runtime/start", async ({ page }) => {
+  await setupApi(page, EMPTY_STATE_WITH_EXECUTOR);
+  await passGate(page);
+
+  let startBody: unknown = null;
+  await page.route("**/api/runtime/start", async (route) => {
+    startBody = route.request().postData() ? JSON.parse(route.request().postData()!) : {};
+    await route.fulfill({ json: { intentId: ACTIVE_INTENT.intentId, runtime: { startedAt: Date.now(), autoStopAt: Date.now() + 600000, loopPeriodSec: 5, plannedTicks: 3 } } });
+  });
+  await page.goto("/#/launch");
+  await page.getByText("Start Conditions", { exact: true }).first().click();
+  await page.getByRole("button", { name: /Start runtime/ }).click();
+  await expect.poll(() => startBody).toEqual({ intentId: ACTIVE_INTENT.intentId });
+  await expect(page.getByText(/runtime armed/)).toBeVisible();
+});
+
 test("Intent List active card should render current intent API values", async ({ page }) => {
   await setupApi(page);
   await passGate(page);
