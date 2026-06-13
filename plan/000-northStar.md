@@ -1,7 +1,8 @@
 
 # IntentOS North Star
 
-IntentOSはAIAgentによる取引の課題を統合して解決するレイヤープロトコルです
+IntentOSはAIAgentによる取引の課題を
+統合により解決するレイヤープロトコルです
 
 ## 課題１：Agentによるチャンス獲得と暴走のはざまの問題を解決する
 
