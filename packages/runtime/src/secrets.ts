@@ -40,3 +40,44 @@ export async function getBaseRpcUrl(): Promise<string> {
   }
   return "https://mainnet.base.org";
 }
+
+// Well-known public Base mainnet RPCs used as fallbacks (no key). Ordered roughly by reliability.
+const PUBLIC_BASE_RPCS = [
+  "https://mainnet.base.org",
+  "https://base.llamarpc.com",
+  "https://base-rpc.publicnode.com",
+  "https://base.drpc.org",
+  "https://1rpc.io/base",
+];
+
+/**
+ * An ORDERED, de-duplicated list of Base mainnet RPC URLs for a viem fallback() transport, so a single
+ * endpoint failing (rate-limit, 5xx, the Infura "no access" blip we hit) auto-fails over to the next.
+ * Order: explicit override(s) in INTENTOS_RPC (comma/space separated) -> the Infura secret -> public
+ * RPCs. Secrets/keys never get logged. Returns at least one URL.
+ */
+export async function getBaseRpcUrls(): Promise<string[]> {
+  const urls: string[] = [];
+  const push = (u?: string | null) => {
+    const t = (u ?? "").trim();
+    if (t && !urls.includes(t)) urls.push(t);
+  };
+
+  // 1) explicit override(s): INTENTOS_RPC may hold one URL or several (comma / whitespace separated)
+  if (process.env.INTENTOS_RPC) {
+    for (const u of process.env.INTENTOS_RPC.split(/[\s,]+/)) push(u);
+  }
+  // 2) the keyed Infura (or other) secret, if present
+  try {
+    const [v] = await sm.accessSecretVersion({
+      name: "projects/ethglobal-nyc2026-rtree/secrets/base-rpc-url/versions/latest",
+    });
+    push(v.payload?.data?.toString());
+  } catch {
+    /* secret not set yet */
+  }
+  // 3) public RPCs (always appended so there is always a fallback)
+  for (const u of PUBLIC_BASE_RPCS) push(u);
+
+  return urls.length ? urls : ["https://mainnet.base.org"];
+}

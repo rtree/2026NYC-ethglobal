@@ -4,6 +4,7 @@ import {
   createPublicClient,
   createWalletClient,
   decodeEventLog,
+  fallback,
   http,
   keccak256,
   parseEther,
@@ -31,7 +32,7 @@ import {
   buildExecutionRequest,
   delegateAndInitialize,
   fundGasVault,
-  getBaseRpcUrl,
+  getBaseRpcUrls,
   getOwnerAccount,
   getPlatformAccount,
   mintExecutorNft,
@@ -69,8 +70,13 @@ function deployments(): Deployments {
 let _ctx: Awaited<ReturnType<typeof buildCtx>> | null = null;
 
 async function buildCtx() {
-  const rpc = await getBaseRpcUrl();
-  const transport = http(rpc, { retryCount: 5, retryDelay: 800, batch: false });
+  // Multiple Base RPCs behind a viem fallback() transport: a single endpoint failing (rate-limit,
+  // 5xx, the Infura "no access" blip) auto-fails over to the next, and viem ranks healthier ones first.
+  const rpcs = await getBaseRpcUrls();
+  const transport = fallback(
+    rpcs.map((u) => http(u, { retryCount: 3, retryDelay: 600, batch: false })),
+    { rank: { interval: 60_000, sampleCount: 3 }, retryCount: 2 },
+  );
   // Typed as any: viem resolves to multiple peer-variants across workspace packages, which TS treats
   // as distinct nominal types. Runtime is fine (fork e2e passes); this avoids the type-identity clash.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
