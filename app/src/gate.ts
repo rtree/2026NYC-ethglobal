@@ -1,11 +1,16 @@
-// Onboarding gate state (North Star §2 onboarding): the user must connect a wallet AND pass World ID
-// human-proof before entering the Intent List. World ID is mocked in dev (clearly labeled) and uses
-// real IDKit when VITE_WORLDID_APP_ID is set. The flag persists for the session.
+// Onboarding gate state (North Star §2 onboarding): the user must connect a wallet, sign in (Web3 ->
+// Firebase, so per-wallet data + the LLM endpoint are gated), AND pass World ID before entering. World
+// ID is mocked in dev (clearly labeled) and uses real IDKit when VITE_WORLDID_APP_ID is set.
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import { authState } from "./auth";
+import { authState, FIREBASE_API_KEY } from "./auth";
 
 const WORLDID_KEY = "intentos:worldid";
+
+// When a Firebase Web API key is configured, the backend gates /api/* with a Firebase ID token, so the
+// user MUST complete the Web3->Firebase sign-in before entering (otherwise every API call 401s). In
+// dev (no key) sign-in is a no-op and not required.
+export const AUTH_REQUIRED = !!FIREBASE_API_KEY;
 
 export function worldIdVerified(): boolean {
   return sessionStorage.getItem(WORLDID_KEY) === "1";
@@ -37,5 +42,6 @@ export function useGate() {
     };
   }, []);
 
-  return { isConnected, address, verified, signedIn, passed: isConnected && verified };
+  const authOk = !AUTH_REQUIRED || signedIn;
+  return { isConnected, address, verified, signedIn, authRequired: AUTH_REQUIRED, passed: isConnected && authOk && verified };
 }

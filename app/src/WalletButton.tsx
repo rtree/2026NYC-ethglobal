@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
 import { shortAddr, addrUrl } from "./format";
 import { authState, signInWithWallet, signOut } from "./auth";
@@ -16,6 +16,8 @@ export function WalletButton({ block }: { block?: boolean }) {
   const [authErr, setAuthErr] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
   const [, forceRender] = useState(0);
+  // Track which address we've already auto-attempted, so a failed sign-in doesn't loop signature popups.
+  const attemptedFor = useRef<string | null>(null);
 
   // Re-render when the Firebase sign-in state changes (so the "Sign in" button updates).
   useEffect(() => {
@@ -24,23 +26,22 @@ export function WalletButton({ block }: { block?: boolean }) {
     return () => window.removeEventListener("intentos:auth", onAuth);
   }, []);
 
-  // Run the SIWE handshake once the wallet is connected and we don't yet have a session.
-  useEffect(() => {
-    if (!isConnected || !address || authState() || signing) return;
-    let cancelled = false;
+  function runSignIn(addr: `0x${string}`) {
+    attemptedFor.current = addr;
     setSigning(true);
     setAuthErr(null);
-    signInWithWallet(address, signMessageAsync)
-      .catch((e) => {
-        if (!cancelled) setAuthErr(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
-        if (!cancelled) setSigning(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isConnected, address, signMessageAsync, signing]);
+    signInWithWallet(addr, signMessageAsync)
+      .catch((e) => setAuthErr(e instanceof Error ? e.message : String(e)))
+      .finally(() => setSigning(false));
+  }
+
+  // Auto-run the SIWE handshake ONCE per connected address. Manual "Sign in" (below) retries on failure.
+  useEffect(() => {
+    if (!isConnected || !address || authState() || signing) return;
+    if (attemptedFor.current === address) return; // already tried this address; wait for manual retry
+    runSignIn(address);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, address]);
 
   if (isConnected && address) {
     const signedIn = !!authState();

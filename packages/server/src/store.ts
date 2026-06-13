@@ -3,6 +3,7 @@
 //   - firestore: REST (firestore.googleapis.com) via ADC, no SDK
 // Docs are scoped users/{uid}/intents/{intentId}; transcript at .../transcript/{turnId}.
 import { accessToken, PROJECT_ID } from "./gcp.js";
+import { isProductionRuntime } from "./authGate.js";
 import type { IntentDoc, TranscriptTurn } from "./intentTypes.js";
 
 export interface Store {
@@ -153,7 +154,15 @@ class FirestoreStore implements Store {
 let _store: Store | null = null;
 export function store(): Store {
   if (_store) return _store;
-  const mode = (process.env.INTENTOS_STORE ?? "memory").toLowerCase();
+  // FAIL-CLOSED for durability: production defaults to Firestore (memory loses history on restart and
+  // splits across Cloud Run instances). Dev/e2e default to memory. Explicit INTENTOS_STORE wins, but an
+  // explicit "memory" in production is warned about loudly.
+  const explicit = (process.env.INTENTOS_STORE ?? "").toLowerCase();
+  let mode = explicit;
+  if (!mode) mode = isProductionRuntime() ? "firestore" : "memory";
+  if (mode === "memory" && isProductionRuntime()) {
+    console.warn("[store] INTENTOS_STORE=memory in production — history is ephemeral and per-instance");
+  }
   _store = mode === "firestore" ? new FirestoreStore() : new MemoryStore();
   return _store;
 }

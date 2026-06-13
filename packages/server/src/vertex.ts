@@ -2,6 +2,7 @@
 // plan/010 §18). Falls back to a scripted compile when INTENTOS_LLM!=vertex or Vertex is unreachable,
 // so the demo never hard-fails. The server validates/normalizes whatever the model returns.
 import { accessToken, PROJECT_ID } from "./gcp.js";
+import { isProductionRuntime } from "./authGate.js";
 import type { AgentPackageDraft } from "./intentTypes.js";
 
 const LOCATION = process.env.INTENTOS_VERTEX_LOCATION ?? "us-central1";
@@ -169,15 +170,17 @@ function mockChat(transcript: Turn[]): ChatResult {
 }
 
 export async function chat(transcript: Turn[]): Promise<ChatResult> {
-  const mode = (process.env.INTENTOS_LLM ?? "mock").toLowerCase();
+  // Default to the real LLM on a Google runtime; dev/e2e default to the scripted mock.
+  const explicit = (process.env.INTENTOS_LLM ?? "").toLowerCase();
+  const mode = explicit || (isProductionRuntime() ? "vertex" : "mock");
   if (mode === "vertex") {
     try {
       return await callVertex(transcript);
     } catch (e) {
-      // graceful fallback — demo never hard-fails
-      const m = mockChat(transcript);
-      m.reply = `${m.reply}`;
-      return m;
+      // Demo never hard-fails, but the fallback is NOT silent: log so a broken Vertex path is visible,
+      // and the result carries llm:"mock" so the UI labels it "scripted" (not real LLM output).
+      console.error("[vertex] generateContent failed, falling back to scripted mock:", e instanceof Error ? e.message : e);
+      return mockChat(transcript);
     }
   }
   return mockChat(transcript);
