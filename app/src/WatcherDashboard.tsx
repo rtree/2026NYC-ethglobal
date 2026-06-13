@@ -1,6 +1,8 @@
 import { useChainState } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { shortHash, txUrl } from "./format";
+import { ActionButton } from "./ActionButton";
+import { api } from "./api";
 
 export function WatcherDashboard() {
   const { state, error, loading } = useChainState();
@@ -51,10 +53,8 @@ export function WatcherDashboard() {
                   <span className="pill">monotonic</span>
                 </div>
                 <p className="desc">The Watcher can only narrow capability. Loosen / unfreeze is Owner-only.</p>
-                <div className="btn-row">
-                  <span className="pill ok">VOTE_TIGHTEN</span>
-                  <span className="pill frozen">VOTE_FREEZE</span>
-                </div>
+                <ActionButton label="VOTE_TIGHTEN (halve per-tx cap)" className="btn block" run={api.watcherTighten} />
+                <ActionButton label="VOTE_FREEZE (stop all execution)" className="btn danger block" run={api.watcherFreeze} />
                 <p className="spec-ref" style={{ marginTop: 12 }}>
                   Votes are signed by the Watcher KMS SessionKey and relayed. On-chain the contract
                   enforces monotonic tightening (NotTightening reverts a loosening patch).

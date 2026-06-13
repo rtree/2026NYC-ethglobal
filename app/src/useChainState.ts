@@ -115,6 +115,12 @@ function loadChainStateShared(maxAgeMs = 10_000): Promise<ChainState> {
   return inflight;
 }
 
+/** Force the next read to bypass the cache (call after a write action). */
+export function invalidateChainState() {
+  lastAt = 0;
+  window.dispatchEvent(new CustomEvent("intentos:refresh"));
+}
+
 export function useChainState(pollMs = 20_000) {
   const [state, setState] = useState<ChainState | null>(lastGood);
   const [error, setError] = useState<string | null>(null);
@@ -137,9 +143,15 @@ export function useChainState(pollMs = 20_000) {
     }
     refresh();
     const t = setInterval(refresh, pollMs);
+    const onRefresh = () => {
+      lastAt = 0;
+      refresh();
+    };
+    window.addEventListener("intentos:refresh", onRefresh);
     return () => {
       active = false;
       clearInterval(t);
+      window.removeEventListener("intentos:refresh", onRefresh);
     };
   }, [pollMs]);
 

@@ -96,6 +96,10 @@
     "/^pnpm --filter @intentos/app build 2>&1 \\| grep -iE \"error\\|fail\\|cannot\\|rollup\\|resolve\" \\| head -15$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.tsx\\?\\\\\\(\" \\| head -10; echo \"app-exit=\\$\\{PIPESTATUS\\[0\\]\\} done\"$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }

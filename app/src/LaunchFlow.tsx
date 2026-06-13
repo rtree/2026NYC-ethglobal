@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useAccount } from "wagmi";
 import { TopBar, Nav } from "./Chrome";
 import { ADDR } from "./config";
 import { shortAddr, addrUrl } from "./format";
+import { ActionButton } from "./ActionButton";
+import { api } from "./api";
 
 const SCRIPT: { who: "owner" | "agent"; text: string }[] = [
   { who: "owner", text: "I want to swap USDC into ETH little by little." },
@@ -24,7 +25,6 @@ const STEPS = [
 ] as const;
 
 export function LaunchFlow() {
-  const { isConnected } = useAccount();
   const [shown, setShown] = useState(2);
 
   return (
@@ -58,9 +58,11 @@ export function LaunchFlow() {
                 Continue conversation
               </button>
             ) : (
-              <button className="btn primary block" style={{ marginTop: 14 }} disabled={!isConnected}>
-                {isConnected ? "Mint Executor Agent NFT" : "Connect wallet to mint"}
-              </button>
+              <div style={{ marginTop: 14 }}>
+                <ActionButton label="① Create Executor Agent (mint + EIP-7702 + initialize)" className="btn primary block" run={api.createExecutor} />
+                <ActionButton label="② Create Watcher Agent (mint + bind, quorum 1)" className="btn block" run={api.createWatcher} />
+                <p className="spec-ref">Real Base mainnet transactions. Then open the Owner dashboard to trade, and the Watcher dashboard to freeze.</p>
+              </div>
             )}
           </div>
 

@@ -2,6 +2,8 @@ import { useChainState } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { ADDR } from "./config";
 import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl } from "./format";
+import { ActionButton } from "./ActionButton";
+import { api } from "./api";
 
 export function OwnerDashboard() {
   const { state, error, loading } = useChainState();
@@ -78,6 +80,15 @@ export function OwnerDashboard() {
               </div>
 
               <div>
+                <div className="card" style={{ marginBottom: 20 }}>
+                  <div className="card-head">
+                    <h3>Owner controls</h3>
+                    <span className="pill role-exec">EXECUTOR</span>
+                  </div>
+                  <ActionButton label="Execute guarded trade (0.001 USDC → WETH)" className="btn primary block" run={api.trade} />
+                  <ActionButton label="Resume / unfreeze (Owner only)" className="btn block" run={api.ownerResume} />
+                  <p className="spec-ref">Trade is signed by the Executor SessionKey (KMS) and relayed. Only the Owner can loosen / unfreeze.</p>
+                </div>
                 <div className="card" style={{ marginBottom: 20 }}>
                   <div className="card-head">
                     <h3>Current Hard Guardrails</h3>
