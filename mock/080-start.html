@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>080 · Start — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <div class="wallet-chip"><span class="dot"></span>0x9A3f…b21c</div>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">080 · Start</div>
+      <h1>Confirm &amp; launch</h1>
+      <p>Start is enabled only when the required preconditions are met. With a Watcher attached, the
+        quorum set and its gas budget must also be ready.</p>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Preconditions</h3><span class="pill ok"><span class="dot"></span>all met</span></div>
+        <div class="guard"><span class="g-name">Agent Package bound (packageHash)</span><span class="g-val" style="color:var(--accent)">✓</span></div>
+        <div class="guard"><span class="g-name">HardGuardState initialized</span><span class="g-val" style="color:var(--accent)">✓</span></div>
+        <div class="guard"><span class="g-name">Identity · ENS · registration</span><span class="g-val" style="color:var(--accent)">✓</span></div>
+        <div class="guard"><span class="g-name">World ID proof</span><span class="g-val" style="color:var(--accent)">✓</span></div>
+        <div class="guard"><span class="g-name">Executor gas vault funded</span><span class="g-val" style="color:var(--accent)">✓ 0.010 ETH</span></div>
+        <div class="guard"><span class="g-name">Watcher quorum + gas (if attached)</span><span class="g-val" style="color:var(--accent)">✓ quorum 1</span></div>
+      </div>
+
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Launch summary</h3><span class="pill running"><span class="dot"></span>ready</span></div>
+        <table class="kv">
+          <tr><td class="k">Intent</td><td class="v">intent-abc · DCA USDC→WETH</td></tr>
+          <tr><td class="k">Executor</td><td class="v">#123 · agent-123.intentos.base.eth</td></tr>
+          <tr><td class="k">Watcher</td><td class="v">#124 · quorum 1</td></tr>
+          <tr><td class="k">Pair</td><td class="v">USDC / WETH</td></tr>
+          <tr><td class="k">Per-tx / total cap</td><td class="v">5 / 100 USDC</td></tr>
+          <tr><td class="k">Mode</td><td class="v">Executor + Watcher</td></tr>
+        </table>
+        <div class="divider"></div>
+        <button class="btn accent block">Start trading — begin AgentLoop</button>
+        <div class="btn-row" style="margin-top:10px">
+          <a class="btn ghost block" href="070-watcher-creation.html">Start Executor-only instead</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:22px">
+      <a class="btn primary" href="090-owner-dashboard.html">Launch → Dashboard</a>
+      <a class="btn ghost" href="030-launch-dashboard.html">Back</a>
+    </div>
+    <p class="spec-ref" style="margin-top:18px">Spec: <a href="../plan/010-interfaces.md">010-interfaces.md</a>
+      §13 (lifecycle DRAFT→…→RUNNING), §15 (screen 080)</p>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>

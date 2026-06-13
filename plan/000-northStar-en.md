@@ -2,13 +2,9 @@
 
 # IntentOS North Star
 
-IntentOS is a layer protocol that solves the problems of AI-Agent-driven trading by using EIP-7702
-to keep funds in the Owner's own wallet and install guardrails there, while a separate Agent watches
-the trading.
+IntentOS is a layer protocol that solves the problems of AI-Agent-driven trading by using EIP-7702 to keep funds in the Owner's own wallet and install guardrails there, while a separate Agent watches the trading.
 
-Agents are also minted as NFTs (ERC-8004 / ERC-721): as proof of access to the Owner's EIP-7702
-delegated contract, and as a symbol of the right to access the AI Agent execution environment built
-in the cloud.
+Agents are also minted as NFTs (ERC-8004 / ERC-721): as proof of access to the Owner's EIP-7702 delegated contract, and as a symbol of the right to access the AI Agent execution environment built in the cloud.
 
 ## Problems We Solve
 

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>050 · Agent Identity — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <div class="wallet-chip"><span class="dot"></span>0x9A3f…b21c</div>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">050 · Agent identity setup</div>
+      <h1>Name the Agent before it runs</h1>
+      <p>The ENS / Basename is assigned after mint and before the Runtime Binding, so Runtime,
+        evidence, dashboard, and Watcher all reference one permanent name.</p>
+    </div>
+
+    <div class="steps">
+      <span class="step done">NFT minted</span>
+      <span class="step done">tokenId fixed</span>
+      <span class="step active">ENS + registration</span>
+      <span class="step">Runtime Binding</span>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Identity</h3><span class="pill role-exec">EXECUTOR · #123</span></div>
+        <table class="kv">
+          <tr><td class="k">tokenId</td><td class="v">123</td></tr>
+          <tr><td class="k">owner</td><td class="v">0x9A3f…b21c</td></tr>
+          <tr><td class="k">ENS / Basename</td><td class="v">agent-123.intentos.base.eth</td></tr>
+          <tr><td class="k">agentManifestHash</td><td class="v">0x7c…e2</td></tr>
+          <tr><td class="k">tokenURI</td><td class="v">→ ERC-8004 registration JSON</td></tr>
+        </table>
+        <div class="divider"></div>
+        <p class="muted" style="font-size:12px;margin:0 0 8px">ENSIP records</p>
+        <div class="guard"><span class="g-name">agent-context</span><span class="g-val">set</span></div>
+        <div class="guard"><span class="g-name">agent-endpoint[web]</span><span class="g-val">intentos.arkt.me</span></div>
+        <div class="guard"><span class="g-name">agent-registration[registry][agentId]</span><span class="g-val">123</span></div>
+      </div>
+
+      <div class="card pad-lg">
+        <div class="card-head"><h3>ERC-8004 registration</h3><span class="pill ok"><span class="dot"></span>preview</span></div>
+        <pre class="code"><span class="tok-cmt">// tokenURI target</span>
+{
+  <span class="tok-key">"schema"</span>: <span class="tok-str">"erc8004-agent-registration"</span>,
+  <span class="tok-key">"name"</span>: <span class="tok-str">"IntentOS Executor Agent #123"</span>,
+  <span class="tok-key">"role"</span>: <span class="tok-str">"EXECUTOR_AGENT"</span>,
+  <span class="tok-key">"agentPackageHash"</span>: <span class="tok-str">"0x7c…e2"</span>,
+  <span class="tok-key">"runtimeManifestHash"</span>: <span class="tok-str">"0x…"</span>,
+  <span class="tok-key">"publicEndpoints"</span>: {
+    <span class="tok-key">"app"</span>: <span class="tok-str">"https://intentos.arkt.me/"</span>
+  },
+  <span class="tok-key">"ownership"</span>: { <span class="tok-key">"transferable"</span>: <span class="tok-num">true</span> }
+}</pre>
+        <p class="spec-ref" style="margin-top:10px">Transfer moves identity + usage right only — never
+          fund custody. See <a href="../plan/010-interfaces.md">010 §6, §10</a>.</p>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:22px">
+      <a class="btn accent" href="060-runtime-funding.html">Continue → Runtime</a>
+      <a class="btn ghost" href="030-launch-dashboard.html">Back</a>
+    </div>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>

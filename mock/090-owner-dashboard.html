@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>090 · Owner Dashboard — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <span class="pill running"><span class="dot"></span>running</span>
+    <div class="wallet-chip"><span class="dot"></span>0x9A3f…b21c</div>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">090 · Owner Runtime Dashboard</div>
+      <h1>intent-abc · DCA USDC → WETH</h1>
+      <p>One timeline where Agent NFT, Runtime, Hard Guard, and Semantic Guard move together.</p>
+    </div>
+
+    <div class="grid cols-4" style="margin-bottom:8px">
+      <div class="card"><p class="muted" style="font-size:12px;margin:0 0 4px">Executor</p><div class="mono">#123</div></div>
+      <div class="card"><p class="muted" style="font-size:12px;margin:0 0 4px">Cumulative spent</p><div class="mono">35.00 / 100 USDC</div><div class="progress" style="margin-top:8px"><span style="width:35%"></span></div></div>
+      <div class="card"><p class="muted" style="font-size:12px;margin:0 0 4px">Gas vault (exec)</p><div class="mono">0.0092 ETH</div></div>
+      <div class="card"><p class="muted" style="font-size:12px;margin:0 0 4px">Watcher</p><div class="mono">#124 · quorum 1</div></div>
+    </div>
+
+    <div class="grid cols-2">
+      <!-- Shared execution timeline -->
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Shared execution timeline</h3><span class="pill ok"><span class="dot"></span>live</span></div>
+        <ul class="timeline">
+          <li class="exec"><div class="t-time">14:02:11</div><div class="t-title">Executor decision · BUY</div>
+            <div class="t-body">Perceived dip; chose BUY 5.00 USDC → WETH.</div></li>
+          <li><div class="t-time">14:02:12</div><div class="t-title">Quote · Uniswap</div>
+            <div class="t-body">quotedAmountOut 0.00181 WETH · <span class="inline">quoteHash 0x2a…</span></div></li>
+          <li><div class="t-time">14:02:12</div><div class="t-title">Simulate</div>
+            <div class="t-body">route + calldata ok · <span class="inline">simulationHash 0x9f…</span></div></li>
+          <li class="guard"><div class="t-time">14:02:13</div><div class="t-title">Hard Guard · passed</div>
+            <div class="t-body">amountIn ≤ cap, slippage 0.31% ≤ 0.5%, not frozen → execute.</div></li>
+          <li class="evidence"><div class="t-time">14:02:14</div><div class="t-title">EvidenceCommitted</div>
+            <div class="t-body">tx <span class="inline">0x54fd…2a99</span> · reason "BUY 5 USDC, dip, slippage 0.31%, inside caps"</div></li>
+          <li class="watch"><div class="t-time">14:03:02</div><div class="t-title">Watcher review · REPORT_OK</div>
+            <div class="t-body">on-intent; route natural, quote fresh.</div></li>
+        </ul>
+      </div>
+
+      <!-- Right column -->
+      <div>
+        <div class="card pad-lg" style="margin-bottom:16px">
+          <div class="card-head"><h3>Current Hard Guardrails</h3><span class="pill mono" style="font-size:11px">hash 0x41…9a</span></div>
+          <div class="guard hard"><span class="g-name">tokenPair</span><span class="g-val">USDC / WETH</span></div>
+          <div class="guard hard"><span class="g-name">amountCapPerTx</span><span class="g-val">5.00 USDC</span></div>
+          <div class="guard hard"><span class="g-name">cumulativeCap</span><span class="g-val">100.00 USDC</span></div>
+          <div class="guard hard"><span class="g-name">slippageCapBps</span><span class="g-val">50</span></div>
+          <div class="guard hard"><span class="g-name">frozen</span><span class="g-val">false</span></div>
+        </div>
+
+        <div class="card pad-lg" style="margin-bottom:16px">
+          <div class="card-head"><h3>AgentLoop log</h3><span class="pill role-exec">EXECUTOR</span></div>
+          <div class="log">
+            <div class="line think"><span class="ts">14:02:11</span> perceive: price −0.8% vs 1h MA</div>
+            <div class="line"><span class="ts">14:02:11</span> decide: BUY (within DCA cadence)</div>
+            <div class="line"><span class="ts">14:02:12</span> tool intentos.get_quote → 0.00181 WETH</div>
+            <div class="line"><span class="ts">14:02:13</span> tool intentos.simulate → ok</div>
+            <div class="line ok"><span class="ts">14:02:14</span> submit_execution_request → executed</div>
+            <div class="line think"><span class="ts">14:05:40</span> perceive: flat; HOLD</div>
+          </div>
+        </div>
+
+        <div class="card pad-lg">
+          <div class="card-head"><h3>Owner controls</h3></div>
+          <div class="btn-row">
+            <button class="btn">Top up gas</button>
+            <a class="btn" href="100-watcher-dashboard.html">Review Watcher</a>
+            <a class="btn danger" href="110-result.html">Stop intent</a>
+          </div>
+          <p class="spec-ref" style="margin-top:10px">Only the Owner can loosen / stop. Watcher can only
+            tighten — <a href="../plan/010-interfaces.md">010 §14</a>.</p>
+        </div>
+      </div>
+    </div>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>060 · Runtime &amp; Funding — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <div class="wallet-chip"><span class="dot"></span>0x9A3f…b21c</div>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">060 · Runtime / fund preparation</div>
+      <h1>Provision the Runtime &amp; fund gas</h1>
+      <p>The Runtime Registry creates an OpenClaw Capsule on Cloud Run and hands it a SessionKey — a
+        request capability, not a fund-moving key. Gas is pre-funded into a lane inside your own
+        delegated account.</p>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card pad-lg">
+        <div class="card-head"><h3>ExecutorRuntime Capsule</h3><span class="pill running"><span class="dot"></span>ready to spawn</span></div>
+        <table class="kv">
+          <tr><td class="k">tokenId</td><td class="v">123</td></tr>
+          <tr><td class="k">runtimeOwner</td><td class="v">0x9A3f…b21c</td></tr>
+          <tr><td class="k">bindingNonce</td><td class="v">1</td></tr>
+          <tr><td class="k">cloudRunService</td><td class="v">intentos-openclaw-gateway</td></tr>
+          <tr><td class="k">kmsKeyRef</td><td class="v">global/intentos/intent-decrypt</td></tr>
+          <tr><td class="k">runtimeStatus</td><td class="v">NONE → SPAWNING</td></tr>
+        </table>
+        <p class="note" style="margin-top:14px">Valid only while
+          <span class="inline">ownerOf(tokenId) == runtimeOwner</span>. Transfer rotates
+          <span class="inline">bindingNonce</span> and revokes the old binding.</p>
+      </div>
+
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Executor ExecutionGasVault</h3><span class="pill required">fund required</span></div>
+        <p class="desc">A reimbursement lane inside your EIP-7702 delegated account. The Relayer fronts
+          tx gas and is settled from this lane (clamped by <span class="inline">gasPerTxCap</span>).</p>
+        <table class="kv">
+          <tr><td class="k">estimated cost / 24h</td><td class="v">~0.004 ETH</td></tr>
+          <tr><td class="k">refund policy</td><td class="v">unused → Owner on stop</td></tr>
+          <tr><td class="k">stop condition</td><td class="v">fund-exhausted → halt</td></tr>
+        </table>
+        <div class="field" style="margin-top:12px">
+          <label>Amount to fund (ETH)</label>
+          <input value="0.010" />
+        </div>
+        <button class="btn accent block">fundGasVault() · sign with wallet</button>
+        <p class="spec-ref" style="margin-top:10px">Executor and Watcher lanes are separated —
+          <a href="../plan/010-interfaces.md">010 §10</a>.</p>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:22px">
+      <a class="btn accent" href="070-watcher-creation.html">Continue → Watcher (optional)</a>
+      <a class="btn ghost" href="080-start.html">Skip to Start</a>
+    </div>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>100 · Watcher Dashboard — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <span class="pill role-watch">WATCHER · #124</span>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">100 · Watcher Runtime Dashboard</div>
+      <h1>Watching Executor #123 · intent-abc</h1>
+      <p>The audit origin is the onchain <span class="inline">EvidenceCommitted</span> event, not an
+        offchain log. The Watcher judges on-intent and can only tighten / freeze.</p>
+    </div>
+
+    <div class="grid cols-2">
+      <!-- Evidence to review -->
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Evidence under review</h3><span class="pill tightened"><span class="dot"></span>suspicious</span></div>
+        <table class="kv">
+          <tr><td class="k">executionId</td><td class="v">0xee…07</td></tr>
+          <tr><td class="k">action</td><td class="v">BUY (3)</td></tr>
+          <tr><td class="k">quoteHash</td><td class="v">0x2a…</td></tr>
+          <tr><td class="k">simulationHash</td><td class="v">0x9f…</td></tr>
+          <tr><td class="k">resultHash</td><td class="v">0x6b…</td></tr>
+          <tr><td class="k">reason (200)</td><td class="v">"BUY 5 USDC, route via 3 hops, quote age 41s"</td></tr>
+        </table>
+        <p class="muted" style="font-size:12px;margin:14px 0 6px">Judge vs Semantic Guardrails</p>
+        <div class="guard sem"><span class="g-name">route naturalness</span><span class="g-val" style="color:var(--warn)">3 hops · unusual</span></div>
+        <div class="guard sem"><span class="g-name">quote freshness</span><span class="g-val" style="color:var(--warn)">41s · stale-ish</span></div>
+        <div class="guard sem"><span class="g-name">recovery preference</span><span class="g-val" style="color:var(--accent)">ok</span></div>
+      </div>
+
+      <!-- Actions -->
+      <div>
+        <div class="card pad-lg" style="margin-bottom:16px">
+          <div class="card-head"><h3>Ask the Executor</h3><span class="pill role-exec">chat</span></div>
+          <div class="chat">
+            <div class="bubble agent">Why a 3-hop route on a fresh-ish quote?</div>
+            <div class="bubble owner">Direct pool had thin liquidity; 3-hop reduced slippage to 0.31%.</div>
+          </div>
+        </div>
+
+        <div class="card pad-lg">
+          <div class="card-head"><h3>Report / vote</h3><span class="pill required">quorum 1 · 1 vote enacts</span></div>
+          <p class="desc">A single vote immediately updates ExecutionContract state (quorum = 1).</p>
+          <div class="btn-row">
+            <button class="btn accent">REPORT_OK</button>
+            <button class="btn">REPORT_SUSPICIOUS</button>
+          </div>
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn" style="border-color:#5a4715;color:var(--warn)">VOTE_TIGHTEN</button>
+            <button class="btn" style="border-color:#1c4a63;color:var(--cyan)">VOTE_FREEZE</button>
+          </div>
+          <div class="divider"></div>
+          <p class="muted" style="font-size:12px;margin:0 0 6px">Tighten preview (narrow only)</p>
+          <div class="guard hard"><span class="g-name">amountCapPerTx</span><span class="g-val">5.00 → 2.00 USDC</span></div>
+          <div class="guard hard"><span class="g-name">slippageCapBps</span><span class="g-val">50 → 30</span></div>
+          <p class="spec-ref" style="margin-top:10px">No cap increase, no expiry extension, no unfreeze.
+            Loosen is Owner-only — <a href="../plan/010-interfaces.md">010 §8, §12</a>.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:22px">
+      <a class="btn ghost" href="090-owner-dashboard.html">← Owner view</a>
+      <a class="btn" href="110-result.html">See result →</a>
+    </div>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>

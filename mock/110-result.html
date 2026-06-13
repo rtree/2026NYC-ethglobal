@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>110 · Result — IntentOS</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="logo">I</span> IntentOS</div>
+    <div class="spacer"></div>
+    <span class="pill tightened"><span class="dot"></span>tightened</span>
+    <a class="pill-link" href="index.html">All screens</a>
+  </div>
+
+  <div class="main">
+    <div class="page-head">
+      <div class="eyebrow">110 · Result / Performance</div>
+      <h1>intent-abc · final state</h1>
+      <p>A Watcher vote tightened future capability (quorum 1). The Intent stopped inside its
+        boundary; remaining funds stay with the Owner.</p>
+    </div>
+
+    <div class="grid cols-4" style="margin-bottom:8px">
+      <div class="card"><p class="muted" style="font-size:12px;margin:0 0 6px">Final state</p>
+        <span class="pill tightened"><span class="dot"></span>tightened</span></div>
+      <div class="card"><p class="muted" style="font-size:12px;margin:0 0 6px">Net delta</p>
+        <div class="stat up">+0.41</div><p class="muted mono" style="font-size:11px">USDC equiv</p></div>
+      <div class="card"><p class="muted" style="font-size:12px;margin:0 0 6px">Gas + runtime cost</p>
+        <div class="mono">0.0031 ETH</div></div>
+      <div class="card"><p class="muted" style="font-size:12px;margin:0 0 6px">Gas vault refund</p>
+        <div class="mono">0.0069 ETH → Owner</div></div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Outcome</h3></div>
+        <table class="kv">
+          <tr><td class="k">stop reason</td><td class="v">Watcher VOTE_TIGHTEN → cap reached</td></tr>
+          <tr><td class="k">last tx</td><td class="v">0x54fd…2a99</td></tr>
+          <tr><td class="k">final amountCapPerTx</td><td class="v">2.00 USDC (tightened)</td></tr>
+          <tr><td class="k">final slippageCapBps</td><td class="v">30 (tightened)</td></tr>
+          <tr><td class="k">frozen</td><td class="v">false</td></tr>
+          <tr><td class="k">ExecutionGasVault left</td><td class="v">0.0069 ETH</td></tr>
+        </table>
+      </div>
+
+      <div class="card pad-lg">
+        <div class="card-head"><h3>Performance</h3></div>
+        <table class="kv">
+          <tr><td class="k">target value before</td><td class="v">100.00 USDC</td></tr>
+          <tr><td class="k">target value after</td><td class="v">100.41 USDC</td></tr>
+          <tr><td class="k">net delta</td><td class="v" style="color:var(--accent)">+0.41 USDC</td></tr>
+          <tr><td class="k">token balance delta</td><td class="v">−65.00 USDC · +0.0234 WETH</td></tr>
+          <tr><td class="k">executions</td><td class="v">13 BUY · 0 RECOVER</td></tr>
+        </table>
+        <div class="divider"></div>
+        <p class="muted" style="font-size:12px;margin:0 0 8px">Other terminal states (canonical set)</p>
+        <div class="btn-row">
+          <span class="pill running">running</span>
+          <span class="pill frozen">frozen</span>
+          <span class="pill self-stopped">self-stopped</span>
+          <span class="pill owner-stopped">owner-stopped</span>
+          <span class="pill fund-exhausted">fund-exhausted</span>
+          <span class="pill transferred">transferred</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:22px">
+      <a class="btn primary" href="020-intent-list.html">Back to Intent List</a>
+      <a class="btn ghost" href="090-owner-dashboard.html">View timeline</a>
+    </div>
+    <p class="spec-ref" style="margin-top:18px">Spec: <a href="../plan/010-interfaces.md">010-interfaces.md</a>
+      §13 (terminal states), §15 (screen 110) · North Star §2 Result / Performance</p>
+    <p class="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+  </div>
+</div>
+</body>
+</html>

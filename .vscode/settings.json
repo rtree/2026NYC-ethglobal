@@ -12,6 +12,10 @@
       "approve": true,
       "matchCommandLine": true
     },
-    "git cat-file": true
+    "git cat-file": true,
+    "git pull": true,
+    "git add": true,
+    "git commit": true,
+    "git push": true
   }
 }
