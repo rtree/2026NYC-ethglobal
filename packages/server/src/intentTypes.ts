@@ -27,6 +27,14 @@ export interface StartConfig {
   watcherEnabled: boolean;
 }
 
+/** Bounded runtime schedule, set when the AgentLoop is started (plan/010 §18). */
+export interface RuntimeState {
+  startedAt: number;
+  autoStopAt: number;
+  loopPeriodSec: number;
+  plannedTicks: number;
+}
+
 export interface IntentDoc {
   intentId: string;
   title: string;
@@ -36,6 +44,7 @@ export interface IntentDoc {
   watcherTokenId: string | null;
   packages: { executor: AgentPackageDraft; watcher: AgentPackageDraft };
   startConfig: StartConfig;
+  runtime?: RuntimeState | null;
 }
 
 export interface TranscriptTurn {

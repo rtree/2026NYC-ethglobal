@@ -202,3 +202,20 @@ test("Intent List reset should send the current intentId", async ({ page }) => {
   await page.getByRole("button", { name: /Reset demo session/ }).click();
   await expect.poll(() => resetBody).toEqual({ intentId: ACTIVE_INTENT.intentId });
 });
+
+test("protected IntentBuilder calls should include a Firebase Bearer token", async ({ page }) => {
+  test.fail(true, "AUTH-002: when VITE_FIREBASE_API_KEY is absent, UI creates an empty-token local session and backend returns missing bearer token.");
+  await setupApi(page);
+  await passGate(page);
+
+  let authHeader: string | null = null;
+  await page.route("**/api/intent/chat", async (route) => {
+    authHeader = route.request().headers().authorization ?? null;
+    await route.fulfill({ json: { intentId: ACTIVE_INTENT.intentId, reply: "ok", packages: ACTIVE_INTENT.packages, llm: "mock" } });
+  });
+
+  await page.goto("/#/launch");
+  await page.getByPlaceholder("Describe purpose & limits…").fill("DCA");
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await expect.poll(() => authHeader).toMatch(/^Bearer .+/);
+});

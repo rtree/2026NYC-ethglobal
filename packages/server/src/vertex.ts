@@ -173,13 +173,17 @@ export async function chat(transcript: Turn[]): Promise<ChatResult> {
   // Default to the real LLM on a Google runtime; dev/e2e default to the scripted mock.
   const explicit = (process.env.INTENTOS_LLM ?? "").toLowerCase();
   const mode = explicit || (isProductionRuntime() ? "vertex" : "mock");
+  // INTENTOS_LLM_STRICT=1 makes a Vertex failure propagate (hard-fail) instead of falling back to the
+  // scripted mock — for environments that must never serve canned packages as if they were the LLM.
+  const strict = process.env.INTENTOS_LLM_STRICT === "1";
   if (mode === "vertex") {
     try {
       return await callVertex(transcript);
     } catch (e) {
-      // Demo never hard-fails, but the fallback is NOT silent: log so a broken Vertex path is visible,
-      // and the result carries llm:"mock" so the UI labels it "scripted" (not real LLM output).
-      console.error("[vertex] generateContent failed, falling back to scripted mock:", e instanceof Error ? e.message : e);
+      console.error("[vertex] generateContent failed:", e instanceof Error ? e.message : e);
+      if (strict) throw e instanceof Error ? e : new Error(String(e));
+      // Demo never hard-fails, but the fallback is NOT silent: logged above, and the result carries
+      // llm:"mock" so the UI labels it "scripted" (not real LLM output).
       return mockChat(transcript);
     }
   }

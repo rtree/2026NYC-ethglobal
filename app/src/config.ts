@@ -17,6 +17,21 @@ export const ADDR = {
 
 export const BASE_RPC = import.meta.env.VITE_BASE_RPC ?? "https://mainnet.base.org";
 
+// Map a Base token address to its symbol (data-driven token-pair display). Unknown -> short address.
+const TOKEN_SYMBOLS: Record<string, string> = {
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "USDC",
+  "0x4200000000000000000000000000000000000006": "WETH",
+};
+export function tokenSymbol(addr?: string): string {
+  if (!addr) return "—";
+  return TOKEN_SYMBOLS[addr.toLowerCase()] ?? `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+/** "USDC / WETH" derived from a guard's tokenA/tokenB (falls back to the MVP pair). */
+export function tokenPair(tokenA?: string, tokenB?: string): string {
+  if (!tokenA || !tokenB) return "USDC / WETH";
+  return `${tokenSymbol(tokenA)} / ${tokenSymbol(tokenB)}`;
+}
+
 // Minimal ABI surface the dApp reads. Full ABI lives in @intentos/shared for the runtime.
 export const delegateAbi = [
   {

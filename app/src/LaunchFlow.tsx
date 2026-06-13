@@ -4,6 +4,7 @@ import { TopBar, Nav } from "./Chrome";
 import { ActionButton } from "./ActionButton";
 import { api, type ChatResponse } from "./api";
 import { authState } from "./auth";
+import { tokenPair } from "./config";
 import { shortAddr, addrUrl, usdc, eth } from "./format";
 import type { AgentPackageDraft, IntentDoc } from "./intentTypes";
 
@@ -246,15 +247,15 @@ function ExecutorStep({ state, fixed, pkg, intentId }: { state: ChainState | nul
         <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
       </div>
       <div className="card pad-lg">
-        <div className="card-head"><h3>Agent identity</h3><span className="pill ok">ENS · ERC-8004</span></div>
+        <div className="card-head"><h3>Agent identity</h3>{execId ? <span className="pill ok">minted #{execId}</span> : <span className="pill">after mint</span>}</div>
         <table className="kv"><tbody>
           <tr><td className="k">tokenId</td><td className="v">{execId ?? "—"}</td></tr>
-          <tr><td className="k">ENS / Basename</td><td className="v">{ensName}</td></tr>
+          <tr><td className="k">ENS / Basename</td><td className="v">{ensName} {execId ? <span className="muted">(planned)</span> : null}</td></tr>
           <tr><td className="k">AgentNFT</td><td className="v">{state ? <a href={addrUrl(state.agentNft)} target="_blank" rel="noreferrer">{shortAddr(state.agentNft)}</a> : "—"}</td></tr>
           <tr><td className="k">ExecutionContract</td><td className="v">{state ? <a href={addrUrl(state.delegate)} target="_blank" rel="noreferrer">{shortAddr(state.delegate)}</a> : "—"}</td></tr>
           <tr><td className="k">SessionKey (KMS)</td><td className="v">{state ? shortAddr(state.sessionKey) : "—"}</td></tr>
         </tbody></table>
-        <p className="spec-ref" style={{ marginTop: 10 }}>ERC-8004 registration is published to the subname's text records once minted.</p>
+        <p className="spec-ref" style={{ marginTop: 10 }}>ENS subname + ERC-8004 registration are <strong>planned</strong> (not yet written on-chain in this MVP); the AgentNFT + ExecutionContract above are real.</p>
       </div>
     </div>
   );
@@ -274,10 +275,10 @@ function WatcherStep({ state, fixed, hasExecutor, pkg, intentId }: { state: Chai
         <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
       </div>
       <div className="card pad-lg">
-        <div className="card-head"><h3>Watcher identity</h3><span className="pill ok">ENS · ERC-8004</span></div>
+        <div className="card-head"><h3>Watcher identity</h3>{watchId ? <span className="pill ok">minted #{watchId}</span> : <span className="pill">after mint</span>}</div>
         <table className="kv"><tbody>
           <tr><td className="k">tokenId</td><td className="v">{watchId ?? "—"}</td></tr>
-          <tr><td className="k">ENS / Basename</td><td className="v">{watchId ? `watcher-${watchId}.intentos.base.eth` : "watcher-<tokenId>.intentos.base.eth"}</td></tr>
+          <tr><td className="k">ENS / Basename</td><td className="v">{watchId ? `watcher-${watchId}.intentos.base.eth` : "watcher-<tokenId>.intentos.base.eth"} {watchId ? <span className="muted">(planned)</span> : null}</td></tr>
           <tr><td className="k">WatcherKey (KMS)</td><td className="v">{state ? shortAddr(state.watcherKey) : "—"}</td></tr>
           <tr><td className="k">watchedExecutor</td><td className="v">{state?.session.executorTokenId ?? "—"}</td></tr>
         </tbody></table>
@@ -322,10 +323,12 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
   const [ttl, setTtl] = useState(cfg.ttlMinutes);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [started, setStarted] = useState<{ autoStopAt: number; plannedTicks: number } | null>(intent?.runtime ?? null);
 
   useEffect(() => {
     setLoop(cfg.loopPeriodSec);
     setTtl(cfg.ttlMinutes);
+    setStarted(intent?.runtime ?? null);
   }, [intent?.intentId]);
 
   async function save() {
@@ -341,6 +344,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
     }
   }
 
+  const hasExecutor = !!state?.session.executorTokenId;
   const pkg = intent?.packages.executor;
   return (
     <div className="grid cols-2">
@@ -359,7 +363,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
       <div className="card pad-lg">
         <div className="card-head"><h3>Launch summary</h3>{state?.delegated ? <span className="pill ok">live on Base</span> : <span className="pill">not yet live</span>}</div>
         <table className="kv"><tbody>
-          <tr><td className="k">Pair</td><td className="v">USDC / WETH</td></tr>
+          <tr><td className="k">Pair</td><td className="v">{tokenPair(state?.guard?.tokenA, state?.guard?.tokenB)}</td></tr>
           <tr><td className="k">Executor</td><td className="v">#{state?.session.executorTokenId ?? "—"}</td></tr>
           <tr><td className="k">Watcher</td><td className="v">{state?.session.watcherTokenId ? `#${state.session.watcherTokenId} · quorum 1` : "none"}</td></tr>
           <tr><td className="k">amountCapPerTx</td><td className="v">{pkg ? usdc(BigInt(pkg.constraints.amountCapPerTx)) : (state?.guard ? usdc(state.guard.amountCapPerTx) : "—")}</td></tr>
@@ -368,7 +372,22 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
           <tr><td className="k">Loop / TTL</td><td className="v">{loop}s · {ttl} min</td></tr>
           <tr><td className="k">Executor pkg</td><td className="v">{pkg?.packageHash ? `${pkg.packageHash.slice(0, 12)}…` : "— (fix)"}</td></tr>
         </tbody></table>
-        <a className="btn primary block" style={{ marginTop: 12 }} href="#/console">Go to Live Console →</a>
+        {started ? (
+          <div className="pill ok" style={{ marginTop: 12 }}><span className="dot" />runtime armed · ≤{started.plannedTicks} ticks · autostop {new Date(started.autoStopAt).toLocaleTimeString()}</div>
+        ) : (
+          <ActionButton
+            label="Start runtime (arm bounded AgentLoop)"
+            className="btn primary block"
+            disabled={!hasExecutor}
+            run={async () => {
+              const r = await api.runtimeStart(intent?.intentId);
+              setStarted(r.runtime);
+              return { ok: true } as const;
+            }}
+          />
+        )}
+        {!hasExecutor && <p className="spec-ref" style={{ marginTop: 8 }}>Create the Executor Agent first (step ②).</p>}
+        <a className="btn block" style={{ marginTop: 10 }} href="#/console">Go to Live Console →</a>
       </div>
     </div>
   );

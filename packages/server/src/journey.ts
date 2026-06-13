@@ -214,6 +214,30 @@ async function linkIntent(opts: CreateOpts | undefined, patch: { executorTokenId
   await store().putIntent(opts.uid, { ...doc, ...patch });
 }
 
+// Hard ceiling on planned AgentLoop ticks regardless of TTL/period (tiny-amounts + bounded policy).
+const MAX_PLANNED_TICKS = 12;
+
+/**
+ * Start the (bounded) runtime: consume the intent's StartConfig, mark it live, and record the schedule
+ * (startedAt / autoStopAt / plannedTicks). It does NOT auto-move money — periodic execution is the
+ * manual guarded-trade path (and a future Cloud Scheduler tick), so this stays within the no-infinite-
+ * loop / tiny-amounts safety policy. Requires an Executor to exist for this session.
+ */
+export async function runtimeStart(opts?: CreateOpts) {
+  if (!session.executorTokenId) throw new Error("create the Executor Agent first");
+  if (!opts?.uid || !opts?.intentId) throw new Error("intentId required");
+  const doc = await store().getIntent(opts.uid, opts.intentId);
+  if (!doc) throw new Error("intent not found");
+  const cfg = doc.startConfig;
+  const startedAt = Date.now();
+  const autoStopAt = startedAt + cfg.ttlMinutes * 60_000;
+  const plannedTicks = Math.max(1, Math.min(MAX_PLANNED_TICKS, Math.floor((cfg.ttlMinutes * 60) / Math.max(1, cfg.loopPeriodSec))));
+  const runtime = { startedAt, autoStopAt, loopPeriodSec: cfg.loopPeriodSec, plannedTicks };
+  await store().putIntent(opts.uid, { ...doc, status: "live", runtime });
+  logAction({ at: Date.now(), action: `runtime started (loop ${cfg.loopPeriodSec}s, autostop ${cfg.ttlMinutes}m, <=${plannedTicks} ticks)`, ok: true });
+  return { intentId: doc.intentId, runtime };
+}
+
 // ---- state ----
 export async function getState() {
   const c = await ctx();

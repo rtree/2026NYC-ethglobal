@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useChainState, activeStatus, hasActiveIntent } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
+import { tokenPair } from "./config";
 import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl } from "./format";
 import { ActionButton } from "./ActionButton";
 import { api } from "./api";
@@ -125,7 +126,7 @@ export function LiveConsole() {
                   <div className="card-head"><h3>Current Hard Guardrails</h3><span className={`pill ${status ?? ""}`}>{status ?? "—"}</span></div>
                   {g && (
                     <>
-                      <div className="guard hard"><span className="g-name">tokenPair</span><span className="g-val">USDC / WETH</span></div>
+                      <div className="guard hard"><span className="g-name">tokenPair</span><span className="g-val">{tokenPair(g.tokenA, g.tokenB)}</span></div>
                       <div className="guard hard"><span className="g-name">amountCapPerTx</span><span className="g-val">{usdc(g.amountCapPerTx)}</span></div>
                       <div className="guard hard"><span className="g-name">cumulativeCap</span><span className="g-val">{usdc(g.cumulativeCap)}</span></div>
                       <div className="guard hard"><span className="g-name">slippageCapBps</span><span className="g-val">{g.slippageCapBps}</span></div>

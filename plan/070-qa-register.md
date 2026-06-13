@@ -21,6 +21,7 @@ When one issue is found, search for the same pattern across the app:
 | ID | Area | Status | Finding | Coverage |
 |---|---|---:|---|---|
 | AUTH-001 | API gate | Fixed | Auth now defaults fail-closed on production runtimes; `INTENTOS_AUTH=off` is ignored in production. | `app/e2e/journey.spec.ts` gate coverage |
+| AUTH-002 | Frontend auth config | Open | IntentBuilder can show a connected wallet but call `/api/intent/chat` without `Authorization` when the browser build lacks `VITE_FIREBASE_API_KEY`; `auth.ts` creates a local session with an empty `idToken`, while the fail-closed backend still requires a Firebase Bearer token, producing `missing bearer token`. | expected-fail e2e |
 | STORE-001 | Persistence | Mitigated | Store now defaults to Firestore in production; explicit `INTENTOS_STORE=memory` still only warns. | Manual review |
 | LLM-001 | IntentBuilder | Open | Vertex failures still fall back to scripted mock, but now log and return `llm:"mock"`. Decide whether production should hard-fail instead. | Manual review |
 | API-001 | Executor create | Fixed | Create Executor button posts `intentId`; server loads FIXed draft and uses package hash/guard. | `app/e2e/data-wiring.spec.ts` |

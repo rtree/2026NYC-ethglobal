@@ -52,6 +52,7 @@ export const api = {
   createExecutor: (intentId?: string) => postJson<ApiResult>("/api/executor/create", { intentId }),
   createWatcher: (intentId?: string) => postJson<ApiResult>("/api/watcher/create", { intentId }),
   fundGas: (lane: "executor" | "watcher", intentId?: string) => postJson<ApiResult & { lane?: string }>("/api/gas/fund", { lane, intentId }),
+  runtimeStart: (intentId?: string) => postJson<{ intentId: string; runtime: { startedAt: number; autoStopAt: number; loopPeriodSec: number; plannedTicks: number } }>("/api/runtime/start", { intentId }),
   trade: (intentId?: string) => postJson<ApiResult>("/api/trade", { intentId }),
   watcherFreeze: () => post("/api/watcher/freeze"),
   watcherTighten: () => post("/api/watcher/tighten"),

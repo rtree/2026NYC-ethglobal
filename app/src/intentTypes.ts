@@ -26,6 +26,13 @@ export interface StartConfig {
   watcherEnabled: boolean;
 }
 
+export interface RuntimeState {
+  startedAt: number;
+  autoStopAt: number;
+  loopPeriodSec: number;
+  plannedTicks: number;
+}
+
 export interface IntentDoc {
   intentId: string;
   title: string;
@@ -35,4 +42,5 @@ export interface IntentDoc {
   watcherTokenId: string | null;
   packages: { executor: AgentPackageDraft; watcher: AgentPackageDraft };
   startConfig: StartConfig;
+  runtime?: RuntimeState | null;
 }
