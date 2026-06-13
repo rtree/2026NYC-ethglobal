@@ -580,3 +580,154 @@ balances it must show, taken from the vocabulary above.
 | 090 | Owner Runtime Dashboard | AgentLoop log, Hard Guardrails, gas balance, shared execution timeline (§11) |
 | 100 | Watcher Runtime Dashboard | EvidenceCommitted + reason + hashes; report / vote / tighten / freeze (§8, §12) |
 | 110 | Result / Performance | terminal states (§13), USDC value delta, gas / runtime cost |
+
+### 15.1 Information architecture v2 (M5 — live-demo redesign)
+
+The 11 mocks above remain the **component source** (the controls/widgets are harvested from them),
+but the live app collapses them into **3 authenticated destinations**. Rationale + full decisions:
+[TASK.md](../TASK.md) M5. World ID stays inert until IDKit is wired (gate logic is testable with a mock).
+
+| Route | Destination | Built from mocks | Notes |
+| --- | --- | --- | --- |
+| `#/` | Onboarding (010) | 010 | Gate 1 wallet (EIP-6963 picker) + Gate 2 World ID. Wallet sign = primary credential for Firebase Auth (§17). |
+| `#/intents` | Intents hub (020) | 020 | Active Intent is **session/agent-scoped** (`session.executorTokenId`), NOT 7702 `delegated`. 1 active/Owner; while active, "Run new" disabled. Lists **past Intents** (history, §16). |
+| `#/launch` | Launch wizard | 030+040+050+060+070+080 | **Single screen, master/detail.** Left = step nav, right = controls. Steps: ① Intent & Agent Packages → ② Executor Agent → ③ Watcher Agent → ④ Gas Funding → ⑤ Start Conditions. Footer "Complete required cards to start". |
+| `#/console` | Live Console | 090+100+110 | Merge of Owner + Watcher + Result. Live guard/vaults/timeline + Owner controls (trade/resume) + Watcher controls (freeze/tighten). After stop → becomes Result. |
+
+Step detail for `#/launch`:
+- **① Intent & Agent Packages** — IntentBuilder conversation (§17 LLM) authors **both** Executor and
+  Watcher AgentPackages at once. Right pane = dual AgentPackage preview, each with its `AGENTS.md`
+  (objective / tools / Hard Guardrails / Semantic Guardrails / recovery) + a **FIX** button to freeze
+  that package (§16 draft → fixed). No minting here. No "Setup steps" list.
+- **② Executor Agent** — mint AgentNFT + EIP-7702 delegate + initialize HardGuardState. Agent
+  identity (ENS `agent-<id>.intentos.base.eth` + ERC-8004) shown/created **inline**.
+- **③ Watcher Agent** — mint Watcher AgentNFT (bound, quorum=1). Identity inline. Directly after ②.
+- **④ Gas Funding** — fund executor/watcher lanes. No "Skip to Start". No separate Runtime Preview card.
+- **⑤ Start Conditions** — real settings: AgentLoop period + Cloud Run TTL minutes (§18 StartConfig).
+  Launch summary shows the **real** AgentPackage + Guardrails + identities + vaults.
+
+---
+
+## 16. Off-chain data store (M5)
+
+> **On-chain is primary.** The chain is the only source of truth for money state (guard, vaults,
+> balances, `cumulativeSpent`, the `EvidenceCommitted` / `GuardTightened` / `GuardFrozen` timeline).
+> The store below holds ONLY what cannot live on-chain: pre-mint drafts, conversation transcripts,
+> per-agent `AGENTS.md` text, Start config, and a per-wallet **history index**. On reconnect, chain
+> wins; the store annotates. Backend `INTENTOS_STORE=memory|firestore` (memory for dev/e2e).
+
+Firestore (Native mode), backend-only access via ADC (the browser never touches Firestore directly;
+it goes through `/api/*`). Documents are **scoped to the authenticated wallet** (§17):
+
+```text
+users/{uid}/intents/{intentId}
+  intentId        string   keccak slug, e.g. "intent-abc"
+  title           string   "DCA USDC -> WETH"
+  status          string   draft | live | stopped   (mirrors §13 terminal states; chain wins)
+  createdAt       number   epoch ms
+  executorTokenId string?  set after mint (links to chain)
+  watcherTokenId  string?
+  packages        { executor: AgentPackageDraft, watcher: AgentPackageDraft }
+  startConfig     StartConfig (§18)
+
+users/{uid}/intents/{intentId}/transcript/{turnId}
+  role            "owner" | "agent"
+  text            string
+  at              number
+```
+
+`uid` is the CAIP-10 id from §17. `AgentPackageDraft` is the editable pre-mint form of the Agent
+Package (§7): the same logical files, kept as text/JSON while authored, plus a `fixed: boolean` and a
+computed `packageHash` once FIXed. On mint, the fixed draft's `CONSTRAINTS.json` becomes the on-chain
+`HardGuardState` and its `packageHash` is what the AgentNFT/evidence reference.
+
+```ts
+interface AgentPackageDraft {
+  role: "EXECUTOR" | "WATCHER";
+  summary: string;        // SUMMARY.md
+  agents: string;         // AGENTS.md (objective / tools / never-rules / default)
+  soul: string;           // SOUL.md (risk posture / recovery preference)
+  constraints: {          // CONSTRAINTS.json -> HardGuardState (§9)
+    tokenA: Address; tokenB: Address; poolFee: number;
+    amountCapPerTx: string; cumulativeCap: string; slippageCapBps: number; expiry: string;
+  };
+  semantic: string[];     // Semantic Guardrails the Watcher judges (route naturalness, quote freshness, ...)
+  fixed: boolean;
+  packageHash?: Hex;      // set when fixed
+}
+```
+
+---
+
+## 17. Auth — Web3 login → Firebase Auth (M5)
+
+> Goal: a per-wallet identity that BOTH Firestore Security Rules (`request.auth.uid`) and our backend
+> trust, and that gates the LLM endpoint so it is never an open proxy. The wallet signature is the
+> primary credential; the server mints a Firebase **custom token**; the browser signs into Firebase
+> Auth and uses the resulting **ID token** as the bearer for `/api/*`. Backend `INTENTOS_AUTH=firebase|off`.
+
+```text
+1. connect wallet (EIP-6963 picker)
+2. GET  /api/auth/nonce?address=0x..     -> { nonce }            (server stores nonce, short TTL)
+3. wallet signs the SIWE/EIP-4361 message (domain + nonce + chainId 8453)
+4. POST /api/auth/web3 { message, signature }
+     server: viem verifyMessage + check nonce + domain
+          -> mint Firebase custom token (JWT, signed key-LESSLY via IAM Credentials signJwt + ADC)
+     -> { customToken }
+5. browser: POST identitytoolkit accounts:signInWithCustomToken?key=WEB_API_KEY  -> { idToken, refreshToken }
+6. all protected /api/* calls send  Authorization: Bearer <Firebase ID token>
+     server verifies ID token (node crypto vs securetoken x509 certs); request.uid = token.sub
+```
+
+- **uid** = CAIP-10 `eip155:8453:<lowercased address>`. Custom claims `{ address, chainId }`.
+- **Custom token** is a JWT: `iss=sub=<CloudRun SA email>`,
+  `aud=https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit`,
+  `exp<=iat+3600`, `uid`. Signed via **IAM Credentials `signJwt`** REST (ADC; SA needs
+  `roles/iam.serviceAccountTokenCreator` on itself). **No service-account JSON in repo. No firebase-admin.**
+- **Web API Key** (`VITE_FIREBASE_API_KEY`) is public-by-design but **restricted to ONLY
+  `identitytoolkit` + `securetoken`** — never "Generative Language API" (see §18 security note).
+- Basic auth stays the venue-door perimeter; Firebase Auth is the per-wallet locker.
+- **Demo compromise:** one shared on-chain Owner EOA (judges can't 7702-delegate real funds) → all
+  operators share the single on-chain Intent; the OFF-chain layer (§16) is per-wallet. PRODUCT mode
+  (future): the connected wallet IS its own 7702 Owner.
+
+---
+
+## 18. Control-panel API surface + StartConfig (M5)
+
+The server (`@intentos/server`) serves `app/dist` + the write-path API behind Basic auth, and (M5)
+Firebase-Auth-gated per-wallet endpoints. Money writes use the platform key + KMS SessionKeys
+server-side (never in the browser).
+
+```text
+unauthed:  GET  /healthz
+auth:      GET  /api/auth/nonce            -> { nonce }
+           POST /api/auth/web3             -> { customToken }            (verifies SIWE)
+chain:     GET  /api/state                 -> live chain state (guard/vaults/balances/timeline, §11)
+intent:    POST /api/intent/chat           -> { reply, packages }        (Vertex turn; §17-gated + rate-limited)
+           POST /api/intent/compile        -> { packages }               (transcript -> Executor+Watcher drafts)
+           POST /api/intent/fix            -> { packageHash }            (freeze a draft, §16)
+store:     GET  /api/intents               -> [{ intentId, title, status, ... }]  (this wallet's history)
+           GET  /api/intents/:id           -> intent + packages + transcript + startConfig
+write:     POST /api/executor/create       -> mint + 7702 delegate + initialize + fund vault
+           POST /api/watcher/create        -> mint Watcher (bound, quorum=1)
+           POST /api/start                 -> persist StartConfig + arm the bounded AgentLoop
+           POST /api/trade                  -> one guarded USDC->WETH execution
+           POST /api/watcher/freeze | tighten ; POST /api/owner/resume ; POST /api/reset
+```
+
+```ts
+interface StartConfig {
+  loopPeriodSec: number;     // AgentLoop tick period (e.g. 5)
+  ttlMinutes: number;        // hard auto-stop: tear the runtime down after N minutes (bounded; no infinite loops)
+  watcherEnabled: boolean;
+}
+```
+
+- **⚠️ LLM security (see [TASK.md](../TASK.md) M5 D2):** the IntentBuilder uses **Vertex AI**
+  (`aiplatform.googleapis.com`) via backend **ADC** — no API-key path, so the public browser key
+  cannot reach it. The **Gemini Developer API** (`generativelanguage.googleapis.com`, API-key auth)
+  **must stay DISABLED**, and the browser Web API key must never include "Generative Language API" in
+  its allowlist. `/api/intent/*` are Firebase-Auth-gated + rate-limited so they are not an open LLM proxy.
+- **Bounded runtime:** `ttlMinutes` + `loopPeriodSec` + a hard `maxAttemptsPerTick` keep Cloud Run
+  runtimes bounded (no infinite loops, no spam) per the repo safety policy.

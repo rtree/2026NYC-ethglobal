@@ -185,3 +185,42 @@ fund-exhausted: relayer reimbursement reverts on empty lane -> terminal
 transferred   : ownerOf changes -> bindingNonce stale -> all authority ops revert -> next stop check
                 self-stops the old Runtime (no synchronous kill needed)
 ```
+
+---
+
+## 9. M5 — control-panel server: auth, store, IntentBuilder LLM
+
+The `@intentos/server` (010 §18) hosts the write-path + these M5 modules. All accessed server-side
+via REST + `google-auth-library` ADC (no firebase-admin, no @google-cloud/{firestore,vertexai} SDKs —
+smaller supply-chain surface under the pnpm policy). Toggles: `INTENTOS_AUTH`, `INTENTOS_STORE`,
+`INTENTOS_LLM` (each `…|off|memory|mock` so dev/e2e run with zero GCP).
+
+### 9.1 Auth (Web3 → Firebase, 010 §17)
+- `auth.web3.ts`: `getNonce(address)` (in-memory TTL map), `verifyAndMint({message, signature})` —
+  viem `verifyMessage` + nonce/domain check → mint Firebase custom token.
+- `firebaseToken.ts`: build the custom-token JWT and sign **key-lessly** via IAM Credentials
+  `projects/-/serviceAccounts/{sa}:signJwt` (ADC bearer from `google-auth-library`). Verify inbound
+  Firebase **ID tokens** with node `crypto` against cached `securetoken@system` x509 certs (check
+  RS256, `aud=projectId`, `iss=https://securetoken.google.com/<projectId>`, `exp`). Middleware sets
+  `req.uid` (CAIP-10) for gated routes.
+
+### 9.2 Store (010 §16)
+- `store.ts` interface `{ getIntents(uid), getIntent(uid,id), putIntent(uid,id,doc), appendTurn(...) }`
+  with two impls: `memory` (Map; dev/e2e) and `firestore` (REST `firestore.googleapis.com/v1/...:commit`
+  + `:runQuery`, ADC). Docs scoped `users/{uid}/intents/{intentId}` (+ `/transcript/{turnId}`).
+  On-chain stays primary; the store never holds money state.
+
+### 9.3 IntentBuilder LLM (010 §18, Vertex)
+- `vertex.ts`: `chat(transcript) -> { reply, packages }` and `compile(transcript) -> packages` calling
+  Vertex `…aiplatform.googleapis.com/v1/projects/{p}/locations/{loc}/publishers/google/models/gemini-2.5-flash:generateContent`
+  with an ADC bearer. The system prompt compiles the conversation into the dual `AgentPackageDraft`
+  (Executor + Watcher, 010 §16) as strict JSON; the server validates/normalizes (clamps caps to the
+  demo ceiling, forces USDC↔WETH, ASCII `reason` ≤200). `mock` impl returns the scripted drafts so
+  the demo never hard-fails. **Vertex via ADC only — never the API-key Gemini Developer API (010 §18).**
+- `/api/intent/*` are auth-gated (§9.1) + per-uid rate-limited (token bucket) so the LLM is not an
+  open proxy. `compile`/`fix` write the resulting drafts/`packageHash` to the store (§9.2).
+
+### 9.4 StartConfig & bounded loop (010 §18)
+- `/api/start` persists `StartConfig {loopPeriodSec, ttlMinutes, watcherEnabled}` and arms a **bounded**
+  AgentLoop: at most `ttlMinutes`, one tick per `loopPeriodSec`, hard `maxAttemptsPerTick`. No infinite
+  loops, no spam (repo safety policy). The existing `/api/trade` remains the manual single-tick path.

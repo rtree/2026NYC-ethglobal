@@ -118,3 +118,37 @@ for execution, the SessionKey via adapter/relayer) — never a privileged backen
 - World ID IDKit on the onboarding gate only.
 - Keep the app a thin view over chain state: the dashboards should be reconstructable purely from
   on-chain events + RuntimeRecord, matching "evidence is canonical onchain" (010 §14).
+
+---
+
+## 8. M5 — IA v2, auth, IntentBuilder (supersedes §1 routing for the live app)
+
+The 11 mocks remain the **component source**, but the live app collapses to **3 destinations**
+(010 §15.1). Routing v2:
+
+| Route | Destination | Replaces |
+| --- | --- | --- |
+| `#/` | Onboarding | `/` |
+| `#/intents` | Intents hub + history | `/intents` |
+| `#/launch` | **single-screen master/detail wizard** | `/launch*` (030–080) |
+| `#/console` | Live Console (Owner+Watcher+Result) | `/dashboard` + `/watcher` + `/result` |
+
+- **Active Intent is session/agent-scoped** (`state.session.executorTokenId`), never the permanent
+  on-chain 7702 `delegated` flag (the demo Owner stays delegated forever). Helpers
+  `hasActiveIntent()` / `activeStatus()` in `useChainState.ts` are the single source for the pill.
+- **Launch wizard** (`#/launch`): left step-nav (`useState` selected step, no route hops), right pane
+  swaps controls harvested from mocks 040/050/060/070/080. Steps ①–⑤ per 010 §15.1. Footer gates
+  "Start" on required steps. Identity (ENS + ERC-8004) is rendered **inline** in steps ②/③.
+- **IntentBuilder** (step ①): chat posts to `/api/intent/chat`; the right pane shows the dual
+  AgentPackage preview (Executor + Watcher) re-rendered each turn from the returned drafts; each card
+  has a **FIX** button (`/api/intent/fix`). Falls back to the scripted conversation when the backend
+  returns `llm:"mock"`. The browser never calls Vertex directly (010 §18 security).
+- **Auth (Web3 → Firebase, 010 §17):** after wallet connect, `gate.ts` runs the SIWE handshake
+  (`/api/auth/nonce` → wallet sign → `/api/auth/web3` → `signInWithCustomToken` REST) and stores the
+  Firebase ID token in memory; `api.ts` attaches it as `Authorization: Bearer` and refreshes via the
+  securetoken REST endpoint. No `firebase` SDK; `VITE_FIREBASE_API_KEY` + `VITE_FIREBASE_PROJECT_ID`
+  are public build-time vars (key restricted to identitytoolkit+securetoken). `INTENTOS_AUTH=off`
+  short-circuits the handshake for dev/e2e.
+- **Live Console** (`#/console`): one screen = guard + vaults + balances + shared timeline (090) +
+  Owner controls trade/resume (090) + Watcher controls freeze/tighten (100); when stopped it renders
+  the Result/performance summary (110) in place. History list links each past Intent here.
