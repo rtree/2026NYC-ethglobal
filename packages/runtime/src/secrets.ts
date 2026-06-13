@@ -23,3 +23,20 @@ export function getPlatformAccount() {
 export function getOwnerAccount() {
   return loadAccount("projects/ethglobal-nyc2026-rtree/secrets/owner-test-wallet-key/versions/latest");
 }
+
+/** Optional Base RPC URL from Secret Manager (e.g. an Alchemy URL with an embedded key). Returns the
+ *  public endpoint if the secret is absent, so nothing breaks without it. The secret never appears in
+ *  source, logs, or chat. */
+export async function getBaseRpcUrl(): Promise<string> {
+  if (process.env.INTENTOS_RPC) return process.env.INTENTOS_RPC;
+  try {
+    const [v] = await sm.accessSecretVersion({
+      name: "projects/ethglobal-nyc2026-rtree/secrets/base-rpc-url/versions/latest",
+    });
+    const url = v.payload?.data?.toString().trim();
+    if (url) return url;
+  } catch {
+    /* secret not set yet — fall through to public */
+  }
+  return "https://mainnet.base.org";
+}

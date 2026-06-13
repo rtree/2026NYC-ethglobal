@@ -40,9 +40,9 @@ import {
   previewGuard,
   getPlatformAccount,
   getOwnerAccount,
+  getBaseRpcUrl,
 } from "../src/index.js";
 
-const RPC = process.env.INTENTOS_RPC ?? "http://127.0.0.1:8545";
 const FORK = process.env.INTENTOS_FORK === "1";
 const abi = ExecutionDelegate7702Abi as never;
 const erc20 = [
@@ -83,10 +83,12 @@ function readExistingImpl(): Address | null {
 async function main() {
   const platform = await getPlatformAccount();
   const owner = await getOwnerAccount();
-  const pub = createPublicClient({ chain: base, transport: http(RPC) });
-  const wallet = createWalletClient({ chain: base, transport: http(RPC) });
+  const RPC = FORK ? (process.env.INTENTOS_RPC ?? "http://127.0.0.1:8545") : await getBaseRpcUrl();
+  const transport = http(RPC, { retryCount: 6, retryDelay: 1000, batch: false });
+  const pub = createPublicClient({ chain: base, transport });
+  const wallet = createWalletClient({ chain: base, transport });
 
-  console.log(`network: ${FORK ? "BASE FORK" : "BASE MAINNET"}  rpc=${RPC}`);
+  console.log(`network: ${FORK ? "BASE FORK" : "BASE MAINNET"}  rpc=${RPC.replace(/\/v2\/.*/, "/v2/***")}`);
   console.log(`platform(relayer/deployer): ${platform.address}`);
   console.log(`owner(EOA): ${owner.address}`);
 
