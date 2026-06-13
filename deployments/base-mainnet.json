@@ -13,11 +13,13 @@
     "watcherSessionKey": "projects/ethglobal-nyc2026-rtree/locations/us-central1/keyRings/intentos/cryptoKeys/watcher-session-key"
   },
   "secrets": {
-    "platformWalletKey": "projects/ethglobal-nyc2026-rtree/secrets/platform-wallet-key"
+    "platformWalletKey": "projects/ethglobal-nyc2026-rtree/secrets/platform-wallet-key",
+    "ownerTestWalletKey": "projects/ethglobal-nyc2026-rtree/secrets/owner-test-wallet-key"
   },
   "wallets": {
     "platform": "0x078383c4c20b4e9732Ac0c30A68b8123D53ea6C9",
-    "_comment": "platform = deployer + relayer (gas sponsor). Fund with Base ETH."
+    "ownerTest": "0xeEa9c291544d02397FD8078e3162a3549ADa0f01",
+    "_comment": "platform = deployer + relayer (gas sponsor). ownerTest = the demo Owner EOA (7702-delegated, holds the USDC)."
   },
   "sessionKeys": {
     "executor": "0x86bA13f74C5f2AC469eeb6e0010A6AFfd49298eE",
