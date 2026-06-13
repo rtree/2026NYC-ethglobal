@@ -5,7 +5,10 @@ import { SecretManagerServiceClient } from "@google-cloud/secret-manager";
 const sm = new SecretManagerServiceClient();
 
 export async function getBasicAuth(): Promise<string | null> {
-  if (process.env.PANEL_AUTH) return process.env.PANEL_AUTH.trim();
+  if (process.env.PANEL_AUTH) {
+    const v = process.env.PANEL_AUTH.trim();
+    return v === "off" ? null : v; // "off" explicitly disables auth (local dev only)
+  }
   try {
     const [v] = await sm.accessSecretVersion({
       name: "projects/ethglobal-nyc2026-rtree/secrets/panel-basic-auth/versions/latest",
