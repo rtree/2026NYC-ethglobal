@@ -64,6 +64,14 @@
     "/^cd /home/araki/2026NYC-ethglobal && pnpm --filter @intentos/runtime typecheck 2>&1 \\| tail -15 && echo \"TYPECHECK_EXIT=\\$\\?\"$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^pnpm install 2>&1 \\| tail -6 && echo \"--- audit ---\" && pnpm audit 2>&1 \\| tail -3$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^pnpm install 2>&1 \\| tail -3 && git add -A && git commit -q -m \"chore: revert dep overrides — patched esbuild/uuid blocked by 7-day min-release-age; advisories are transitive dev/tooling, no exploit path \\(Renovate to pick up once aged\\)\" && git push -q origin main && echo PUSHED$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }
