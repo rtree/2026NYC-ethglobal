@@ -13,7 +13,6 @@ IntentOSはAIAgentによる取引の課題を
 でも毎回承認だとチャンスを逃す。
 かといってAgentに全権を渡すのは怖い。
 ```
-
 - オンチェーンのチャンスは、人間が起きて毎回承認するのを待ってくれません。
 - でもAgentにwalletの全権を渡すのは危険すぎます。
 - IntentOSは、毎回承認と白紙委任の間にあります。
@@ -43,7 +42,6 @@ Agentが機会を取りに行くほど、取引は増える。
 さらに隔離したAgentに資金や鍵を渡すのはもっと怖い。
 止まった際の回収不安があるなら預けられないよね
 ```
-
 - Agentを本当に自律実行させようとすると、単にpromptを作るだけでは足りません。Agentには、プログラムを動かすPCが必要ですが自分のPCで動かすのは不安です。PCがsleepすれば止まりますし、local環境にAPI keyやsession keyを置くのも怖いです
 - 逆に、cloud上に隔離環境を作ろうとすると、今度はRuntimeの作成、権限分離、鍵管理、セキュリティも自分で担保しなくてはなりません
 - IntentOSは、隔離環境・鍵・資金の分離をまとめて用意します
@@ -58,6 +56,6 @@ Agentが機会を取りに行くほど、取引は増える。
 > Watcher Agent は締めることしかできない。
 > 緩められるのは Owner だけ。
 
-IntentOS は、資金OwnerのIntent を LLM経由で AI Agent / AI Agentの実行環境 / ExecutionContract として 準EIP-7702 Hard Guard と WatcherAI Semantic Guard によって、Owner の資金を守りながら Agent に自律実行させる protocol である。
+IntentOS は、資金OwnerのIntent を LLM経由で解釈し、 AI Agent / AI Agentの実行環境 / ExecutionContract として準備します。OwnerのSelfCustodyを守りつつ、AI Agentに資金の部分的な利用権限を与えるために、OwnerのEOA内にEIP-7702を利用してContractをつくり、ここに設定したガードレールの範囲でAI Agentに資金利用許可を与えます。また、このガードレールは、これを見張る専用のWatcher AgentがIntentと状況のSemanticを判断し、さらにガードレールの強化を行います。
 
 
