@@ -681,6 +681,88 @@ WatcherRuntime tools:
 
 ---
 
+## 6. MVP スコープ（Executor + 単一 Watcher）
+
+MVP は到達点と一足飛びに作る。
+
+> Owner の Natural Intent から、Executor Agent が Base mainnet 上で Hard Guardrails の内側で USDC↔WETH を guarded execution し、単一の Watcher Agent がその evidence を読んで締める（tighten / freeze）まで、を一つの execution timeline として通す。
+
+### 6.1 デプロイ構成（Base mainnet + Cloud Run）
+
+MVP は Base mainnet と Cloud Run / GCP の上で動かす。Owner のローカルPCで動くのはブラウザだけにする。
+
+```text
+ローカル（ブラウザ）:
+  Frontend dApp（onboarding / IntentBuilder UI / Owner dashboard）
+  Owner Wallet（EIP-7702 authorization / mint / funding の署名）
+  World ID 人間証明（IDKit widget + World App）
+
+Cloud Run / GCP:
+  Runtime Registry / Backend
+  ExecutorRuntime Capsule（OpenClaw）
+  WatcherRuntime Capsule（OpenClaw）
+  SessionKey（GCP KMS）
+  Relayer / sponsor（gas 立替）
+  simulation provider / indexer
+
+Base mainnet（onchain）:
+  EIP-7702 delegated account
+  ExecutionContract / Hard Guardrails
+  Executor / Watcher ExecutionGasVault
+  EvidenceCommitted events
+  Uniswap（USDC↔WETH）
+```
+
+計算負荷・鍵・Agent runtime・relayer はすべて Cloud Run / GCP 側にあり、PC が sleep しても止まらない。ローカルに残る鍵は Owner 自身の wallet だけで、資金もそこに留まる。
+
+### 6.2 MVP に含める
+
+Executor 側は縦スライスを丸ごと通す。
+
+```text
+World ID gate
+  -> IntentBuilder で Natural Intent -> Executor Agent Package
+  -> Executor Agent NFT mint + ENS/Basename + ERC-8004 registration
+  -> EIP-7702 delegated account に ExecutionContract / Hard Guardrails / ExecutionGasVault を設定
+  -> Cloud Run ExecutorRuntime + SessionKey(KMS)
+  -> observe -> get_quote(Uniswap) -> simulate -> submit_execution_request
+  -> Hard Guard 照合 -> execute / revert
+  -> EvidenceCommitted を Base に刻む
+  -> Relayer 立替 + ExecutionGasVault 後精算
+```
+
+Watcher 側は単一 Agent・quorum=1 で最短経路にする。
+
+```text
+Watcher Agent NFT を 1 体 mint（Executor package を immutable context として参照）
+  -> Cloud Run WatcherRuntime + SessionKey(KMS)
+  -> EvidenceCommitted を読む
+  -> Semantic Guardrails に照らして on-intent か判断
+  -> quorum=1 なので 1 票で tighten / freeze が即時 state 反映
+  -> ExecutionContract の future capability が締まり、次の Executor request が revert する
+```
+
+Owner dashboard は、Executor decision / evidence / Watcher vote / contract state / 最終 Result を一つの shared timeline として見せ、Owner stop と gas top-up を提供する。
+
+固定パラメータは次とする。
+- 取引ペアは USDC↔WETH に固定する。
+- Watcher は 1 体に固定し、quorum=1（1 票 = 即時 tighten / freeze）とする。
+
+### 6.3 MVP でやらないこと（scope boundary）
+
+```text
+複数 Watcher quorum / Watcher 専用 operator console の作り込み
+任意 DEX ルーティング / USDC↔WETH 以外の token / 任意 contract call
+LLM による calldata 直接生成 / LLM による policy loosen
+Agent wallet への fund custody / native ETH 保有
+Executor execution budget と Watcher monitoring budget の混在
+third-party watcher marketplace / reward / bond / slashing
+1 Owner の複数同時 active intent
+Reputation Registry / Validation Registry の本接続
+```
+
+---
+
 
 ### X. Agent NFT Model
 
