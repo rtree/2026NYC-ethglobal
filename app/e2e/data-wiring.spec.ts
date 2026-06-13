@@ -155,7 +155,6 @@ test("write buttons send the current intentId to backend APIs", async ({ page })
 });
 
 test("Intent List active card should render current intent API values", async ({ page }) => {
-  test.fail(true, "UI-001: active card still uses static intent-abc / DCA copy.");
   await setupApi(page);
   await passGate(page);
 
@@ -165,7 +164,6 @@ test("Intent List active card should render current intent API values", async ({
 });
 
 test("Live Console should render current intent title and state delegate", async ({ page }) => {
-  test.fail(true, "UI-002/UI-003: console title and Owner EOA are still hardcoded.");
   await setupApi(page);
   await passGate(page);
   await page.goto("/#/console");
@@ -176,7 +174,6 @@ test("Live Console should render current intent title and state delegate", async
 });
 
 test("runtime/funding/live badges should not claim live or funded without API support", async ({ page }) => {
-  test.fail(true, "UI-004: runtime/funding/live badges are static claims.");
   await setupApi(page, EMPTY_STATE);
   await passGate(page);
   await page.goto("/#/launch");
@@ -189,14 +186,12 @@ test("runtime/funding/live badges should not claim live or funded without API su
 });
 
 test("direct deep links should enforce onboarding before showing protected screens", async ({ page }) => {
-  test.fail(true, "ROUTE-001: hash routes can be opened directly without the onboarding gate.");
   await setupApi(page);
   await page.goto("/#/console");
   await expect(page.getByRole("heading", { name: "Enter IntentOS" })).toBeVisible();
 });
 
 test("Intent List reset should send the current intentId", async ({ page }) => {
-  test.fail(true, "API-005: reset button does not carry the current intentId.");
   await setupApi(page);
   await passGate(page);
 

@@ -301,7 +301,7 @@ function FundingStep({ state, intentId }: { state: ChainState | null; intentId?:
         </tbody></table>
       </div>
       <div className="card pad-lg">
-        <div className="card-head"><h3>Gas vault lanes</h3><span className="pill ok">Owner-funded</span></div>
+        <div className="card-head"><h3>Gas vault lanes</h3>{(state && ((state.execVault ?? 0n) > 0n || (state.watcherVault ?? 0n) > 0n)) ? <span className="pill ok">Owner-funded</span> : <span className="pill">unfunded</span>}</div>
         <div className="guard"><span className="g-name" style={{ fontFamily: "var(--sans)" }}>Executor lane</span><span className="g-val">{state ? eth(state.execVault) : "—"}</span></div>
         <div className="guard"><span className="g-name" style={{ fontFamily: "var(--sans)" }}>Watcher lane</span><span className="g-val">{state ? eth(state.watcherVault) : "—"}</span></div>
         <p className="desc" style={{ marginTop: 12 }}>Cumulative spent {state ? usdc(state.cumulativeSpent) : "—"} of {state?.guard ? usdc(state.guard.cumulativeCap) : "—"} cap.</p>
@@ -357,7 +357,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
         {err && <p className="pill fund-exhausted" style={{ marginTop: 8 }}>{err.slice(0, 80)}</p>}
       </div>
       <div className="card pad-lg">
-        <div className="card-head"><h3>Launch summary</h3><span className="pill ok">live on Base</span></div>
+        <div className="card-head"><h3>Launch summary</h3>{state?.delegated ? <span className="pill ok">live on Base</span> : <span className="pill">not yet live</span>}</div>
         <table className="kv"><tbody>
           <tr><td className="k">Pair</td><td className="v">USDC / WETH</td></tr>
           <tr><td className="k">Executor</td><td className="v">#{state?.session.executorTokenId ?? "—"}</td></tr>
