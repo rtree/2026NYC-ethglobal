@@ -49,9 +49,7 @@ contract ExecutionDelegate7702ForkTest is Test, IIntentOSErrors {
             bindingNonce: 1
         });
         vm.prank(address(del));
-        del.initialize(g, sessionKey, address(0), relayer, 0.01 ether, keccak256("pkg"), keccak256("sem"));
-        vm.prank(address(del));
-        del.fundGasVault(false, 0.5 ether);
+        del.initialize(g, sessionKey, address(0), relayer, 0.01 ether, 0.5 ether, 0, keccak256("pkg"), keccak256("sem"));
     }
 
     function test_fork_realSwap() public {

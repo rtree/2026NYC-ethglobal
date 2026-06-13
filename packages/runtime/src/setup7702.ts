@@ -14,6 +14,8 @@ export interface InitParams {
   watcherKey: Address;
   relayer: Address;
   gasPerTxCap: bigint;
+  initialExecVault: bigint;
+  initialWatcherVault: bigint;
   packageHash: Hex;
   semanticGuardHash: Hex;
 }
@@ -36,7 +38,17 @@ export async function delegateAndInitialize(
   const data = encodeFunctionData({
     abi,
     functionName: "initialize",
-    args: [p.guard, p.sessionKey, p.watcherKey, p.relayer, p.gasPerTxCap, p.packageHash, p.semanticGuardHash],
+    args: [
+      p.guard,
+      p.sessionKey,
+      p.watcherKey,
+      p.relayer,
+      p.gasPerTxCap,
+      p.initialExecVault,
+      p.initialWatcherVault,
+      p.packageHash,
+      p.semanticGuardHash,
+    ],
   });
 
   const hash = await wallet.sendTransaction({

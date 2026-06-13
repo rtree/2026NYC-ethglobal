@@ -222,6 +222,16 @@
         "internalType": "uint256"
       },
       {
+        "name": "initialExecVault",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "initialWatcherVault",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "packageHash",
         "type": "bytes32",
         "internalType": "bytes32"

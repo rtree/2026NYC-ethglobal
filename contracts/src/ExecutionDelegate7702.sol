@@ -72,12 +72,16 @@ contract ExecutionDelegate7702 is IIntentOSErrors, IEvidence {
     // -------------------------------------------------------------------------
 
     /// @notice One-time burn of CONSTRAINTS.json -> HardGuardState (010 §9). Owner-authed.
+    /// @dev    Also seeds the gas-vault lanes in the same call, so the Owner needs only ONE delegated
+    ///         transaction for setup (Base limits 7702-delegated accounts to 1 in-flight tx).
     function initialize(
         HardGuardState calldata g,
         address sessionKey,
         address watcherKey,
         address relayer,
         uint256 gasPerTxCap,
+        uint256 initialExecVault,
+        uint256 initialWatcherVault,
         bytes32 packageHash,
         bytes32 semanticGuardHash
     ) external onlyOwner {
@@ -87,10 +91,15 @@ contract ExecutionDelegate7702 is IIntentOSErrors, IEvidence {
         _watcherKey = watcherKey;
         _relayer = relayer;
         _gasPerTxCap = gasPerTxCap;
+        _execGasVault = initialExecVault;
+        _watcherGasVault = initialWatcherVault;
+        require(_execGasVault + _watcherGasVault <= address(this).balance, "OVER_ALLOCATED");
         _packageHash = packageHash;
         _semanticGuardHash = semanticGuardHash;
         _initialized = true;
         emit GuardInitialized(packageHash, _hardGuardHash());
+        if (initialExecVault > 0) emit GasFunded(false, initialExecVault);
+        if (initialWatcherVault > 0) emit GasFunded(true, initialWatcherVault);
     }
 
     /// @notice Earmark part of the Owner EOA's ETH to a gas reimbursement lane (010 §10).

@@ -60,10 +60,7 @@ contract ExecutionDelegate7702Test is Test, IIntentOSErrors, IEvidence {
         });
 
         vm.prank(address(del)); // Owner self-call
-        del.initialize(g, sessionKey, watcherKey, relayer, 0.01 ether, keccak256("pkg"), keccak256("sem"));
-
-        vm.prank(address(del));
-        del.fundGasVault(false, 1 ether); // executor lane
+        del.initialize(g, sessionKey, watcherKey, relayer, 0.01 ether, 1 ether, 0, keccak256("pkg"), keccak256("sem"));
     }
 
     // ---------------------------------------------------------------- helpers
@@ -334,7 +331,7 @@ contract ExecutionDelegate7702Test is Test, IIntentOSErrors, IEvidence {
         HardGuardState memory g = del.guard();
         vm.prank(address(0xBAD));
         vm.expectRevert(NotOwner.selector);
-        fresh.initialize(g, sessionKey, watcherKey, relayer, 0, bytes32(0), bytes32(0));
+        fresh.initialize(g, sessionKey, watcherKey, relayer, 0, 0, 0, bytes32(0), bytes32(0));
     }
 
     // ---------------------------------------------------------------- invariant-ish

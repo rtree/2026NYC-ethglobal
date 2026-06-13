@@ -73,6 +73,13 @@ function saveDeployment(delegateImpl: Address, agentNft: Address) {
   writeFileSync(path, JSON.stringify(j, null, 2) + "\n");
 }
 
+function readExistingImpl(): Address | null {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const path = resolve(here, "../../../deployments/base-mainnet.json");
+  const j = JSON.parse(readFileSync(path, "utf8"));
+  return (j.contracts.executionDelegate7702Impl as Address | null) ?? null;
+}
+
 async function main() {
   const platform = await getPlatformAccount();
   const owner = await getOwnerAccount();
@@ -90,45 +97,66 @@ async function main() {
     await dealUsdc(test, pub, owner.address, 1_000_000n);
   }
 
-  // 1. deploy impls
-  const { delegateImpl, agentNft } = await deployContracts(wallet, pub, platform);
-  console.log(`ExecutionDelegate7702 impl: ${delegateImpl}`);
-  console.log(`AgentNFT: ${agentNft}`);
-  saveDeployment(delegateImpl, agentNft);
-
-  // 2. owner delegates (7702) + initializes guard in one self-tx
   const sessionKey = await getKmsEthAddress(keyVersion(KMS.executorSessionKey));
   const watcherKey = await getKmsEthAddress(keyVersion(KMS.watcherSessionKey));
-  const guard = {
-    router: UNISWAP.swapRouter02,
-    selector: "0x04e45aaf" as Hex, // exactInputSingle
-    tokenA: TOKENS.USDC,
-    tokenB: TOKENS.WETH,
-    poolFee: UNISWAP.usdcWethPoolFee,
-    amountCapPerTx: 2_000n, // 0.002 USDC
-    cumulativeCap: 10_000n, // 0.01 USDC
-    slippageCapBps: 300, // 3% (tiny notional)
-    expiry: BigInt(Math.floor(Date.now() / 1000) + 86_400),
-    frozen: false,
-    bindingNonce: 1n,
-  };
-  const initHash = await delegateAndInitialize(wallet, pub, owner, delegateImpl, {
-    guard,
-    sessionKey,
-    watcherKey,
-    relayer: platform.address,
-    gasPerTxCap: parseEther("0.0002"),
-    packageHash: keccak256(toHex("intent-abc/pkg")),
-    semanticGuardHash: keccak256(toHex("intent-abc/sem")),
-  });
-  console.log(`7702 delegate + initialize: ${initHash}`);
-  const code = await pub.getCode({ address: owner.address });
-  console.log(`owner code after 7702: ${code}`);
 
-  // 3. fund executor gas-vault lane
-  const fundHash = await fundGasVault(wallet, pub, owner, false, parseEther("0.002"));
-  console.log(`fundGasVault(exec): ${fundHash}`);
+  // Resume support: if the owner is already 7702-delegated + initialized, skip deploy/initialize.
+  const existing = readExistingImpl();
+  const ownerCode = await pub.getCode({ address: owner.address });
+  const delegated = !!ownerCode && ownerCode.toLowerCase().startsWith("0xef0100");
+  let initialized = false;
+  if (delegated) {
+    const g = (await pub.readContract({ address: owner.address, abi, functionName: "guard" })) as { router: Address };
+    initialized = g.router !== "0x0000000000000000000000000000000000000000";
+  }
 
+  let delegateImpl: Address;
+  if (existing && delegated && initialized) {
+    delegateImpl = existing;
+    console.log(`RESUME: owner already delegated+initialized -> impl ${delegateImpl}`);
+    const [execVault] = (await pub.readContract({ address: owner.address, abi, functionName: "gasVaults" })) as [bigint, bigint];
+    if (execVault === 0n) {
+      const fundHash = await fundGasVault(wallet, pub, owner, false, parseEther("0.002"));
+      console.log(`fundGasVault(exec): ${fundHash}`);
+    } else {
+      console.log(`exec vault already funded: ${execVault}`);
+    }
+  } else {
+    // Fresh setup: deploy impls, then owner delegates + initializes (+ seeds the vault) in one tx.
+    const deployed = await deployContracts(wallet, pub, platform);
+    delegateImpl = deployed.delegateImpl;
+    console.log(`ExecutionDelegate7702 impl: ${delegateImpl}`);
+    console.log(`AgentNFT: ${deployed.agentNft}`);
+    saveDeployment(delegateImpl, deployed.agentNft);
+
+    const guard = {
+      router: UNISWAP.swapRouter02,
+      selector: "0x04e45aaf" as Hex, // exactInputSingle
+      tokenA: TOKENS.USDC,
+      tokenB: TOKENS.WETH,
+      poolFee: UNISWAP.usdcWethPoolFee,
+      amountCapPerTx: 2_000n, // 0.002 USDC
+      cumulativeCap: 10_000n, // 0.01 USDC
+      slippageCapBps: 300, // 3% (tiny notional)
+      expiry: BigInt(Math.floor(Date.now() / 1000) + 86_400),
+      frozen: false,
+      bindingNonce: 1n,
+    };
+    const initHash = await delegateAndInitialize(wallet, pub, owner, delegateImpl, {
+      guard,
+      sessionKey,
+      watcherKey,
+      relayer: platform.address,
+      gasPerTxCap: parseEther("0.0002"),
+      initialExecVault: parseEther("0.002"),
+      initialWatcherVault: 0n,
+      packageHash: keccak256(toHex("intent-abc/pkg")),
+      semanticGuardHash: keccak256(toHex("intent-abc/sem")),
+    });
+    console.log(`7702 delegate + initialize (+vault): ${initHash}`);
+    const code = await pub.getCode({ address: owner.address });
+    console.log(`owner code after 7702: ${code}`);
+  }
   // 4. executor: quote -> build -> preview guard -> KMS sign -> relayer submit
   const quoted = await quoteExactInputSingle(pub, TOKENS.USDC, TOKENS.WETH, AMOUNT_IN);
   const reason = "M1 mainnet: BUY 0.001 USDC->WETH inside Hard Guardrails";
