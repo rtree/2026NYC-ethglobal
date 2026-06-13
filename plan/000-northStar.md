@@ -162,7 +162,6 @@ Relayer(Platform): 立替分が戻る                                      [ETH 
 
 ## 1. Intent から Agent NFT が動き出すまで
 
-1. Intent から Agent NFT が動き出すまで
 一連の流れはこの形です。
 ```
 Intent
@@ -171,7 +170,26 @@ Intent
   -> OpenClaw Runtime
   -> Guarded Execution
        Hard Guard:     EIP-7702 ExecutionContract
-       Semantic Guard: WatcherAI (optional)
+       Semantic Guard: Watcher Agent (optional)
 ```
 
+1. ログインと人間証明。 Owner は wallet をつなぎ、World ID で人間証明をします。World Chain を使うわけではありませんが、Agent ごとに Cloud Run 上の本物の Runtime を立てるため、wallet だけで無制限に使えると bot / sybil が Runtime を量産し、運営側の compute / model / indexing cost が破綻します。だから人間証明を Runtime 作成前の gate にしています。
+2. Intent を話す。 Owner は IntentBuilder に、やりたいことを話します。ここで書いているのは contract の引数ではなく、自分の資金に何をさせたいか、その目的と許容範囲です。
+   ```
+   「USDC を ETH に少しずつ替えたい」
+   「大きな価格変動時には止めたい」
+   「不自然な route や古い quote は避けたい」
+   「失敗時には stable asset 側に戻したい」
+   ```
+3. Agent Package が生成される。 IntentBuilder は会話を、OpenClaw Runtime に投入できる Agent Package にまとめます。画面には Agent の目標・振る舞い・絶対に越えない Hard Guardrails・実行後に Watcher Agent が読む Semantic Guardrails が表示されます。
+   - Hard Guardrails（target / selector / token pair / amount cap / slippage cap / expiry / nonce など）は EIP-7702 ExecutionContract に書き込まれ、実行のたびに機械的にチェックされます。違反すれば transaction は通りません。
+   - Semantic Guardrails（route の不自然さ、quote の鮮度、simulation の十分さ、recovery path の妥当さなど）は contract がその場で読み切れない期待です。実行後に Watcher Agent が evidence を読んで判断するための読み筋になります。
+4. Executor Agent を mint する。 Owner が内容を確認すると、Executor Agent が Agent NFT として mint されます。これは「AI に資金を渡す」ことではありません。mint されるのは、Intent を実行する Agent identity、Runtime を動かす usage right、従うべき Agent Package manifest です。
+5. Runtime が立ち上がる。 Runtime Registry が NFT を見て OpenClaw Runtime を Cloud Run 上に用意し、AgentLoop を回し始めます。Runtime に渡るのは資金を動かす鍵ではなく、ExecutionContract に ExecutionRequest を出すための SessionKey だけです。
+6. Executor Agent が動く。 tick ごとに market state / portfolio / 現在の Hard Guardrails / Intent の状態を読み、BUY / SELL / HOLD / RECOVER を選びます。必要なら Uniswap から quote と route を取り、simulation を走らせ、evidence を残します。実行すべきと判断したときだけ、SessionKey で ExecutionRequest に署名して ExecutionContract に submit します。
+7. Hard Guard が効く。 ExecutionContract は Agent の reasoning を信用しません。提出された request が Hard Guardrails の内側かどうかだけを見ます。内側なら実行、外側なら revert。ここまでが Hard Guard です。
+8. 証跡が残る。 実行が通ると、onchain tx / event / quote / route / simulation / reasoning hash が timeline に刻まれます。Owner の画面では、Executor Agent が何を見て、何を選び、どの request を出し、どの transaction が通ったかが稼働ログとして見えます。
+9. Watcher Agent を足す。 Owner は 状況の監視役としてWatcher Agent を追加できます。IntentBuilder に Executor Agent の Agent Package を読ませ、監視専用の Watcher Agent Package を生成し、Watcher Agent NFT として mint します。Watcher は対象 Executor Agent の tokenId / intentId / packageHash / guardrail hash を immutable context として参照します。ただし Fund にはアクセスしません。持つのは、観測し・質問し・report / vote するための identity と Runtime usage right だけです。
+10. Semantic Guard が効く。 Watcher Agent の Runtime も OpenClaw 上で動きます。contract event と evidence を読み、Executor Agent に質問し、Semantic Guardrails と照らして実行が on-intent だったかを判断します。問題があれば runtime key で report / vote を出し、quorum が成立すると ExecutionContract の将来の実行範囲が tighten / freeze されます。これが Semantic Guard です。Watcher Agent にできるのは締める方向だけで、緩めるのは Owner だけです。
 
+最終的に Owner が見るのは、単発の transaction ではなく、Agent NFT・Runtime・Hard Guard・Semantic Guard が同時に動く一つの execution timeline です。Executor Agent と Watcher Agent は同じ timeline を見ながら、Agent がどこまで Intent の内側にいたかを確認します。
