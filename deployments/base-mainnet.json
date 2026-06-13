@@ -19,6 +19,11 @@
     "platform": "0x078383c4c20b4e9732Ac0c30A68b8123D53ea6C9",
     "_comment": "platform = deployer + relayer (gas sponsor). Fund with Base ETH."
   },
+  "sessionKeys": {
+    "executor": "0x86bA13f74C5f2AC469eeb6e0010A6AFfd49298eE",
+    "watcher": "0xEe1Dc2f082612D6d510D7E3b3EEd26cE385E9D38",
+    "_comment": "Derived from the KMS HSM keys (sign-only, 0 ETH). Used in ExecutionDelegate7702.initialize."
+  },
   "tokens": {
     "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     "WETH": "0x4200000000000000000000000000000000000006"
