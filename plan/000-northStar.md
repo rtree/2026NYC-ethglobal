@@ -193,3 +193,93 @@ Intent
 10. Semantic Guard が効く。 Watcher Agent の Runtime も OpenClaw 上で動きます。contract event と evidence を読み、Executor Agent に質問し、Semantic Guardrails と照らして実行が on-intent だったかを判断します。問題があれば runtime key で report / vote を出し、quorum が成立すると ExecutionContract の将来の実行範囲が tighten / freeze されます。これが Semantic Guard です。Watcher Agent にできるのは締める方向だけで、緩めるのは Owner だけです。
 
 最終的に Owner が見るのは、単発の transaction ではなく、Agent NFT・Runtime・Hard Guard・Semantic Guard が同時に動く一つの execution timeline です。Executor Agent と Watcher Agent は同じ timeline を見ながら、Agent がどこまで Intent の内側にいたかを確認します。
+
+
+## 2. Agent NFT Model
+
+IntentOS では、ExecutorAI と WatcherAI はどちらも ERC721 / ERC8004-compatible な Agent NFT として存在します。
+
+Agent NFT は Agent の identity、Runtime usage right を代表するものです。このため、transfer 可能です。 Transfer で移転するのは Agent identity と Runtime usage right であり、Owner の fund custody ではない。 Runtime Binding は non-transferable である。 Runtime は NFT と一緒に移転するのではなく、新 owner が新しい Runtime Binding を作る。
+
+Agent NFT は transfer 可能である。 Transfer で移転するのは Agent identity と Runtime usage right であり、Owner の fund custody ではない。 Runtime Binding は non-transferable である。 Runtime は NFT と一緒に移転するのではなく、新 owner が新しい Runtime Binding を作る。
+
+Transfer は old Runtime を同期的に停止できなくてもよい。 Transfer された瞬間に old Runtime Binding が構造的に意味を失うためである。 authority-bearing な操作はすべて ownerOf(tokenId) == runtimeOwner を要求する。 Transfer 後の old Runtime は、実行 request、gas reimbursement、watcher vote などの意味ある操作を通せない。 old Runtime は次の stop check で self-stop する。
+
+Agent NFT の tokenURI は ERC-8004-compatible な Agent Registration JSON を指す。 この registration は、Agent の role、capability、Agent Package、Runtime、evidence、IntentOS への導線を外部から発見できる形で公開する。 Reputation Registry / Validation Registry は後から接続できるようにし、まずは Agent Identity registration を成立させる。
+
+Agent ENS / Basename は、Agent NFT mint 後、Runtime Binding 作成前に付与する。 tokenId が確定してから agent-<tokenId>.intentos.base.eth または watcher-<tokenId>.intentos.base.eth を作り、ENSIP-26 text records と ERC-8004 registration を結ぶ。 Runtime や gas funding より前に名前が付くことで、Runtime、evidence、dashboard、WatcherAI が同じ恒久名を参照できる。
+
+```
+Agent identity setup:
+  Agent NFT mint
+  tokenId 確定
+  ERC-8004 registration JSON 生成
+  ENS / Basename subname 付与
+  agent-context / agent-endpoint[web] を設定
+  agent-registration[registry][agentId] を設定
+  tokenURI / registration に ENS name を入れる
+  Runtime Binding 作成
+```
+```
+{
+  "schema": "erc8004-agent-registration",
+  "schemaVersion": "0.1",
+  "name": "IntentOS ExecutorAI #123",
+  "role": "EXECUTOR",
+  "description": "Executes an Owner Intent through EIP-7702 Hard Guardrails.",
+  "agentPackageHash": "0x...",
+  "runtimeManifestHash": "0x...",
+  "services": [
+    {
+      "name": "guarded-execution",
+      "capabilities": [
+        "observe_state",
+        "get_quote",
+        "simulate",
+        "submit_execution_request"
+      ],
+      "endpoint": {
+        "status": "private",
+        "description": "Runtime access requires current Agent NFT ownership through IntentOS Runtime Registry."
+      }
+    }
+  ],
+  "publicEndpoints": {
+    "app": "https://intentos.arkt.me/",
+    "profile": "https://intentos.arkt.me/",
+    "onboarding": "https://intentos.arkt.me/",
+    "capabilities": {
+      "status": "planned"
+    },
+    "evidence": {
+      "status": "planned"
+    }
+  },
+  "ownership": {
+    "transferable": true,
+    "ownerCan": [
+      "connect_wallet",
+      "spawn_or_resume_runtime",
+      "bind_new_intent",
+      "fund_execution_gas_vault",
+      "view_agent_logs"
+    ],
+    "transferDoesNotTransfer": [
+      "previous_owner_funds",
+      "previous_runtime_capsule",
+      "previous_session_keys",
+      "previous_execution_gas_vault_balance"
+    ]
+  },
+  "supportedTrust": [
+    "hard-guarded-execution",
+    "optional-semantic-guard",
+    "evidence-logging"
+  ],
+  "registries": {
+    "reputation": { "status": "planned" },
+    "validation": { "status": "planned" }
+  }
+}
+```
+
