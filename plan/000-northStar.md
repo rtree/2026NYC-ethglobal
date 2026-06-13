@@ -582,5 +582,80 @@ Concrete tool surfaces:
 
 任意 shell、任意 URL fetch、任意 contract call は有効にしない。
 
+
+---
+
+## 5. Semantic Guard Flow
+
+Watcher Agent は、Owner がより強い guard を必要としたときに追加する Semantic Guard である。
+IntentOS は Executor Agent 単体でも開始できる。
+Owner は Hard Guardrails だけで始めてもよい。
+高額・長期・複雑な intent では Watcher Agent quorum を重ねられる。
+
+Watcher Agent は、Owner が IntentBuilder で生成する Watcher Agent NFT として mint される。
+IntentBuilder は、先に固定された Executor Agent Agent Package を参照し、監視専用の Watcher Agent Agent Package を作る。
+Watcher Agent package は `watchedExecutorTokenId`、`watchedIntentId`、`executorPackageHash`、`hardGuardrailsHash`、`semanticGuardrailsHash` を immutable context として持つ。
+
+Watcher Agent は third-party auditor marketplace ではない。
+Owner-created semantic circuit breaker である。
+Executor co-pilot でもない。
+Watcher Agent は実行を起こさず、Fund access も持たない。
+
+```text
+Predefined Watcher actions:
+  OBSERVE_EXECUTION
+  READ_EVIDENCE
+  ASK_EXECUTOR
+  JUDGE_ON_INTENT
+  REPORT_OK
+  REPORT_SUSPICIOUS
+  VOTE_TIGHTEN
+  VOTE_FREEZE
+  SELF_STOP
+```
+
+Watcher Agent の loop は次の線で進む。
+
+```text
+Observe
+  Base の EvidenceCommitted / tx / contract event を読む
+   ↓
+Question
+  必要なら Executor Agent に explanation を要求する
+   ↓
+Judge
+  action / hashes / 200-char reason を Semantic Guardrails と Watcher Agent package に照らして判断する
+   ↓
+Report / Vote
+  Watcher Agent runtime key で onchain report / vote tx を submit する
+   ↓
+Quorum
+  quorum が成立すると ExecutionContract state が更新される
+   ↓
+Tighten / Freeze
+  future capability を狭めるか、freeze する
+```
+
+Watcher Agent が更新できるのは締める方向だけである。
+cap を増やさない。
+expiry を延ばさない。
+unfreeze しない。
+loosen / expand は Owner だけができる。
+
+```text
+WatcherRuntime tools:
+  onchain read
+  evidence read
+  Executor Agent <-> Watcher Agent chat
+  report / vote submit
+```
+
+第三者 Watcher marketplace、attention fee、correctness bond、slashing は protocol core に含めない。
+将来接続する場合も、core の不変条件は「Watcher Agent は締める方向にしか作用しない」「fund access を持たない」「loosen は Owner だけ」のままである。
+
+---
+
+
+
 ---
 
