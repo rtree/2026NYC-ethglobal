@@ -5,7 +5,7 @@ IntentOSはAIAgentによる取引の課題を
 EIP-7702によってOwnerのWalletでの資金保持・ガードレール設置を実現しつつ
 取引の監視を別Agentが行うことで解決するレイヤープロトコルです。
 
-また、AgentはNFT(ERC-8004 / ERC-721)としてもmintされます。OwnerのEIP-7702のdelegated contractへのアクセス権の証明と、クラウド上に構築されたAI Agentの実行環境へのアクセス権の権利の象徴として、
+また、AgentはNFT(ERC-8004 / ERC-721)としてもmintされます。OwnerのEIP-7702のdelegated contractへのアクセス権の証明と、クラウド上に構築されたAI Agentの実行環境へのアクセス権の権利の象徴として。
 
 ## 解決する課題
 
