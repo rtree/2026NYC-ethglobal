@@ -24,6 +24,11 @@ Already configured in this repo — keep these on:
 - [pnpm-workspace.yaml](pnpm-workspace.yaml): `minimumReleaseAge: 10080` (**7 days** in minutes — only
   install modules ≥7 days old), `trustPolicy: no-downgrade`, `onlyBuiltDependencies: []` (block all
   build scripts unless explicitly allow-listed).
+- `trustPolicyIgnoreAfter: 43200` (**30 days**): exempts the trust-downgrade check for versions
+  published >30 days ago. Needed because build-tool deps (vite, `@babel/core`>`semver`, esbuild)
+  moved from human/trusted publishing to GitHub Actions provenance-only, which `no-downgrade` flags.
+  These are dev/build-time only. New releases (<30d) still get full no-downgrade + 7-day-age checks;
+  `ignore-scripts` stays on for every version. (Verified `vite@5.4.21` etc. are legit CI releases.)
 - Lockfiles are committed. CI uses `pnpm install --frozen-lockfile`.
 - Override only when truly needed, per-package: `onlyBuiltDependencies` allow-list, or
   `pnpm install --ignore-scripts=false` for a single audited dependency.

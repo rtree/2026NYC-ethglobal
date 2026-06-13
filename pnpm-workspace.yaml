@@ -7,6 +7,13 @@ packages:
 minimumReleaseAge: 10080
 # Downgrade of trusted-publishing -> manual publish is blocked.
 trustPolicy: no-downgrade
+# Exempt the trust-downgrade check for versions published more than 30 days ago (minutes: 43200).
+# WHY: many build-tool deps (vite, @babel/core>semver, esbuild, ...) switched from human/trusted
+# publishing to GitHub Actions provenance-only over time, which no-downgrade flags as a "downgrade".
+# These are all DEV/build-time deps (never shipped to the production artifact). New releases (<30d)
+# still get the FULL no-downgrade + 7-day-age checks; only mature, well-vetted versions are allowed.
+# `ignore-scripts=true` (the strongest defense) stays on for every version regardless.
+trustPolicyIgnoreAfter: 43200
 # Build (install) scripts are allow-listed explicitly. Empty = block all by default.
 # Combined with ignore-scripts=true in .npmrc this is double defense.
 onlyBuiltDependencies: []

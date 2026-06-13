@@ -38,3 +38,7 @@ Thumbs.db
 
 # Keep VS Code workspace settings out of the repo
 .vscode/
+
+# app local env (RPC URL with key) — never commit
+app/.env.local
+app/.env
