@@ -197,6 +197,20 @@ test("live console: merged Owner + Watcher controls + timeline + history", async
   await expect(page.getByRole("heading", { name: "Your past Intents" })).toBeVisible();
 });
 
+test("live console empty: no shared history shown until session has an Intent", async ({ page }) => {
+  // Session-scoped: with no Executor created this session, the console must NOT show the shared demo
+  // Owner's timeline/controls — only an empty state + the user's own (per-wallet) history.
+  await page.route("**/api/state", (route) =>
+    route.fulfill({ json: { ...STATE_FIXTURE, session: { executorTokenId: null, watcherTokenId: null } } }),
+  );
+  await passGate(page);
+  await page.goto("/#/console");
+  await expect(page.getByRole("heading", { name: "No running Intent yet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Shared execution timeline" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Owner controls" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Your past Intents" })).toBeVisible();
+});
+
 test("no console errors while walking the whole journey", async ({ page }) => {
   const errors: string[] = [];
   page.on("console", (m) => {

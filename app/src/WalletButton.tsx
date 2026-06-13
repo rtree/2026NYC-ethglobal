@@ -15,6 +15,14 @@ export function WalletButton({ block }: { block?: boolean }) {
   const [open, setOpen] = useState(false);
   const [authErr, setAuthErr] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
+  const [, forceRender] = useState(0);
+
+  // Re-render when the Firebase sign-in state changes (so the "Sign in" button updates).
+  useEffect(() => {
+    const onAuth = () => forceRender((n) => n + 1);
+    window.addEventListener("intentos:auth", onAuth);
+    return () => window.removeEventListener("intentos:auth", onAuth);
+  }, []);
 
   // Run the SIWE handshake once the wallet is connected and we don't yet have a session.
   useEffect(() => {
@@ -35,13 +43,28 @@ export function WalletButton({ block }: { block?: boolean }) {
   }, [isConnected, address, signMessageAsync, signing]);
 
   if (isConnected && address) {
+    const signedIn = !!authState();
     return (
       <>
         <a className="wallet-chip" href={addrUrl(address)} target="_blank" rel="noreferrer">
           <span className="dot" />
           {shortAddr(address)}
-          {signing ? " · signing…" : authState() ? "" : ""}
+          {signing ? " · signing…" : ""}
         </a>
+        {!signedIn && !signing && (
+          <button
+            className="btn primary"
+            onClick={() => {
+              setSigning(true);
+              setAuthErr(null);
+              signInWithWallet(address, signMessageAsync)
+                .catch((e) => setAuthErr(e instanceof Error ? e.message : String(e)))
+                .finally(() => setSigning(false));
+            }}
+          >
+            Sign in
+          </button>
+        )}
         <button className="pill-link" onClick={() => { signOut(); disconnect(); }}>
           Disconnect
         </button>

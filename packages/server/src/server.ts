@@ -15,7 +15,6 @@ import {
   watcherFreeze,
   watcherTighten,
 } from "./journey.js";
-import { getBasicAuth } from "./auth.js";
 import { issueNonce, siweMessage, verifyAndMint } from "./web3auth.js";
 import { requireUid, authEnabled, rateLimit } from "./authGate.js";
 import { intentChat, fixPackage, setStartConfig, listIntents, getIntentFull } from "./intent.js";
@@ -52,17 +51,6 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-// timing-safe-ish basic auth check
-function checkAuth(req: IncomingMessage, expected: string): boolean {
-  const h = req.headers.authorization ?? "";
-  if (!h.startsWith("Basic ")) return false;
-  const got = Buffer.from(h.slice(6), "base64").toString();
-  if (got.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < got.length; i++) diff |= got.charCodeAt(i) ^ expected.charCodeAt(i);
-  return diff === 0;
-}
-
 const API: Record<string, () => Promise<unknown>> = {
   "POST /api/executor/create": createExecutor,
   "POST /api/watcher/create": createWatcher,
@@ -96,8 +84,10 @@ async function serveStatic(res: ServerResponse, urlPath: string) {
 }
 
 async function main() {
-  const expectedAuth = await getBasicAuth();
-
+  // No HTTP Basic auth: it does not attach reliably to fetch()/XHR, which caused repeated native
+  // login popups and intermittent 401s on /api/*. The real gate is Firebase Auth (Web3 sign-in):
+  // public = the SPA, /api/state (read-only chain data), and the /api/auth/* handshake; everything
+  // that moves money or calls the LLM requires a verified Firebase ID token (plan/010 §17).
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     const path = url.pathname;
@@ -105,12 +95,6 @@ async function main() {
     // /healthz is unauthenticated (Cloud Run probe)
     if (path === "/healthz") {
       json(res, 200, { ok: true });
-      return;
-    }
-
-    if (expectedAuth && !checkAuth(req, expectedAuth)) {
-      res.writeHead(401, { "www-authenticate": 'Basic realm="IntentOS", charset="UTF-8"' });
-      res.end("Authentication required");
       return;
     }
 
@@ -206,8 +190,15 @@ async function main() {
       return;
     }
 
+    // ---- write-path (money / agents): Firebase-Auth-gated (plan/010 §17) ----
     const key = `${req.method} ${path}`;
     if (API[key]) {
+      try {
+        await requireUid(req); // throws when AUTH=firebase and no valid bearer
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
       await readBody(req); // drain
       try {
         json(res, 200, (await API[key]()) ?? { ok: true });
@@ -226,7 +217,6 @@ async function main() {
 
   server.listen(PORT, () => {
     console.log(`IntentOS control panel on :${PORT} (app dist: ${APP_DIST})`);
-    console.log(`auth: ${expectedAuth ? "Basic (enabled)" : "DISABLED"}`);
     console.log(
       `toggles: AUTH=${authEnabled() ? "firebase" : "off"} STORE=${process.env.INTENTOS_STORE ?? "memory"} LLM=${process.env.INTENTOS_LLM ?? "mock"}`,
     );

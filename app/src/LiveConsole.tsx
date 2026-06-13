@@ -40,7 +40,25 @@ export function LiveConsole() {
         {loading && !state && <div className="note">Loading on-chain state…</div>}
         {error && <div className="note" style={{ borderColor: "#5a2730", color: "#ff5c5c" }}>RPC error: {error}</div>}
 
-        {state && (
+        {/* No session-active Intent yet: don't show the shared demo Owner's history as if it were the
+            user's. Show an empty state + the user's own (per-wallet) history list. */}
+        {state && !active && (
+          <>
+            <div className="card pad-lg" style={{ marginBottom: 20 }}>
+              <div className="card-head"><h3>No running Intent yet</h3><span className="pill">—</span></div>
+              <p className="desc">
+                You haven&apos;t launched an Intent in this session. Create one in the launch flow — speak
+                an intent, build the Executor &amp; Watcher Agent Packages, mint, and start. Once it&apos;s
+                live, this console shows its guard, vaults, the shared evidence timeline, and the Owner /
+                Watcher controls.
+              </p>
+              <a className="btn primary" href="#/launch">Launch an Intent →</a>
+            </div>
+            <HistoryCard history={history} />
+          </>
+        )}
+
+        {state && active && (
           <>
             <div className="grid cols-4" style={{ marginBottom: 20 }}>
               <div className="card">
@@ -119,29 +137,34 @@ export function LiveConsole() {
               </div>
             </div>
 
-            {/* history */}
-            <div className="card pad-lg" style={{ marginTop: 20 }}>
-              <div className="card-head"><h3>Your past Intents</h3><span className="pill">{history.length}</span></div>
-              {!authState() && <p className="spec-ref">Sign in with your wallet to see your Intent history.</p>}
-              {authState() && history.length === 0 && <p className="muted">No Intents yet — create one in the launch flow.</p>}
-              {history.length > 0 && (
-                <table className="kv"><tbody>
-                  {history.map((i) => (
-                    <tr key={i.intentId}>
-                      <td className="k">{i.intentId}</td>
-                      <td className="v">
-                        {i.title} · <span className={`pill ${i.status === "live" ? "running" : i.status === "stopped" ? "owner-stopped" : ""}`}>{i.status}</span>
-                        {i.executorTokenId ? ` · Executor #${i.executorTokenId}` : ""}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody></table>
-              )}
-            </div>
+            <HistoryCard history={history} />
           </>
         )}
         <p className="footer-note">IntentOS · ETHGlobal NYC 2026 · live console</p>
       </main>
+    </div>
+  );
+}
+
+function HistoryCard({ history }: { history: IntentDoc[] }) {
+  return (
+    <div className="card pad-lg" style={{ marginTop: 20 }}>
+      <div className="card-head"><h3>Your past Intents</h3><span className="pill">{history.length}</span></div>
+      {!authState() && <p className="spec-ref">Sign in with your wallet to see your Intent history.</p>}
+      {authState() && history.length === 0 && <p className="muted">No Intents yet — create one in the launch flow.</p>}
+      {history.length > 0 && (
+        <table className="kv"><tbody>
+          {history.map((i) => (
+            <tr key={i.intentId}>
+              <td className="k">{i.intentId}</td>
+              <td className="v">
+                {i.title} · <span className={`pill ${i.status === "live" ? "running" : i.status === "stopped" ? "owner-stopped" : ""}`}>{i.status}</span>
+                {i.executorTokenId ? ` · Executor #${i.executorTokenId}` : ""}
+              </td>
+            </tr>
+          ))}
+        </tbody></table>
+      )}
     </div>
   );
 }
