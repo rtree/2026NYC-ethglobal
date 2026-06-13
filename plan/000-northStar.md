@@ -33,11 +33,20 @@ Agentが機会を取りに行くほど、取引は増える。
   - TaxableEventかの判断はしません。でも、TaxableEventになりうるものを一か所に保存します
   - Ownerはこの記録を活用して納税・会計の記録を作成することができます
 
-## 課題３：Agentを動かす隔離環境を作るのが大変・隔離すると自分のFundを転送してまかせないとでもRunPullとか鍵の紛失が気になる。。。
+## 課題３：Agentを動かす隔離環境と鍵＆資金管理が難しい
 
 ```
-自分のPCで動かすには不安。でも、隔離環境準備したら。
-OpenClaw, Claude co-work いろいろあるけど結局隔離環境
+自分のPCでAgentを動かすのは不安。
+でも隔離環境を作るのも大変。
+さらに隔離したAgentに資金や鍵を渡すのはもっと怖い。
+止まった際の回収不安があるなら預けられないよね
 ```
+
+- Agentを本当に自律実行させようとすると、単にpromptを作るだけでは足りません。Agentには、プログラムを動かすPCが必要ですが自分のPCで動かすのは不安です。PCがsleepすれば止まりますし、local環境にAPI keyやsession keyを置くのも怖いです
+- 逆に、cloud上に隔離環境を作ろうとすると、今度はRuntimeの作成、権限分離、鍵管理、セキュリティも自分で担保しなくてはなりません
+- IntentOSは、隔離環境・鍵・資金の分離をまとめて用意します
+  - Agentごとに、Cloud Run上のOpenClaw Runtime Capsuleを自動で生成します。常時起動でtickし続けるので、PCをsleepさせても止まりません。Agentが使う鍵はGCPのKMSで管理します。Runtimeに渡るのはfundを動かす鍵ではなく、オーナーのEOAに付随するdelegated contractへExecutionRequestを出すためのsession key（request capability）だけです。
+  - 資金は常にOwnerのアドレスに残ります。EIP-7702を使い、OwnerのEOAそのものにExecutionContractのコードを委任（delegate）するからです。秘密鍵はOwnerが持ったままなので、資金は別アカウントに移りません。AIAgentはこのExecutionContractをガードレール付きで呼び出すことで取引を行い、事前にOwnerが取り決めたガードレールの範囲でOwnerの資金が運用されます。gas budgetも、このOwnerのEIP-7702 delegated account内のExecutionGasVaultに置かれ、AI Agentはfund custodyを持ちません。
+  - だから「止まった際の回収不安」がありません。Ownerはいつでもstopでき、残ったfundはOwner側に残ったまま。Agentをtransferしてもold Runtimeのauthorityは構造的に失効するので、鍵や資金が取り残されることはありません。
 
 
