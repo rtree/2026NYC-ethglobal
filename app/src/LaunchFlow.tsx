@@ -33,8 +33,8 @@ export function LaunchFlow() {
       <main className="main">
         <Nav />
         <div className="page-head" style={{ marginTop: 20 }}>
-          <div className="eyebrow">030–080 · Intent Launch</div>
-          <h1>Launch a guarded Intent</h1>
+          <div className="eyebrow">040 · Intent creation · IntentBuilder</div>
+          <h1>Describe what your funds should do</h1>
           <p>
             Speak purpose and limits — not contract arguments. The IntentBuilder compiles the
             conversation into an Agent Package: enforceable Hard Guardrails + after-the-fact Semantic
@@ -101,6 +101,10 @@ export function LaunchFlow() {
               </p>
             </div>
           </div>
+        </div>
+        <div className="btn-row" style={{ marginTop: 20 }}>
+          <a className="btn" href="#/launch/identity">Next → Agent identity</a>
+          <a className="btn" href="#/launch">Back to hub</a>
         </div>
         <p className="footer-note">IntentOS · ETHGlobal NYC 2026 · launch flow</p>
       </main>

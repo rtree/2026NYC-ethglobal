@@ -41,7 +41,7 @@ export function TopBar({ status }: { status?: string }) {
 
 export function Nav() {
   const items: [string, string][] = [
-    ["#/", "Intents"],
+    ["#/intents", "Intents"],
     ["#/launch", "Launch"],
     ["#/dashboard", "Owner"],
     ["#/watcher", "Watcher"],
@@ -51,7 +51,7 @@ export function Nav() {
   return (
     <div className="steps" style={{ marginBottom: 0 }}>
       {items.map(([href, label]) => (
-        <a key={href} className={`step ${here === href ? "active" : ""}`} href={href}>
+        <a key={href} className={`step ${here === href || here.startsWith(href + "/") ? "active" : ""}`} href={href}>
           {label}
         </a>
       ))}

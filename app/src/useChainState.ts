@@ -33,6 +33,8 @@ export interface ActionItem {
 export interface ChainState {
   delegate: Address;
   agentNft: Address;
+  sessionKey: Address;
+  watcherKey: Address;
   delegated: boolean;
   guard: GuardView | null;
   cumulativeSpent: bigint;
@@ -52,6 +54,8 @@ function mapState(d: any): ChainState {
   return {
     delegate: d.delegate,
     agentNft: d.agentNft,
+    sessionKey: d.sessionKey,
+    watcherKey: d.watcherKey,
     delegated: d.delegated,
     guard: d.guard
       ? {
