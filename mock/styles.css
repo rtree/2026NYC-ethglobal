@@ -23,7 +23,7 @@
 
   --radius: 12px;
   --radius-sm: 8px;
-  --gap: 16px;
+  --gap: 20px;
   --mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -36,7 +36,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
@@ -55,7 +55,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 22px;
+  padding: 14px 28px;
   background: linear-gradient(180deg, #131a25, #0e141d);
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -90,7 +90,7 @@ a:hover { text-decoration: underline; }
 }
 .wallet-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 
-.main { flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; padding: 26px 22px 60px; }
+.main { flex: 1; width: 100%; max-width: 1440px; margin: 0 auto; padding: 30px 28px 72px; }
 
 /* ---------- Step / breadcrumb ---------- */
 .steps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
@@ -104,11 +104,11 @@ a:hover { text-decoration: underline; }
 
 /* ---------- Headings ---------- */
 .page-head { margin-bottom: 22px; }
-.page-head h1 { margin: 0 0 6px; font-size: 22px; }
-.page-head p { margin: 0; color: var(--muted); max-width: 720px; }
+.page-head h1 { margin: 0 0 6px; font-size: 26px; }
+.page-head p { margin: 0; color: var(--muted); max-width: 860px; }
 .eyebrow { color: var(--brand); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 
-h2.section { font-size: 14px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 28px 0 12px; }
+h2.section { font-size: 15px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 28px 0 12px; }
 
 /* ---------- Cards / grid ---------- */
 .grid { display: grid; gap: var(--gap); }
@@ -121,11 +121,11 @@ h2.section { font-size: 14px; text-transform: uppercase; letter-spacing: 0.6px; 
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 22px;
 }
-.card.pad-lg { padding: 22px; }
-.card h3 { margin: 0 0 10px; font-size: 15px; }
-.card .desc { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.card.pad-lg { padding: 26px; }
+.card h3 { margin: 0 0 10px; font-size: 17px; }
+.card .desc { color: var(--muted); font-size: 14.5px; margin: 0 0 12px; }
 
 .nav-card { cursor: pointer; transition: border-color .15s, transform .15s; display: block; color: var(--text); }
 .nav-card:hover { border-color: var(--brand); transform: translateY(-2px); text-decoration: none; }
@@ -140,7 +140,7 @@ h2.section { font-size: 14px; text-transform: uppercase; letter-spacing: 0.6px; 
   display: inline-flex; align-items: center; gap: 8px;
   background: var(--surface-2); color: var(--text);
   border: 1px solid var(--border-2); border-radius: var(--radius-sm);
-  padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: 11px 18px; font-size: 14.5px; font-weight: 600; cursor: pointer;
 }
 .btn:hover { border-color: var(--brand); text-decoration: none; }
 .btn.primary { background: linear-gradient(135deg, var(--brand), #4170e6); border-color: transparent; color: #fff; }
@@ -176,14 +176,14 @@ h2.section { font-size: 14px; text-transform: uppercase; letter-spacing: 0.6px; 
 .kv td { padding: 8px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
 .kv tr:last-child td { border-bottom: none; }
 .kv td.k { color: var(--muted); width: 42%; }
-.kv td.v { font-family: var(--mono); font-size: 12.5px; }
+.kv td.v { font-family: var(--mono); font-size: 14px; }
 .kv td.v .mono { font-family: var(--mono); }
 
 /* ---------- Guardrail list ---------- */
 .guard { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .guard:last-child { border-bottom: none; }
-.guard .g-name { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
-.guard .g-val  { font-family: var(--mono); font-size: 12.5px; }
+.guard .g-name { font-family: var(--mono); font-size: 14px; color: var(--muted); }
+.guard .g-val  { font-family: var(--mono); font-size: 14px; }
 .guard.hard .g-name::before { content: "HARD"; font-size: 9px; color: var(--brand); border: 1px solid var(--brand-dim); border-radius: 4px; padding: 1px 4px; margin-right: 8px; }
 .guard.sem  .g-name::before { content: "SEM";  font-size: 9px; color: var(--watcher); border: 1px solid #43306b; border-radius: 4px; padding: 1px 4px; margin-right: 8px; }
 
@@ -230,7 +230,7 @@ pre.code {
 .mono { font-family: var(--mono); }
 .right { text-align: right; }
 .center { text-align: center; }
-.stat { font-size: 26px; font-weight: 700; }
+.stat { font-size: 32px; font-weight: 700; }
 .stat.up { color: var(--accent); }
 .stat.down { color: var(--danger); }
 .divider { height: 1px; background: var(--border); margin: 18px 0; }
@@ -241,11 +241,11 @@ pre.code {
 .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .field input, .field textarea, .field select {
   width: 100%; background: var(--surface-2); border: 1px solid var(--border-2);
-  border-radius: var(--radius-sm); color: var(--text); padding: 10px 12px; font-family: var(--sans); font-size: 13px;
+  border-radius: var(--radius-sm); color: var(--text); padding: 11px 13px; font-family: var(--sans); font-size: 14.5px;
 }
 .field textarea { min-height: 92px; resize: vertical; }
 .chat { display: flex; flex-direction: column; gap: 12px; }
-.bubble { max-width: 80%; padding: 10px 13px; border-radius: 12px; font-size: 13px; }
+.bubble { max-width: 80%; padding: 10px 13px; border-radius: 12px; font-size: 14.5px; }
 .bubble.owner { align-self: flex-end; background: var(--brand-dim); border: 1px solid #34507e; }
 .bubble.agent { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); }
 .progress { height: 7px; background: var(--surface-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
