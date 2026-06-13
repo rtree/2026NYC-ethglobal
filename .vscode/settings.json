@@ -1,0 +1,17 @@
+{
+  "chat.tools.terminal.autoApprove": {
+    "/^git pull --no-edit origin main && git add TASK\\.md plan/000-northStar-en\\.md && git status --short$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^ls -la TASK\\.md 2>&1; echo \"---check-ignore---\"; git check-ignore -v TASK\\.md 2>&1; echo \"---status---\"; git status --short --ignored \\| head -30$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^echo \"---ls-files---\"; git ls-files \\| grep -i task; echo \"---diff HEAD TASK\\.md---\"; git --no-pager diff --stat HEAD -- TASK\\.md; echo \"---is it in HEAD\\?---\"; git cat-file -e HEAD:TASK\\.md 2>&1 && echo \"EXISTS IN HEAD\" \\|\\| echo \"NOT IN HEAD\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "git cat-file": true
+  }
+}
