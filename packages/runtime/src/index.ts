@@ -4,4 +4,6 @@ export * from "./buildRequest.js";
 export * from "./relay.js";
 export * from "./feedback.js";
 export * from "./executor.js";
+export * from "./deploy.js";
+export * from "./setup7702.js";
 export * from "./secrets.js";
