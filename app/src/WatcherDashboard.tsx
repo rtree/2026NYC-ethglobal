@@ -1,4 +1,4 @@
-import { useChainState } from "./useChainState";
+import { useChainState, activeStatus } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { shortHash, txUrl } from "./format";
 import { ActionButton } from "./ActionButton";
@@ -11,7 +11,7 @@ export function WatcherDashboard() {
 
   return (
     <div className="app">
-      <TopBar status={state?.guard?.frozen ? "frozen" : "running"} />
+      <TopBar status={activeStatus(state)} />
       <main className="main">
         <Nav />
         <div className="page-head" style={{ marginTop: 20 }}>

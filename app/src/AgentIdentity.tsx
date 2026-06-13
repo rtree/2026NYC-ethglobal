@@ -1,4 +1,4 @@
-import { useChainState } from "./useChainState";
+import { useChainState, activeStatus } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { shortAddr, addrUrl } from "./format";
 
@@ -27,7 +27,7 @@ export function AgentIdentity() {
 
   return (
     <div className="app">
-      <TopBar status={state?.delegated ? "running" : undefined} />
+      <TopBar status={activeStatus(state)} />
       <main className="main">
         <Nav />
         <div className="page-head" style={{ marginTop: 20 }}>

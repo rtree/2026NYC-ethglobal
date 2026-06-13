@@ -1,13 +1,11 @@
-import { useConnect } from "wagmi";
-import { injected } from "wagmi/connectors";
 import { TopBar } from "./Chrome";
+import { WalletButton } from "./WalletButton";
 import { useGate, setWorldIdVerified, WORLDID_APP_ID } from "./gate";
 
 // 010 · Owner onboarding. Two gates before entering: (1) connect a wallet, (2) World ID human-proof.
 // World ID prevents bot/sybil mass-creation of Cloud Run runtimes (North Star §2). When VITE_WORLDID_APP_ID
 // is unset, a clearly-labeled dev simulation stands in for the IDKit widget.
 export function Onboarding() {
-  const { connect } = useConnect();
   const { isConnected, verified, passed } = useGate();
 
   function enter() {
@@ -38,9 +36,7 @@ export function Onboarding() {
             {isConnected ? (
               <div className="pill ok"><span className="dot" />wallet connected</div>
             ) : (
-              <button className="btn primary block" onClick={() => connect({ connector: injected() })}>
-                Connect Wallet
-              </button>
+              <WalletButton block />
             )}
           </div>
 

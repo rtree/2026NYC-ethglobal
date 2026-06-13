@@ -1,11 +1,8 @@
-import { useAccount, useConnect, useDisconnect } from "wagmi";
-import { injected } from "wagmi/connectors";
-import { shortAddr, addrUrl } from "./format";
+import { useAccount } from "wagmi";
+import { WalletButton } from "./WalletButton";
 
 export function TopBar({ status }: { status?: string }) {
-  const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
-  const { disconnect } = useDisconnect();
+  const { isConnected } = useAccount();
 
   return (
     <header className="topbar">
@@ -20,21 +17,8 @@ export function TopBar({ status }: { status?: string }) {
           {status}
         </span>
       )}
-      {isConnected && address ? (
-        <>
-          <a className="wallet-chip" href={addrUrl(address)} target="_blank" rel="noreferrer">
-            <span className="dot" />
-            {shortAddr(address)}
-          </a>
-          <button className="pill-link" onClick={() => disconnect()}>
-            Disconnect
-          </button>
-        </>
-      ) : (
-        <button className="btn primary" onClick={() => connect({ connector: injected() })}>
-          Connect Wallet
-        </button>
-      )}
+      <WalletButton />
+      {!isConnected && null}
     </header>
   );
 }

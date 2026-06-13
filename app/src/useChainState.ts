@@ -95,6 +95,19 @@ export function invalidateChainState() {
   window.dispatchEvent(new CustomEvent("intentos:refresh"));
 }
 
+// The journey is session-scoped. The Owner EOA is permanently EIP-7702-delegated on Base mainnet
+// (from earlier runs), so `delegated` is always true and must NOT be used to decide whether an Intent
+// is live. An Intent is "active" only once its Executor has been created in THIS session.
+export function hasActiveIntent(state: ChainState | null): boolean {
+  return !!state?.session.executorTokenId;
+}
+
+/** Pill status for the active Intent, or undefined when nothing has been created this session. */
+export function activeStatus(state: ChainState | null): "running" | "frozen" | undefined {
+  if (!hasActiveIntent(state)) return undefined;
+  return state?.guard?.frozen ? "frozen" : "running";
+}
+
 export function useChainState(pollMs = 12_000) {
   const [state, setState] = useState<ChainState | null>(lastGood);
   const [error, setError] = useState<string | null>(null);

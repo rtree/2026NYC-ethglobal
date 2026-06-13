@@ -1,4 +1,4 @@
-import { useChainState } from "./useChainState";
+import { useChainState, activeStatus } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { ADDR } from "./config";
 import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl } from "./format";
@@ -8,7 +8,7 @@ import { api } from "./api";
 export function OwnerDashboard() {
   const { state, error, loading } = useChainState();
   const g = state?.guard;
-  const status = g?.frozen ? "frozen" : state?.delegated ? "running" : "owner-stopped";
+  const status = activeStatus(state);
 
   return (
     <div className="app">
@@ -92,7 +92,7 @@ export function OwnerDashboard() {
                 <div className="card" style={{ marginBottom: 20 }}>
                   <div className="card-head">
                     <h3>Current Hard Guardrails</h3>
-                    <span className={`pill ${status}`}>{status}</span>
+                    <span className={`pill ${status ?? ""}`}>{status ?? "—"}</span>
                   </div>
                   {g && (
                     <>

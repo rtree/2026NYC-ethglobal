@@ -1,4 +1,4 @@
-import { useChainState } from "./useChainState";
+import { useChainState, activeStatus } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { useGate } from "./gate";
 import { usdc, eth } from "./format";
@@ -30,7 +30,7 @@ export function LaunchDashboard() {
 
   return (
     <div className="app">
-      <TopBar status={state?.guard?.frozen ? "frozen" : state?.delegated ? "running" : undefined} />
+      <TopBar status={activeStatus(state)} />
       <main className="main">
         <Nav />
         <div className="page-head" style={{ marginTop: 20 }}>

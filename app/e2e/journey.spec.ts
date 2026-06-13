@@ -50,8 +50,9 @@ test("010 onboarding gate blocks entry until wallet + World ID", async ({ page }
   const enter = page.getByRole("button", { name: /Complete both gates/ });
   await expect(enter).toBeDisabled();
 
-  // Gate 1: connect wallet (mock injected).
+  // Gate 1: connect wallet via the picker (mock injected announces over EIP-6963).
   await page.getByRole("button", { name: "Connect Wallet" }).first().click();
+  await page.getByRole("button", { name: /Mock Wallet|Injected|MetaMask/ }).first().click();
   await expect(page.getByText("wallet connected")).toBeVisible();
 
   // Gate 2: simulate World ID (dev).
@@ -66,6 +67,7 @@ test("010 onboarding gate blocks entry until wallet + World ID", async ({ page }
 async function passGate(page: import("@playwright/test").Page) {
   await page.goto("/#/");
   await page.getByRole("button", { name: "Connect Wallet" }).first().click();
+  await page.getByRole("button", { name: /Mock Wallet|Injected|MetaMask/ }).first().click();
   await page.getByRole("button", { name: /Simulate World ID/ }).click();
   await page.getByRole("button", { name: /Enter — go to Intent List/ }).click();
   await expect(page.getByRole("heading", { name: "Your Intents" })).toBeVisible();
@@ -76,6 +78,19 @@ test("020 Intent List shows live active intent and links to launch + dashboard",
   await expect(page.getByText("020 · Intent List")).toBeVisible();
   await expect(page.getByRole("heading", { name: "DCA USDC → WETH" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Run a new Intent" })).toBeVisible();
+});
+
+test("020 empty: no active intent until an Executor is created this session", async ({ page }) => {
+  // Session-scoped: the Owner EOA is permanently 7702-delegated on mainnet, but with no Executor
+  // created this session the Intent List must NOT show a running intent.
+  await page.route("**/api/state", (route) =>
+    route.fulfill({ json: { ...STATE_FIXTURE, session: { executorTokenId: null, watcherTokenId: null } } }),
+  );
+  await passGate(page);
+  await expect(page.getByRole("heading", { name: "No active Intent yet" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "DCA USDC → WETH" })).toHaveCount(0);
+  // and no "running" status pill in the header
+  await expect(page.getByText("running")).toHaveCount(0);
 });
 
 test("030 Launch Dashboard renders the card hub with live completion", async ({ page }) => {

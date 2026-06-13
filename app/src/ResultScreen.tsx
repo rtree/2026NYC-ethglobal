@@ -1,11 +1,11 @@
-import { useChainState } from "./useChainState";
+import { useChainState, activeStatus } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { usdc, eth, weth } from "./format";
 
 export function ResultScreen() {
   const { state } = useChainState();
   const g = state?.guard;
-  const terminal = g?.frozen ? "frozen" : state?.delegated ? "running" : "owner-stopped";
+  const terminal = activeStatus(state) ?? "owner-stopped";
   const states = ["running", "tightened", "frozen", "self-stopped", "owner-stopped", "fund-exhausted", "transferred"];
 
   return (
