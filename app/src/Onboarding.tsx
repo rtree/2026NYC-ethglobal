@@ -71,7 +71,7 @@ export function Onboarding() {
 
         <div style={{ marginTop: 24 }}>
           <button className="btn accent" disabled={!passed} onClick={enter}>
-            {passed ? "Enter — go to Intent List →" : "Complete both gates to continue"}
+            {passed ? "Enter — go to Intent List →" : "Complete the gates to continue"}
           </button>
         </div>
         <p className="footer-note">IntentOS · ETHGlobal NYC 2026 · onboarding gate</p>

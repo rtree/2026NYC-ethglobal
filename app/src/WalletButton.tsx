@@ -53,16 +53,7 @@ export function WalletButton({ block }: { block?: boolean }) {
           {signing ? " · signing…" : ""}
         </a>
         {!signedIn && !signing && (
-          <button
-            className="btn primary"
-            onClick={() => {
-              setSigning(true);
-              setAuthErr(null);
-              signInWithWallet(address, signMessageAsync)
-                .catch((e) => setAuthErr(e instanceof Error ? e.message : String(e)))
-                .finally(() => setSigning(false));
-            }}
-          >
+          <button className="btn primary" onClick={() => runSignIn(address)}>
             Sign in
           </button>
         )}

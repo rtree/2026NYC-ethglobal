@@ -41,13 +41,20 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(injectMockWallet);
   // Deterministic, instant state for the dashboards (no live RPC in UI tests).
   await page.route("**/api/state", (route) => route.fulfill({ json: STATE_FIXTURE }));
-  // Auth handshake (server runs INTENTOS_AUTH=off in tests): nonce + web3 are stubbed so the wallet
-  // sign-in flow completes without hitting Firebase.
+  // Auth handshake: nonce + web3 are stubbed, and the Firebase REST exchange (signInWithCustomToken /
+  // securetoken refresh) is mocked too, so the Web3->Firebase sign-in completes headlessly and the
+  // onboarding gate (which now requires sign-in when VITE_FIREBASE_API_KEY is set) passes.
   await page.route("**/api/auth/nonce**", (route) =>
     route.fulfill({ json: { nonce: "testnonce", message: "localhost wants you to sign in\nNonce: testnonce" } }),
   );
   await page.route("**/api/auth/web3", (route) =>
-    route.fulfill({ json: { customToken: "", uid: "eip155:8453:0xtest", address: "0xtest" } }),
+    route.fulfill({ json: { customToken: "test-custom-token", uid: "eip155:8453:0xtest", address: "0xtest" } }),
+  );
+  await page.route("**/identitytoolkit.googleapis.com/**", (route) =>
+    route.fulfill({ json: { idToken: "test-id-token", refreshToken: "test-refresh", expiresIn: "3600" } }),
+  );
+  await page.route("**/securetoken.googleapis.com/**", (route) =>
+    route.fulfill({ json: { id_token: "test-id-token", refresh_token: "test-refresh", expires_in: "3600" } }),
   );
   // IntentBuilder + store (memory) — return a deterministic draft so the wizard renders packages.
   const draftPkg = (role: "EXECUTOR" | "WATCHER") => ({
@@ -86,14 +93,14 @@ test.beforeEach(async ({ page }) => {
 test("010 onboarding gate blocks entry until wallet + World ID", async ({ page }) => {
   await page.goto("/#/");
   await expect(page.getByRole("heading", { name: "Enter IntentOS" })).toBeVisible();
-  // The enter button is disabled before both gates.
-  const enter = page.getByRole("button", { name: /Complete both gates/ });
+  // The enter button is disabled before the gates.
+  const enter = page.getByRole("button", { name: /Complete the gates/ });
   await expect(enter).toBeDisabled();
 
-  // Gate 1: connect wallet via the picker (mock injected announces over EIP-6963).
+  // Gate 1: connect wallet via the picker (mock injected announces over EIP-6963), then auto sign-in.
   await page.getByRole("button", { name: "Connect Wallet" }).first().click();
   await page.getByRole("button", { name: /Mock Wallet|Injected|MetaMask/ }).first().click();
-  await expect(page.getByText("wallet connected")).toBeVisible();
+  await expect(page.getByText(/signed in|wallet connected/)).toBeVisible();
 
   // Gate 2: simulate World ID (dev).
   await page.getByRole("button", { name: /Simulate World ID/ }).click();
@@ -108,6 +115,7 @@ async function passGate(page: import("@playwright/test").Page) {
   await page.goto("/#/");
   await page.getByRole("button", { name: "Connect Wallet" }).first().click();
   await page.getByRole("button", { name: /Mock Wallet|Injected|MetaMask/ }).first().click();
+  await expect(page.getByText(/signed in|wallet connected/)).toBeVisible();
   await page.getByRole("button", { name: /Simulate World ID/ }).click();
   await page.getByRole("button", { name: /Enter — go to Intent List/ }).click();
   await expect(page.getByRole("heading", { name: "Your Intents" })).toBeVisible();

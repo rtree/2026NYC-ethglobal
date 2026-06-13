@@ -1,5 +1,7 @@
-// IntentOS control-panel server. Serves the built dApp + a small write-path API behind Basic auth.
-// Keys never reach the browser: mint / 7702 / KMS-signed execute / votes all happen here.
+// IntentOS control-panel server. Serves the built dApp + a small write-path API. Public: the SPA,
+// /api/state (read-only chain data), and the /api/auth/* Web3->Firebase handshake. Everything that
+// moves money or calls the LLM requires a verified Firebase ID token (plan/010 §17). Keys never reach
+// the browser: mint / 7702 / KMS-signed execute / votes all happen here.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -51,14 +53,17 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-const API: Record<string, () => Promise<unknown>> = {
-  "POST /api/executor/create": createExecutor,
-  "POST /api/watcher/create": createWatcher,
-  "POST /api/trade": trade,
-  "POST /api/watcher/freeze": watcherFreeze,
-  "POST /api/watcher/tighten": watcherTighten,
-  "POST /api/owner/resume": ownerResume,
-  "POST /api/reset": reset,
+// Write-path handlers receive the authenticated uid and the (already-parsed) request body, so the
+// create endpoints can use the caller's FIXed Agent Package (intentId) instead of a hardcoded one.
+type WriteBody = { intentId?: string };
+const API: Record<string, (uid: string, body: WriteBody) => Promise<unknown>> = {
+  "POST /api/executor/create": (uid, b) => createExecutor({ uid, intentId: b.intentId }),
+  "POST /api/watcher/create": (uid, b) => createWatcher({ uid, intentId: b.intentId }),
+  "POST /api/trade": () => trade(),
+  "POST /api/watcher/freeze": () => watcherFreeze(),
+  "POST /api/watcher/tighten": () => watcherTighten(),
+  "POST /api/owner/resume": () => ownerResume(),
+  "POST /api/reset": () => reset(),
 };
 
 async function serveStatic(res: ServerResponse, urlPath: string) {
@@ -193,15 +198,16 @@ async function main() {
     // ---- write-path (money / agents): Firebase-Auth-gated (plan/010 §17) ----
     const key = `${req.method} ${path}`;
     if (API[key]) {
+      let uid: string;
       try {
-        await requireUid(req); // throws when AUTH=firebase and no valid bearer
+        uid = await requireUid(req); // throws when auth enabled and no valid bearer
       } catch (e) {
         json(res, 401, { error: e instanceof Error ? e.message : String(e) });
         return;
       }
-      await readBody(req); // drain
+      const body = (await readBody(req)) as WriteBody;
       try {
-        json(res, 200, (await API[key]()) ?? { ok: true });
+        json(res, 200, (await API[key](uid, body)) ?? { ok: true });
       } catch (e) {
         json(res, 500, { error: e instanceof Error ? e.message : String(e) });
       }

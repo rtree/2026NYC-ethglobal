@@ -178,18 +178,20 @@ Star (Runtime/Relayer are server-side; the browser only views + triggers).
    - `POST /api/reset`            -> rotateBinding / re-init so the demo can be re-run
    - Reuses `@intentos/runtime` (deploy, setup7702, executor, watcher, KMS, secrets).
 2. Server also serves the built `app/dist` (single origin -> no CORS).
-3. **Basic auth** middleware (creds from Secret Manager `panel-basic-auth`).
+3. **Auth** (superseded by M5): originally HTTP Basic auth; **removed in M5** because it doesn't attach
+   to fetch()/XHR (caused repeated popups + 401s). Now `/api/*` writes are gated by a **Firebase ID
+   token** (Web3 -> Firebase sign-in, plan/010 §17); `/api/state` is public read-only.
 4. Control-panel UI: buttons on the Launch/Owner/Watcher screens call the API; the existing live
    dashboards reflect results.
 5. **Local iteration**: run the whole journey against Base mainnet (tiny amounts) until smooth.
 6. **Containerize**: one Dockerfile (build app + server, run node). `.dockerignore`.
 7. **Cloud Run**: dedicated runtime service account with `roles/cloudkms.signerVerifier` on the keys
    + `secretmanager.secretAccessor` on the secrets. Deploy. Bounded (no infinite loops).
-8. **Verify** the public URL: full journey over the internet behind Basic auth.
+8. **Verify** the public URL: full journey over the internet (M5: behind Firebase-Auth-gated writes).
 9. **World ID gate** on onboarding (screen 010) — last.
 
 Safety reminders for M4: tiny amounts only (~0.001 USDC); bounded actions (no loops/spam); keys only
-in KMS/Secret Manager; Basic auth in front; never log secrets.
+in KMS/Secret Manager; (M5) Firebase Auth gates money-writes; never log secrets.
 
 ---
 

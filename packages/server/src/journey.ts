@@ -45,6 +45,8 @@ import {
   voteFreeze,
   voteTighten,
 } from "@intentos/runtime";
+import { store } from "./store.js";
+import type { AgentPackageDraft } from "./intentTypes.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const abi = ExecutionDelegate7702Abi as any;
@@ -147,6 +149,71 @@ const pkgHash = keccak256(toHex("intent-abc/pkg"));
 const runtimeHash = keccak256(toHex("intent-abc/runtime"));
 const semHash = keccak256(toHex("intent-abc/sem"));
 
+// ---- bridge from a FIXed Agent Package draft (plan/010 §16) to the on-chain guard/hashes ----
+export interface CreateOpts {
+  uid?: string;
+  intentId?: string;
+}
+
+/** keccak of an arbitrary id string (the on-chain intentId is a hash of the slug). */
+function intentIdHash(slug: string): Hex {
+  return keccak256(toHex(slug));
+}
+
+/** Build a HardGuardState from a FIXed Executor draft's CONSTRAINTS (clamped to demo rails for safety
+ *  on mainnet). Falls back to the demo guard when no draft is provided (dev / back-compat). */
+function guardFromDraft(draft: AgentPackageDraft | null, bindingNonce: bigint): HardGuardState {
+  if (!draft) return DEMO_GUARD(bindingNonce);
+  const clampBig = (v: string, max: bigint) => {
+    let n: bigint;
+    try {
+      n = BigInt(v);
+    } catch {
+      n = max;
+    }
+    return n < 1n ? 1n : n > max ? max : n;
+  };
+  const clampBps = (v: number) => Math.max(1, Math.min(300, Math.round(v || 300)));
+  return {
+    router: UNISWAP.swapRouter02,
+    selector: "0x04e45aaf",
+    tokenA: TOKENS.USDC,
+    tokenB: TOKENS.WETH,
+    poolFee: UNISWAP.usdcWethPoolFee,
+    // Safety: never exceed the demo ceilings even if a draft asks for more (tiny-amounts policy).
+    amountCapPerTx: clampBig(draft.constraints.amountCapPerTx, 2_000n),
+    cumulativeCap: clampBig(draft.constraints.cumulativeCap, DEMO_CUM_CAP),
+    slippageCapBps: clampBps(draft.constraints.slippageCapBps),
+    expiry: BigInt(Math.floor(Date.now() / 1000) + 86_400),
+    frozen: false,
+    bindingNonce,
+  };
+}
+
+/** Load the intent doc + its FIXed Executor/Watcher drafts for this caller, if intentId given. */
+async function loadDrafts(opts?: CreateOpts): Promise<{
+  slug: string;
+  executor: AgentPackageDraft | null;
+  watcher: AgentPackageDraft | null;
+}> {
+  if (!opts?.uid || !opts?.intentId) return { slug: "intent-abc", executor: null, watcher: null };
+  const doc = await store().getIntent(opts.uid, opts.intentId);
+  if (!doc) return { slug: opts.intentId, executor: null, watcher: null };
+  return {
+    slug: doc.intentId,
+    executor: doc.packages.executor.fixed ? doc.packages.executor : null,
+    watcher: doc.packages.watcher.fixed ? doc.packages.watcher : null,
+  };
+}
+
+/** Persist mint results back onto the intent doc so the off-chain history links to the chain. */
+async function linkIntent(opts: CreateOpts | undefined, patch: { executorTokenId?: string; watcherTokenId?: string; status?: "draft" | "live" | "stopped" }) {
+  if (!opts?.uid || !opts?.intentId) return;
+  const doc = await store().getIntent(opts.uid, opts.intentId);
+  if (!doc) return;
+  await store().putIntent(opts.uid, { ...doc, ...patch });
+}
+
 // ---- state ----
 export async function getState() {
   const c = await ctx();
@@ -217,44 +284,51 @@ export async function getState() {
   };
 }
 
-async function ensureSetup() {
+async function ensureSetup(execDraft?: AgentPackageDraft | null, pkgHashOverride?: Hex) {
   const c = await ctx();
   const code = await c.pub.getCode({ address: c.delegate });
   const delegated = !!code && code.toLowerCase().startsWith("0xef0100");
+  const desiredGuard = guardFromDraft(execDraft ?? null, 1n);
   if (!delegated) {
     const tx = await delegateAndInitialize(c.wallet, c.pub, c.owner, c.delegateImpl, {
-      guard: DEMO_GUARD(1n),
+      guard: desiredGuard,
       sessionKey: c.sessionKey,
       watcherKey: c.watcherKey,
       relayer: c.platform.address,
       gasPerTxCap: parseEther("0.0002"),
       initialExecVault: parseEther("0.002"),
       initialWatcherVault: parseEther("0.001"),
-      packageHash: pkgHash,
+      packageHash: pkgHashOverride ?? pkgHash,
       semanticGuardHash: semHash,
     });
     logAction({ at: Date.now(), action: "delegate+initialize (EIP-7702)", txHash: tx, ok: true });
     return;
   }
-  // Already delegated: make sure caps are demo-friendly and not frozen.
+  // Already delegated (shared demo Owner): apply this caller's FIXed guard (or reset to demo-ready).
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
-  if (guard.frozen || guard.cumulativeCap < DEMO_CUM_CAP) {
-    const tx = await ownerUpdateGuard(c.wallet, c.pub, c.owner, DEMO_GUARD(guard.bindingNonce, false));
-    logAction({ at: Date.now(), action: "owner reset guard (demo-ready)", txHash: tx, ok: true });
+  const target = guardFromDraft(execDraft ?? null, guard.bindingNonce);
+  if (guard.frozen || guard.cumulativeCap < target.cumulativeCap || guard.amountCapPerTx !== target.amountCapPerTx) {
+    const tx = await ownerUpdateGuard(c.wallet, c.pub, c.owner, target);
+    logAction({ at: Date.now(), action: "owner set guard from FIXed package", txHash: tx, ok: true });
   }
 }
 
-export async function createExecutor() {
+export async function createExecutor(opts?: CreateOpts) {
   const c = await ctx();
-  await ensureSetup();
+  const { slug, executor } = await loadDrafts(opts);
+  // Production correctness: the on-chain guard + hashes come from the user's FIXed Executor package,
+  // not a hardcoded "intent-abc". Falls back to demo values only when no FIXed draft is available.
+  const pkgHashReal = executor?.packageHash ?? pkgHash;
+  await ensureSetup(executor, pkgHashReal);
   const r = await mintExecutorNft(c.wallet, c.pub, c.platform, c.agentNft, c.delegate, {
-    agentManifestHash: pkgHash,
+    agentManifestHash: pkgHashReal,
     runtimeManifestHash: runtimeHash,
-    intentId,
+    intentId: intentIdHash(slug),
     executionContract: c.delegate,
-    hardGuardrailsHash: keccak256(toHex("hardguard")),
+    hardGuardrailsHash: keccak256(toHex(`${slug}/hardguard`)),
   });
   session.executorTokenId = r.tokenId.toString();
+  await linkIntent(opts, { executorTokenId: r.tokenId.toString(), status: "live" });
   logAction({ at: Date.now(), action: `mint Executor Agent NFT #${r.tokenId}`, txHash: r.txHash, ok: true });
   return { tokenId: r.tokenId.toString(), txHash: r.txHash };
 }
@@ -270,20 +344,24 @@ async function ensureWatcherVault() {
   logAction({ at: Date.now(), action: "fund Watcher gas vault lane", txHash: tx, ok: true });
 }
 
-export async function createWatcher() {
+export async function createWatcher(opts?: CreateOpts) {
   const c = await ctx();
   if (!session.executorTokenId) throw new Error("create the Executor Agent first");
+  const { slug, executor, watcher } = await loadDrafts(opts);
+  const execPkgHash = executor?.packageHash ?? pkgHash;
+  const watcherPkgHash = watcher?.packageHash ?? keccak256(toHex(`${slug}/watcher/pkg`));
   const r = await mintWatcherNft(c.wallet, c.pub, c.platform, c.agentNft, c.delegate, {
-    agentManifestHash: keccak256(toHex("watcher/pkg")),
-    runtimeManifestHash: keccak256(toHex("watcher/runtime")),
+    agentManifestHash: watcherPkgHash,
+    runtimeManifestHash: keccak256(toHex(`${slug}/watcher/runtime`)),
     watchedExecutorTokenId: BigInt(session.executorTokenId),
-    watchedIntentId: intentId,
-    executorPackageHash: pkgHash,
-    hardGuardrailsHash: keccak256(toHex("hardguard")),
-    semanticGuardrailsHash: semHash,
-    watcherPackageHash: keccak256(toHex("watcher/pkg")),
+    watchedIntentId: intentIdHash(slug),
+    executorPackageHash: execPkgHash,
+    hardGuardrailsHash: keccak256(toHex(`${slug}/hardguard`)),
+    semanticGuardrailsHash: keccak256(toHex(`${slug}/sem`)),
+    watcherPackageHash: watcherPkgHash,
   });
   session.watcherTokenId = r.tokenId.toString();
+  await linkIntent(opts, { watcherTokenId: r.tokenId.toString() });
   logAction({ at: Date.now(), action: `mint Watcher Agent NFT #${r.tokenId} (quorum 1)`, txHash: r.txHash, ok: true });
   await ensureWatcherVault();
   return { tokenId: r.tokenId.toString(), txHash: r.txHash };

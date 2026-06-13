@@ -43,7 +43,9 @@ export function readDeployments(): Deployments {
   return JSON.parse(readFileSync(path, "utf8")) as Deployments;
 }
 
-/** Base RPC URL. Default to the public endpoint; override with BASE_RPC_URL (e.g. Alchemy). */
+/** Base RPC URL for the simple single-endpoint clients (scripts/tests). The server's live path uses
+ *  the multi-RPC fallback in @intentos/runtime getBaseRpcUrls(). Override precedence: INTENTOS_RPC
+ *  (unified name) -> BASE_RPC_URL (legacy) -> public endpoint. */
 export function baseRpcUrl(): string {
-  return process.env.BASE_RPC_URL ?? "https://mainnet.base.org";
+  return process.env.INTENTOS_RPC?.split(/[\s,]+/)[0] || process.env.BASE_RPC_URL || "https://mainnet.base.org";
 }

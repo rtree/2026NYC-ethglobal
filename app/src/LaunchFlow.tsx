@@ -96,8 +96,8 @@ export function LaunchFlow() {
           {/* right: detail pane */}
           <div>
             {step === "intent" && <IntentStep intent={intent} setIntent={setIntent} />}
-            {step === "executor" && <ExecutorStep state={state} fixed={execFixed} pkg={intent?.packages.executor} />}
-            {step === "watcher" && <WatcherStep state={state} fixed={watchFixed} hasExecutor={hasExecutor} pkg={intent?.packages.watcher} />}
+            {step === "executor" && <ExecutorStep state={state} fixed={execFixed} pkg={intent?.packages.executor} intentId={intent?.intentId} />}
+            {step === "watcher" && <WatcherStep state={state} fixed={watchFixed} hasExecutor={hasExecutor} pkg={intent?.packages.watcher} intentId={intent?.intentId} />}
             {step === "funding" && <FundingStep state={state} />}
             {step === "start" && <StartStep state={state} intent={intent} setIntent={setIntent} />}
           </div>
@@ -233,7 +233,7 @@ function PackageCard({ title, role, pkg, onFix }: { title: string; role: "EXECUT
 }
 
 // ---------- ② Executor Agent ----------
-function ExecutorStep({ state, fixed, pkg }: { state: ChainState | null; fixed: boolean; pkg?: AgentPackageDraft }) {
+function ExecutorStep({ state, fixed, pkg, intentId }: { state: ChainState | null; fixed: boolean; pkg?: AgentPackageDraft; intentId?: string }) {
   const execId = state?.session.executorTokenId;
   const ensName = execId ? `agent-${execId}.intentos.base.eth` : "agent-<tokenId>.intentos.base.eth";
   return (
@@ -242,7 +242,7 @@ function ExecutorStep({ state, fixed, pkg }: { state: ChainState | null; fixed: 
         <div className="card-head"><h3>Create Executor Agent</h3><span className="pill role-exec">EXECUTOR</span></div>
         <p className="desc">Mint the AgentNFT, delegate the Owner EOA via EIP-7702, and initialize the Hard Guardrails from the fixed package. One real transaction.</p>
         {!fixed && <div className="note">FIX the Executor package in step ① first.</div>}
-        <ActionButton label="Create Executor (mint + EIP-7702 + initialize)" className="btn primary block" run={api.createExecutor} disabled={!fixed} />
+        <ActionButton label="Create Executor (mint + EIP-7702 + initialize)" className="btn primary block" run={() => api.createExecutor(intentId)} disabled={!fixed} />
         <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
       </div>
       <div className="card pad-lg">
@@ -261,7 +261,7 @@ function ExecutorStep({ state, fixed, pkg }: { state: ChainState | null; fixed: 
 }
 
 // ---------- ③ Watcher Agent ----------
-function WatcherStep({ state, fixed, hasExecutor, pkg }: { state: ChainState | null; fixed: boolean; hasExecutor: boolean; pkg?: AgentPackageDraft }) {
+function WatcherStep({ state, fixed, hasExecutor, pkg, intentId }: { state: ChainState | null; fixed: boolean; hasExecutor: boolean; pkg?: AgentPackageDraft; intentId?: string }) {
   const watchId = state?.session.watcherTokenId;
   return (
     <div className="grid cols-2">
@@ -270,7 +270,7 @@ function WatcherStep({ state, fixed, hasExecutor, pkg }: { state: ChainState | n
         <p className="desc">Mint the Watcher AgentNFT bound to the Executor. It can only tighten / freeze — never loosen, never move funds.</p>
         {!hasExecutor && <div className="note">Create the Executor Agent (step ②) first.</div>}
         {hasExecutor && !fixed && <div className="note">FIX the Watcher package in step ① first.</div>}
-        <ActionButton label="Create Watcher (mint + bind, quorum 1)" className="btn block" run={api.createWatcher} disabled={!hasExecutor || !fixed} />
+        <ActionButton label="Create Watcher (mint + bind, quorum 1)" className="btn block" run={() => api.createWatcher(intentId)} disabled={!hasExecutor || !fixed} />
         <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
       </div>
       <div className="card pad-lg">

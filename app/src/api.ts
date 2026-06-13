@@ -49,8 +49,8 @@ export interface ChatResponse {
 }
 
 export const api = {
-  createExecutor: () => post("/api/executor/create"),
-  createWatcher: () => post("/api/watcher/create"),
+  createExecutor: (intentId?: string) => postJson<ApiResult>("/api/executor/create", { intentId }),
+  createWatcher: (intentId?: string) => postJson<ApiResult>("/api/watcher/create", { intentId }),
   trade: () => post("/api/trade"),
   watcherFreeze: () => post("/api/watcher/freeze"),
   watcherTighten: () => post("/api/watcher/tighten"),
