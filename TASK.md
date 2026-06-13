@@ -77,8 +77,13 @@ context and prevents the failure modes below.
   tools, RuntimeRecord/Binding, guardrail enforce order, terminal states, screen list.
 - **Mocks** -> `mock/` (English): design system (`styles.css`), `index.html` hub, `README.md`, and
   11 screens `010-110`. Validated in browser: 0 console errors, all internal links resolve,
-  responsive grid OK.
+  responsive grid OK. Fonts scaled up + container made fluid to fill wide screens at 100% zoom.
+- **SDD** (per component, English), anchored to `010-interfaces.md` sections + `mock/` screens:
+  - `020-sdd-overview.md` — scope, repo layout, stack, end-to-end sequences, build order M0-M3.
+  - `030-sdd-contracts.md` — ExecutionDelegate7702 + AgentNFT (Solidity/Foundry).
+  - `040-sdd-runtime.md` — registry, OpenClaw runtime, adapter (intentos.*), relayer, KMS.
+  - `050-sdd-frontend.md` — React/Vite dApp, routes -> mocks, data sources.
 
 ### Next
-1. **SDD** (per component, English): contract -> runtime / relayer -> frontend, B-scope vertical slice.
-   Anchor each component to its `010-interfaces.md` section + the matching `mock/` screen.
+1. **Implementation** following SDD build order M0-M3 (contracts -> runtime slice -> frontend ->
+   watcher). Scaffold the monorepo (pnpm workspace + Foundry) per `020-sdd-overview.md` §2.
