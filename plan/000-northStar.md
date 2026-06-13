@@ -108,4 +108,20 @@ Owner EOA（資金はここに残る）
 
 EIP-7702 によって、Owner の EOA そのものに「契約コード」を後付けします。資金は別口座に移さず、Owner の balance のまま。その Owner アカウントのコードの中に、ExecutionContract と Hard Guardrails が同居します。
 
+実行の流れ（誰が何の鍵を持つか）
+```
+ExecutorAI(OpenClaw)  : 「BUY 0.05 USDC」というシグナルを出すだけ。鍵は持たない
+IntentOS adapter      : quote/simulate して typed ExecutionRequest を組む
+SessionKey(KMS)       : その ExecutionRequest の digest を「署名するだけ」
+                        └─ 資金を動かせない鍵。0 ETH のまま。送信もしない
+ExecutionContract     : 署名と request を Hard Guardrails と照合 → 内側なら execute / 外側なら revert
+```
+
+つまり代理執行の実体は3層に分離されています:
+1. 頭（OpenClaw/LLM）は「やりたいこと」を考えるだけで、onchain 権限ゼロ
+2. SessionKeyは ExecutionRequest に署名できるが、これは「資金を動かす鍵」ではなく「実行を要求する鍵」。Owner の資金を勝手に送金することはできず、できるのは ExecutionContract に request を出すことだけ
+3. ExecutionContract（= Owner アカウント内のコード）が、その request が Hard Guardrails（token pair / amount cap / slippage / expiry / freeze など）の内側かを機械的に判定し、内側のときだけ Owner の資金を動かす
+
+だから「Agent が custody を持つ」のではなく、Agent は Owner アカウントに対して制約付きの『実行要求』を出せるだけ。資金は常に Owner のもので、契約のガードが最終的な栓になっています。
+cap を越えた要求は adapter で握りつぶさず、契約が AmountTooLarge で revert し、その却下理由を LLM に返して境界内に再要求させます。
 
