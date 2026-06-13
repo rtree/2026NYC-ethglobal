@@ -4,7 +4,9 @@
 IntentOSはAIAgentによる取引の課題を
 統合により解決するレイヤープロトコルです
 
-## 課題１：Agentによるチャンス獲得と暴走のはざまの問題を解決する
+## 解決する課題
+
+### 課題１：Agentによるチャンス獲得と暴走のはざまの問題を解決する
 
 ```
 寝ている間にチャンスが来る。
@@ -13,13 +15,13 @@ IntentOSはAIAgentによる取引の課題を
 ```
 
 - オンチェーンのチャンスは、人間が起きて毎回承認するのを待ってくれません。
-- でもAI Agentにwalletの全権を渡すのは危険すぎます。
+- でもAgentにwalletの全権を渡すのは危険すぎます。
 - IntentOSは、毎回承認と白紙委任の間にあります。
-  - OwnerはIntentを定義し、ExecutorAIはそのIntentの内側で機会を取りに行きます。
-  - EIP-7702 ExecutionContractがHard Limitを強制し、WatcherAIは将来の権限をtighten / freezeすることだけができます。
+  - OwnerはIntentを定義し、Executor AgentはそのIntentの内側で機会を取りに行きます。
+  - EIP-7702 ExecutionContractがHard Limitを強制し、Watcher Agentは将来の権限をtighten / freezeすることだけができます。
   - つまりOwnerがオフラインでもAgentは動ける。でもOwnerの境界の外には出られません。
 
-## 課題２：チャンス獲得＝TaxableEventの増加
+### 課題２：チャンス獲得＝TaxableEventの増加
 
 ```
 Agentが機会を取りに行くほど、取引は増える。
@@ -33,7 +35,7 @@ Agentが機会を取りに行くほど、取引は増える。
   - TaxableEventかの判断はしません。でも、TaxableEventになりうるものを一か所に保存します
   - Ownerはこの記録を活用して納税・会計の記録を作成することができます
 
-## 課題３：Agentを動かす隔離環境と鍵＆資金管理が難しい
+### 課題３：Agentを動かす隔離環境と鍵＆資金管理が難しい
 
 ```
 自分のPCでAgentを動かすのは不安。
@@ -48,5 +50,12 @@ Agentが機会を取りに行くほど、取引は増える。
   - Agentごとに、Cloud Run上のOpenClaw Runtime Capsuleを自動で生成します。常時起動でtickし続けるので、PCをsleepさせても止まりません。Agentが使う鍵はGCPのKMSで管理します。Runtimeに渡るのはfundを動かす鍵ではなく、オーナーのEOAに付随するdelegated contractへExecutionRequestを出すためのsession key（request capability）だけです。
   - 資金は常にOwnerのアドレスに残ります。EIP-7702を使い、OwnerのEOAそのものにExecutionContractのコードを委任（delegate）するからです。秘密鍵はOwnerが持ったままなので、資金は別アカウントに移りません。AIAgentはこのExecutionContractをガードレール付きで呼び出すことで取引を行い、事前にOwnerが取り決めたガードレールの範囲でOwnerの資金が運用されます。gas budgetも、このOwnerのEIP-7702 delegated account内のExecutionGasVaultに置かれ、AI Agentはfund custodyを持ちません。
   - だから「止まった際の回収不安」がありません。Ownerはいつでもstopでき、残ったfundはOwner側に残ったまま。Agentをtransferしてもold Runtimeのauthorityは構造的に失効するので、鍵や資金が取り残されることはありません。
+
+## 0. 概要
+
+> Executor Agentは要求する。
+> ExecutionContract は事前に通すか止める。
+> Watcher Agent は締めることしかできない。
+> 緩められるのは Owner だけ。
 
 
