@@ -1,13 +1,26 @@
+import { useEffect, useState } from "react";
 import { useChainState, hasActiveIntent, activeStatus } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { ActionButton } from "./ActionButton";
 import { api } from "./api";
 import { usdc } from "./format";
+import type { IntentDoc } from "./intentTypes";
 
 export function IntentList() {
   const { state } = useChainState();
   const active = hasActiveIntent(state);
   const status = activeStatus(state);
+  const [intent, setIntent] = useState<IntentDoc | null>(null);
+
+  // Load this wallet's active Intent so the card renders REAL values (id, title) — not static copy.
+  useEffect(() => {
+    api.listIntents()
+      .then((r) => setIntent(r.intents.find((i) => i.status === "live") ?? r.intents.find((i) => i.executorTokenId) ?? null))
+      .catch(() => {});
+  }, []);
+
+  const cardTitle = intent?.title ?? "DCA USDC → WETH";
+  const cardId = intent?.intentId ?? "intent";
 
   return (
     <div className="app">
@@ -22,12 +35,12 @@ export function IntentList() {
 
         <div className="grid cols-2">
           {active ? (
-            <a className="card nav-card pad-lg" href="#/dashboard">
+            <a className="card nav-card pad-lg" href="#/console">
               <div className="card-head">
-                <span className="num">intent-abc</span>
+                <span className="num">{cardId}</span>
                 <span className={`pill ${status}`}>{status}</span>
               </div>
-              <h3>DCA USDC → WETH</h3>
+              <h3>{cardTitle}</h3>
               <p className="desc">
                 {state ? `Cumulative spent ${usdc(state.cumulativeSpent)} · per-tx cap ${usdc(state.guard?.amountCapPerTx ?? 0n)}` : "Loading live state…"}
               </p>
@@ -70,7 +83,7 @@ export function IntentList() {
         </div>
         {active && (
           <div style={{ marginTop: 18 }}>
-            <ActionButton label="Reset demo session (clear agents · unfreeze)" className="btn" run={api.reset} />
+            <ActionButton label="Reset demo session (clear agents · unfreeze)" className="btn" run={() => api.reset(intent?.intentId)} />
           </div>
         )}
         <p className="footer-note">IntentOS · ETHGlobal NYC 2026</p>

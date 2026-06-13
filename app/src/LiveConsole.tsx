@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useChainState, activeStatus, hasActiveIntent } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
-import { ADDR } from "./config";
 import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl } from "./format";
 import { ActionButton } from "./ActionButton";
 import { api } from "./api";
@@ -24,7 +23,9 @@ export function LiveConsole() {
   }, []);
 
   // The active Intent for this session (its FIXed guard/draft is what trade/resume/reset bind to).
-  const activeIntentId = history.find((i) => i.status === "live")?.intentId ?? history.find((i) => i.executorTokenId)?.intentId;
+  const activeIntent = history.find((i) => i.status === "live") ?? history.find((i) => i.executorTokenId);
+  const activeIntentId = activeIntent?.intentId;
+  const consoleTitle = activeIntent ? `${activeIntent.intentId} · ${activeIntent.title}` : "Running Intent";
 
   return (
     <div className="app">
@@ -33,7 +34,7 @@ export function LiveConsole() {
         <Nav />
         <div className="page-head" style={{ marginTop: 20 }}>
           <div className="eyebrow">Live Console · Owner + Watcher · LIVE</div>
-          <h1>intent · DCA USDC → WETH</h1>
+          <h1>{consoleTitle}</h1>
           <p>
             One place for the running Intent: live guard, vaults, balances, the shared EvidenceCommitted
             timeline, and both Owner and Watcher controls. After it stops, this is the Result.
@@ -133,7 +134,7 @@ export function LiveConsole() {
                     </>
                   )}
                   <table className="kv" style={{ marginTop: 12 }}><tbody>
-                    <tr><td className="k">Owner EOA (7702)</td><td className="v"><a href={addrUrl(ADDR.owner)} target="_blank" rel="noreferrer">{shortAddr(ADDR.owner)}</a></td></tr>
+                    <tr><td className="k">Owner EOA (7702)</td><td className="v">{state ? <a href={addrUrl(state.delegate)} target="_blank" rel="noreferrer">{shortAddr(state.delegate)}</a> : "—"}</td></tr>
                     <tr><td className="k">Delegated</td><td className="v">{String(state.delegated)}</td></tr>
                   </tbody></table>
                 </div>
