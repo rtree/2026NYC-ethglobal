@@ -1,0 +1,12 @@
+packages:
+  - "packages/*"
+  - "app"
+
+# --- Supply-chain security (pnpm v10) ---
+# Block packages published less than 7 days ago (minutes: 7 * 24 * 60 = 10080).
+minimumReleaseAge: 10080
+# Downgrade of trusted-publishing -> manual publish is blocked.
+trustPolicy: no-downgrade
+# Build (install) scripts are allow-listed explicitly. Empty = block all by default.
+# Combined with ignore-scripts=true in .npmrc this is double defense.
+onlyBuiltDependencies: []

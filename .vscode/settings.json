@@ -16,6 +16,22 @@
     "git pull": true,
     "git add": true,
     "git commit": true,
-    "git push": true
+    "git push": true,
+    "/^echo \"--- node ---\"; node -v 2>&1; echo \"--- pnpm ---\"; pnpm -v 2>&1; echo \"--- forge ---\"; forge --version 2>&1 \\| head -1; echo \"--- gcloud proj ---\"; gcloud config get-value project 2>&1; echo \"--- adc ---\"; ls -la ~/\\.config/gcloud/application_default_credentials\\.json 2>&1 \\| tail -1; echo \"--- global npmrc ---\"; cat ~/\\.npmrc 2>&1$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^gcloud config set project ethglobal-nyc2026-rtree 2>&1 && gcloud config get-value project 2>&1 && echo \"--- quota project in ADC ---\" && gcloud auth application-default set-quota-project ethglobal-nyc2026-rtree 2>&1 \\| tail -2$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^cd /home/araki/2026NYC-ethglobal/contracts && forge install foundry-rs/forge-std openzeppelin/openzeppelin-contracts 2>&1 \\| tail -20$/": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "/^forge build 2>&1 \\| tail -30$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
   }
 }

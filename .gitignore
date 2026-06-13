@@ -1,0 +1,40 @@
+# --- Node / pnpm ---
+node_modules/
+.pnpm-store/
+dist/
+build/
+*.tsbuildinfo
+coverage/
+.cache/
+
+# --- Foundry ---
+contracts/out/
+contracts/cache/
+contracts/broadcast/**/dry-run/
+contracts/.gas-snapshot.tmp
+
+# --- Secrets / credentials (NEVER commit) ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*-key.json
+service-account*.json
+secrets/
+.secrets/
+application_default_credentials.json
+
+# --- Local platform wallet material (addresses OK, keys NEVER) ---
+wallet.json
+keystore/
+*.keystore
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+
+# Keep VS Code workspace settings out of the repo
+.vscode/
