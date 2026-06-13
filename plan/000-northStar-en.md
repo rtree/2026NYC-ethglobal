@@ -88,7 +88,7 @@ Intent
        Hard Guardrails:
          EIP-7702 ExecutionContract
        Optional Semantic Guardrails:
-         Watcher Agent Agent NFTs
+         Watcher Agent NFTs
 ```
 
 Note that both the Executor Agent and the Watcher Agent hold a so-called wallet as a SessionKey, but
@@ -118,7 +118,7 @@ Execution flow (who holds which key)
 (2) IntentOS adapter         : quotes / simulates and assembles a typed ExecutionRequest
 (3) SessionKey(KMS)          : only "signs" the digest of that ExecutionRequest
                                └─ a key that cannot move funds. stays at 0 ETH. does not broadcast
-(4) Replayer                 : prepared by the Platform (us, the IntentOS provider). relays the
+(4) Relayer                  : prepared by the Platform (us, the IntentOS provider). relays the
                                signature and request to the ExecutionContract (temporarily fronts gas)
 (5) ExecutionContract        : checks the signature and request against Hard Guardrails ->
                                execute if inside / revert if outside
@@ -294,7 +294,7 @@ Execution being visible.
 
 - Watcher Agent creation
   - If needed, the Owner hands the Executor Agent's Agent Package to the IntentBuilder
-  - The IntentBuilder generates a monitoring-only Watcher Agent Agent Package
+  - The IntentBuilder generates a monitoring-only Watcher Agent Package
   - The Owner confirms the Executor Agent tokenId / intentId / package hash / guardrail hash that the
     Watcher Agent package references
   - Mint the Watcher Agent NFT
@@ -717,8 +717,8 @@ The Owner may start with Hard Guardrails only.
 For high-value / long-running / complex intents, a Watcher Agent quorum can be layered on.
 
 The Watcher Agent is minted as a Watcher Agent NFT that the Owner generates with the IntentBuilder.
-The IntentBuilder references the already-fixed Executor Agent Agent Package and creates a
-monitoring-only Watcher Agent Agent Package.
+The IntentBuilder references the already-fixed Executor Agent Package and creates a
+monitoring-only Watcher Agent Package.
 The Watcher Agent package holds `watchedExecutorTokenId`, `watchedIntentId`, `executorPackageHash`,
 `hardGuardrailsHash`, `semanticGuardrailsHash` as immutable context.
 
@@ -911,7 +911,7 @@ Agent identity setup:
 {
   "schema": "erc8004-agent-registration",
   "schemaVersion": "0.1",
-  "name": "IntentOS ExecutorAI #123",
+  "name": "IntentOS Executor Agent #123",
   "role": "EXECUTOR_AGENT",
   "description": "Executes an Owner Intent through EIP-7702 Hard Guardrails.",
   "agentPackageHash": "0x...",

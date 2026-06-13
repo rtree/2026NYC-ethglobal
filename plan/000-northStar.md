@@ -60,25 +60,7 @@ Intent
        Hard Guardrails:
          EIP-7702 ExecutionContract
        Optional Semantic Guardrails:
-         Watcher Agent Agent NFTs
-```
-
-なお、Executor AgentもWatcher AgentいずれもSessionKeyとしていわゆるWalletを保有しますが、資金は一切保有しません。資金は常に Owner のアドレスに残り、OwnerのSelf Custodyは失われません。また、Gas代もOwnerのEOAのdelegated contract内部にあるExecutionGasVaultから供給されます。
-
-ここでAI Agentは2つ登場します。いずれも、Owner配下のEIP-7702のdelegated contractへのアクセス権の証明と、構築されたAI Agentの実行環境へのアクセス権の権利の象徴として、NFT(ERC-8004 / ERC-721)もmintされます。
-
-- **Executor Agent** は Owner の Intent を実現するための Agentです。OpenClaw Runtime 上で動き、EIP-7702 ExecutionContract に ExecutionRequest を出します。
-- **Watcher Agent** は Owner が Executor Agent とは別に準備する監視用のAgentです。Executor Agentの実行結果や外部の状況変化の情報を収集し、必要なら将来の実行範囲を締めためにExecutionContract内部のガードレール定義をよりRestrictiveな方向に修正します。
-
-```text
-Intent
-  -> AI Agent NFT
-  -> OpenClaw Runtime
-  -> Guarded Execution
-       Hard Guardrails:
-         EIP-7702 ExecutionContract
-       Optional Semantic Guardrails:
-         Watcher Agent Agent NFTs
+         Watcher Agent NFTs
 ```
 
 なお、Executor AgentもWatcher AgentいずれもSessionKeyとしていわゆるWalletを保有しますが、資金は一切保有しません。資金は常に Owner のアドレスに残り、OwnerのSelf Custodyは失われません。また、Gas代もOwnerのEOAのdelegated contract内部にあるExecutionGasVaultから供給されます。
@@ -103,7 +85,7 @@ EIP-7702 によって、Owner の EOA そのものに「契約コード」を後
 ② IntentOS adapter      : quote/simulate して typed ExecutionRequest を組む
 ③ SessionKey(KMS)       : その ExecutionRequest の digest を「署名するだけ」
                            └─ 資金を動かせない鍵。保有が0 ETH のまま。送信もしない
-④ Replayer              : Platform(IntentOS提供者である我々)が準備する。署名とrequestをExecution Contractに代理送信（一時的にgas代を立替払い）
+④ Relayer               : Platform(IntentOS提供者である我々)が準備する。署名とrequestをExecution Contractに代理送信（一時的にgas代を立替払い）
 ⑤ ExecutionContract     : 署名と request を Hard Guardrails と照合 → 内側なら execute / 外側なら revert
 ```
 
@@ -234,8 +216,8 @@ Intent
   - Owner の delegated account 内 ExecutionGasVault に fund を入れる
 
 - Watcher Agent creation
-  - Owner は必要なら Executor Agent Agent Package を IntentBuilder に渡す
-  - IntentBuilder が監視専用の Watcher Agent Agent Package を生成する
+  - Owner は必要なら Executor Agent Package を IntentBuilder に渡す
+  - IntentBuilder が監視専用の Watcher Agent Package を生成する
   - Owner は Watcher Agent package が参照する Executor Agent tokenId / intentId / package hash / guardrail hash を確認する
   - Watcher Agent NFT を mint する
   - `watcher-<tokenId>.intentos.base.eth` を作る
@@ -619,7 +601,7 @@ Owner は Hard Guardrails だけで始めてもよい。
 高額・長期・複雑な intent では Watcher Agent quorum を重ねられる。
 
 Watcher Agent は、Owner が IntentBuilder で生成する Watcher Agent NFT として mint される。
-IntentBuilder は、先に固定された Executor Agent Agent Package を参照し、監視専用の Watcher Agent Agent Package を作る。
+IntentBuilder は、先に固定された Executor Agent Package を参照し、監視専用の Watcher Agent Package を作る。
 Watcher Agent package は `watchedExecutorTokenId`、`watchedIntentId`、`executorPackageHash`、`hardGuardrailsHash`、`semanticGuardrailsHash` を immutable context として持つ。
 
 Watcher Agent は third-party auditor marketplace ではない。
@@ -788,7 +770,7 @@ Agent identity setup:
 {
   "schema": "erc8004-agent-registration",
   "schemaVersion": "0.1",
-  "name": "IntentOS ExecutorAI #123",
+  "name": "IntentOS Executor Agent #123",
   "role": "EXECUTOR_AGENT",
   "description": "Executes an Owner Intent through EIP-7702 Hard Guardrails.",
   "agentPackageHash": "0x...",
