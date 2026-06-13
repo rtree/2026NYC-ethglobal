@@ -70,12 +70,15 @@ context and prevents the failure modes below.
 ## Task Board
 
 ### Done
-- North Star sections 0-6 + Agent NFT Model written (Japanese).
+- North Star sections 0-6 + Agent NFT Model written (Japanese), cleanup pass applied.
 - MVP scope fixed to B (Executor + single Watcher, quorum=1, USDC<->WETH, Base mainnet + Cloud Run).
 - English mirror `plan/000-northStar-en.md` created.
+- **Seam Freeze** -> `plan/010-interfaces.md` (English): types, EvidenceCommitted, manifest, intentos.*
+  tools, RuntimeRecord/Binding, guardrail enforce order, terminal states, screen list.
+- **Mocks** -> `mock/` (English): design system (`styles.css`), `index.html` hub, `README.md`, and
+  11 screens `010-110`. Validated in browser: 0 console errors, all internal links resolve,
+  responsive grid OK.
 
 ### Next
-1. **Seam Freeze** -> `plan/010-interfaces.md` (English).
-   Result states, EvidenceCommitted fields, manifest.json, intentos.* tools, RuntimeRecord, screen list.
-2. **Mocks** (per screen, English), starting from North Star section 2.
-3. **SDD** (per component, English): contract -> runtime / relayer -> frontend, B-scope vertical slice.
+1. **SDD** (per component, English): contract -> runtime / relayer -> frontend, B-scope vertical slice.
+   Anchor each component to its `010-interfaces.md` section + the matching `mock/` screen.
