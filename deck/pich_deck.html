@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IntentOS Pitch Deck</title>
+    <style>
+        :root {
+            /* Same color rules as pitch.pdf: light base + mint=alignment/safe, blue=tech, coral=risk */
+            --bg-color: #EAEEF7;   /* light blue-gray background */
+            --card-bg: #FFFFFF;    /* white cards */
+            --text-color: #0F1626; /* near-black navy text */
+            --text-muted: #5C6678; /* muted slate */
+            --primary: #10B981;    /* mint = alignment / safe */
+            --secondary: #2563EB;  /* blue = tech (highlights/accents) */
+            --accent: #2563EB;     /* blue = tech */
+            --danger: #EF5B43;     /* coral = risk */
+            --line: #D5DCEA;
+            --line2: #C3CDE0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .deck-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 60px 80px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+            background-color: var(--bg-color);
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Header */
+        .slide-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--line2);
+            padding-bottom: 20px;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: var(--primary);
+        }
+
+        .logo span {
+            color: var(--text-color);
+        }
+
+        .slide-tag {
+            font-size: 0.9rem;
+            background-color: #FFFFFF;
+            border: 1px solid var(--line2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            color: var(--text-muted);
+        }
+
+        /* Content Base */
+        .slide-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-top: 30px;
+            margin-bottom: 40px;
+            line-height: 1.2;
+        }
+
+        .slide-title span {
+            color: var(--primary);
+        }
+
+        .slide-body {
+            flex-grow: 1;
+            display: grid;
+            gap: 40px;
+        }
+
+        /* Slide 1 Layout */
+        .grid-2col {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            border: 1px solid var(--line2);
+        }
+
+        .card-danger {
+            border-left: 5px solid var(--danger);
+        }
+
+        .card-success {
+            border-left: 5px solid var(--primary);
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-danger h3 { color: var(--danger); }
+        .card-success h3 { color: var(--primary); }
+
+        ul {
+            list-style: none;
+        }
+
+        li {
+            margin-bottom: 15px;
+            line-height: 1.6;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--text-muted);
+        }
+
+        .card-success li::before {
+            color: var(--primary);
+            content: "✓";
+        }
+
+        .highlight {
+            font-weight: bold;
+            color: var(--secondary);
+        }
+
+        /* Danger-card highlights use coral (risk) */
+        .card-danger .highlight {
+            color: var(--danger);
+        }
+
+        .footer-message {
+            margin-top: 30px;
+            background: linear-gradient(90deg, rgba(16,185,129,0.12) 0%, rgba(37,99,235,0.12) 100%);
+            border: 1px solid rgba(16,185,129,0.35);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        /* Slide 2 Layout: Table & Flow */
+        .grid-3col {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .architecture-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .layer-num {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+        }
+
+        .flow-container {
+            margin-top: 20px;
+            background-color: #E1E7F2;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px dashed var(--line2);
+        }
+
+        .flow-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: var(--secondary);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .flow-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .step {
+            background-color: var(--card-bg);
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--line2);
+            text-align: center;
+            flex-grow: 1;
+            margin: 0 5px;
+        }
+
+        .step-arrow {
+            color: var(--text-muted);
+            font-weight: bold;
+        }
+
+        /* Footer / Controls */
+        .slide-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 30px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background-color: #FFFFFF;
+            color: var(--text-color);
+            border: 1px solid var(--line2);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background-color: #DCE3F0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="deck-container">
+
+    <div class="slide active" id="slide-1">
+        <div class="slide-header">
+            <div class="logo">Intent<span>OS</span></div>
+            <div class="slide-tag">01 / PROBLEM & SOLUTION</div>
+        </div>
+        
+        <h2 class="slide-title">Solving the <span>core risks</span> of AI-agent trading</h2>
+        
+        <div class="slide-body grid-2col">
+            <div class="card card-danger">
+                <h3>⚠️ The Problem</h3>
+                <ul>
+                    <li><span class="highlight">Manual approval doesn't scale:</span> on-chain opportunities fire 24/7, but waking up to approve every action means missing them.</li>
+                    <li><span class="highlight">Handing over the keys is terrifying:</span> give an agent your funds directly and a bug, a hack, or "a wrong intent optimized perfectly" can wipe you out.</li>
+                    <li><span class="highlight">The infra wall:</span> safely building an isolated runtime — and depositing funds and keys into it — is extremely hard to get right.</li>
+                </ul>
+            </div>
+            
+            <div class="card card-success">
+                <h3>🚀 The Solution</h3>
+                <ul>
+                    <li><span class="highlight">True self-custody via EIP-7702:</span> funds never leave your wallet — they stay in your own EOA while the agent trades within bounds.</li>
+                    <li><span class="highlight">Mechanical × semantic guardrails:</span> the contract (Hard) rejects invalid trades, while a separate Watcher agent reads market context and auto-tightens the limits.</li>
+                    <li><span class="highlight">Agents as NFTs (ERC-721/8004):</span> intent and execution identity are encapsulated as an NFT — the foundation of an autonomous agent economy.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer-message">
+            💡 Core idea: you don't have to fear a malicious or buggy AI — by design, it structurally cannot act outside the boundary the owner drew.
+        </div>
+        
+        <div class="slide-footer">
+            <div>© 2026 IntentOS Project</div>
+            <div class="controls">
+                <button class="btn" onclick="nextSlide()">NEXT →</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="slide" id="slide-2">
+        <div class="slide-header">
+            <div class="logo">Intent<span>OS</span></div>
+            <div class="slide-tag">02 / ARCHITECTURE</div>
+        </div>
+        
+        <h2 class="slide-title">Robustness through EIP-7702 × <span>role separation (Executor / Watcher)</span></h2>
+        
+        <div class="slide-body">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                <div class="card architecture-card">
+                    <div>
+                        <div class="layer-num">Layer 01 / Intelligence</div>
+                        <h4 style="color: var(--accent); margin-bottom: 15px;">🧠 Executor Agent</h4>
+                        <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-muted);">
+                            Reasons about trading strategy in an isolated runtime (Cloud Run). It only signs execution requests with a GCP KMS session key — it <span class="highlight">never holds funds</span>.
+                        </p>
+                    </div>
+                </div>
+                <div class="card architecture-card">
+                    <div>
+                        <div class="layer-num">Layer 02 / Authority</div>
+                        <h4 style="color: var(--primary); margin-bottom: 15px;">⚡ EIP-7702 Contract</h4>
+                        <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-muted);">
+                            Execution code delegated onto the owner's EOA. It enforces <span class="highlight">Hard Guardrails</span> on-chain and instantly reverts any request outside the preset limits.
+                        </p>
+                    </div>
+                </div>
+                <div class="card architecture-card">
+                    <div>
+                        <div class="layer-num">Layer 03 / Monitoring</div>
+                        <h4 style="color: var(--secondary); margin-bottom: 15px;">👁️ Watcher Agent</h4>
+                        <p style="font-size: 0.9rem; line-height: 1.5; color: var(--text-muted);">
+                            Continuously monitors the market and execution logs. A <span class="highlight">one-way governance</span> design: on anomalies it can only tighten or freeze the limits — never loosen them.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-container">
+                <div class="flow-title">🔄 From human intent to secure autonomous execution</div>
+                <div class="flow-steps">
+                    <div class="step">① Human Intent<br><span style="color:var(--text-muted); font-size:0.75rem;">LLM resolves ambiguity</span></div>
+                    <div class="step-arrow">➔</div>
+                    <div class="step">② Agent Package<br><span style="color:var(--text-muted); font-size:0.75rem;">Rules compiled to code</span></div>
+                    <div class="step-arrow">➔</div>
+                    <div class="step">③ Agent NFT<br><span style="color:var(--text-muted); font-size:0.75rem;">Mint (ERC-721/8004)</span></div>
+                    <div class="step-arrow">➔</div>
+                    <div class="step">④ Runtime spin-up<br><span style="color:var(--text-muted); font-size:0.75rem;">Cloud Run + KMS Key</span></div>
+                    <div class="step-arrow">➔</div>
+                    <div class="step">⑤ Guarded Execution<br><span style="color:var(--text-muted); font-size:0.75rem;">Hard / Semantic Guard</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-message">
+            🔒 Final authority over moving funds stays with the contract, not the LLM. Even if the upper layer (AI) is compromised, the lower layer (EIP-7702 Guardrails) protects the funds.
+        </div>
+
+        <div class="slide-footer">
+            <div>© 2026 IntentOS Project</div>
+            <div class="controls">
+                <button class="btn" onclick="prevSlide()">← PREV</button>
+                <button class="btn" onclick="nextSlide()">NEXT →</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let currentSlide = 1;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+
+    function showSlide(n) {
+        // wrap-around
+        if (n > totalSlides) currentSlide = 1;
+        else if (n < 1) currentSlide = totalSlides;
+        else currentSlide = n;
+
+        slides.forEach((slide) => slide.classList.remove('active'));
+        const target = document.getElementById('slide-' + currentSlide);
+        if (target) target.classList.add('active');
+    }
+
+    function nextSlide() {
+        showSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+        showSlide(currentSlide - 1);
+    }
+
+    // Keyboard navigation (Left / Right, Space)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') {
+            e.preventDefault();
+            nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            prevSlide();
+        }
+    });
+
+    // Initial render
+    showSlide(1);
+</script>
+
+</body>
+</html>
