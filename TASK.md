@@ -190,3 +190,75 @@ Star (Runtime/Relayer are server-side; the browser only views + triggers).
 
 Safety reminders for M4: tiny amounts only (~0.001 USDC); bounded actions (no loops/spam); keys only
 in KMS/Secret Manager; Basic auth in front; never log secrets.
+
+---
+
+## M5 — UX overhaul (live-demo redesign) — REGISTERED MEMO TO FUTURE SELF
+
+Context-saving note: this section is the **source of truth for the redesign** decided in the M5
+working session, so we can free the chat context and still resume. After M5 ships, **back-port the
+shaded decisions into `plan/000-northStar.md` (JP, source of truth), `plan/000-northStar-en.md`, and
+the SDD (`020`–`050`)** — see "Back-port checklist" at the end. Until then, THIS is the spec.
+
+### Why (user feedback, 2026-06-13)
+The live demo exposed flow problems: a "running" Intent showed before the user created anything;
+the launch flow is split across many routes with broken/mock pieces; the IntentBuilder conversation
+is fully scripted; gas/start/result screens are placeholders. We are reworking the **information
+architecture** and making the launch pieces real.
+
+### New information architecture (3 authenticated destinations)
+1. **Intents** (`#/intents`) — hub. If an Intent is active this session → card links to the Live
+   Console; else → the create card on the right is the only entry. (DONE this session.)
+   - Active state is **session-scoped** (`session.executorTokenId`), NOT the permanent on-chain 7702
+     delegation. Owner EOA stays delegated forever, so `delegated` must never imply "running".
+   - One active Intent per Owner: while active, "Run a new Intent" is **disabled**; Reset first.
+2. **Launch** (`#/launch`) — **single screen, master/detail wizard** (no route hops). Left = vertical
+   step nav; right pane swaps the controls for the selected step. Bottom "Complete required cards to
+   start" stays. Steps, in order:
+   1. **Intent & Agent Packages** — the IntentBuilder conversation builds **both** the Executor and
+      the Watcher **Agent Packages** at once. Right pane shows a **dual AgentPackage preview**
+      (Executor + Watcher), each with its **AGENTS.md** (objective / tools / Hard Guardrails /
+      Semantic Guardrails / recovery) and a **FIX** button to lock that package. No agent is *minted*
+      here — this step only authors + freezes packages. No "Setup steps" list here.
+   2. **Executor Agent** — mint AgentNFT + EIP-7702 delegate + initialize HardGuardState. Agent
+      **identity (ENS `agent-<id>.intentos.base.eth` + ERC-8004 registration)** is shown/created
+      **inline here** (moved out of the standalone identity screen).
+   3. **Watcher Agent** — mint Watcher AgentNFT (bound, quorum=1). Identity inline here too. Comes
+      **right after** Executor (rename "Watcher Guard" → "Watcher Agent").
+   4. **Gas Funding** — fund executor/watcher lanes. Remove the "Skip to Start" button ("do nothing"
+      is fine, "skip" is not). Remove the separate **Runtime Preview** card entirely.
+   5. **Start Conditions** — **real settings**: AgentLoop period (e.g. one tick / Ns) and Cloud Run
+      **TTL minutes** (auto-stop after M minutes). Launch summary must show the **real** AgentPackage,
+      Guardrails, identities, vaults — not a mock.
+   - **Human Proof** (World ID) gets a real-looking screen (widget UI present; verification can stay
+     inert/dev-sim until we wire IDKit). No more blank pane after pressing it.
+3. **Live Console** (merge of `#/dashboard` + `#/watcher` + `#/result`) — one screen showing the
+   running Intent: guard, vaults, balances, shared timeline, Owner controls (trade/resume) AND Watcher
+   controls (freeze/tighten). After stop it **becomes** the Result view. Must include a **history
+   list of past Intents** so prior runs are reachable.
+
+### Open decisions (BLOCKER until user confirms — fill in when answered)
+- **D1 Data store**: where AgentPackages (pre-mint drafts), conversation transcripts, per-intent
+  metadata, and **history** live. Candidates: Firestore (GCP-native, persistent) / server in-memory +
+  on-chain timeline / SQLite. → DECISION: __TBD__.
+- **D2 IntentBuilder LLM**: real conversation → compiles to Executor+Watcher AgentPackages. Candidates:
+  Vertex AI Gemini (GCP-native, ADC, graceful fallback to scripted mock) / Anthropic|OpenAI via
+  Secret Manager key / keep mock for now. → DECISION: __TBD__.
+- **D3 Delivery cadence**: ship per-screen (intents → launch → console) vs one big reveal.
+  → DECISION: __TBD__.
+
+### Done in this session
+- Intent List (`#/intents`): session-scoped active state; empty-state has no stray button (entry
+  moved into the right card); "Run a new Intent" disabled while an Intent is live; Reset kept.
+- Wallet connect: EIP-6963 connector **picker** (pick MetaMask), surfaces connect errors.
+
+### Back-port checklist (do AFTER M5 ships; frees context now)
+- North Star §2 screen list → replace the 11-screen enumeration with the 3-destination IA above.
+- North Star: note that "active/running" is session/agent-scoped, not 7702-delegation-scoped.
+- SDD `050-sdd-frontend.md`: rewrite routes/data-sources for the master/detail Launch + Live Console.
+- SDD `040-sdd-runtime.md`: add the data store (D1) + IntentBuilder LLM (D2) + Start config
+  (loop period, Cloud Run TTL) to the runtime/server design.
+- SDD `020-sdd-overview.md`: update the end-to-end sequence for the merged Console + history.
+
+Safety reminders unchanged: tiny amounts only; bounded actions; keys only in KMS/Secret Manager;
+Basic auth in front; never log secrets.

@@ -35,29 +35,38 @@ export function IntentList() {
               {state?.session.watcherTokenId && <span className="pill role-watch">Watcher #{state.session.watcherTokenId}</span>}
             </a>
           ) : (
-            <div className="card pad-lg" style={{ opacity: 0.7 }}>
+            <div className="card pad-lg" style={{ opacity: 0.75 }}>
               <div className="card-head">
                 <span className="num">none</span>
                 <span className="pill">—</span>
               </div>
               <h3>No active Intent yet</h3>
               <p className="desc">
-                You haven&apos;t created an Intent in this session. Start one in the launch flow: speak an
-                intent, mint the Executor, delegate via EIP-7702, and go live.
+                You haven&apos;t created an Intent in this session. Start one from the card on the
+                right: speak an intent, build the Executor &amp; Watcher Agent Packages, mint, delegate
+                via EIP-7702, and go live on Base mainnet.
               </p>
-              <a className="btn primary" href="#/launch">Create your first Intent →</a>
             </div>
           )}
 
-          <a className="card nav-card pad-lg" href="#/launch">
+          <div className="card pad-lg">
             <div className="card-head">
               <span className="num">new</span>
               <span className="arrow">→</span>
             </div>
             <h3>{active ? "Run a new Intent" : "Run an Intent"}</h3>
-            <p className="desc">Speak an intent, generate the Agent Package, mint the Executor, delegate via EIP-7702, fund the gas vault, and start.</p>
-            <span className="pill">IntentBuilder → mint → 7702 → start</span>
-          </a>
+            <p className="desc">Speak an intent, generate the Executor &amp; Watcher Agent Packages, mint, delegate via EIP-7702, fund the gas vault, and start.</p>
+            {active ? (
+              <>
+                <button className="btn block" disabled aria-disabled="true" title="One active Intent per Owner">
+                  One active Intent per Owner
+                </button>
+                <p className="spec-ref" style={{ marginTop: 8 }}>Reset the current Intent below to start a new one.</p>
+              </>
+            ) : (
+              <a className="btn primary block" href="#/launch">Create an Intent →</a>
+            )}
+          </div>
         </div>
         {active && (
           <div style={{ marginTop: 18 }}>
