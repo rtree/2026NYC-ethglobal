@@ -124,6 +124,10 @@
     "/^pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.tsx\\?\\\\\\(\" \\| head -30; echo \"types-exit=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^cd /home/araki/2026NYC-ethglobal && pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\\|\\\\\\.tsx\\?\\\\\\(\" \\| head; echo \"types=\\$\\{PIPESTATUS\\[0\\]\\}\"; cd app && pnpm build 2>&1 \\| tail -4; echo \"build=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }
