@@ -15,6 +15,11 @@ function artifact(name: string): { abi: unknown; bytecode: Hex } {
   return { abi: j.abi, bytecode: j.bytecode.object as Hex };
 }
 
+function deployedAddress(receipt: { status: "success" | "reverted"; contractAddress: Address | null }, what: string): Address {
+  if (receipt.status !== "success" || !receipt.contractAddress) throw new Error(`${what} deployment failed`);
+  return receipt.contractAddress;
+}
+
 export async function deployContracts(
   wallet: WalletClient,
   pub: PublicClient,
@@ -29,7 +34,7 @@ export async function deployContracts(
     account: deployer,
     chain: wallet.chain,
   });
-  const delegateImpl = (await pub.waitForTransactionReceipt({ hash: h1 })).contractAddress as Address;
+  const delegateImpl = deployedAddress(await pub.waitForTransactionReceipt({ hash: h1 }), "ExecutionDelegate7702");
 
   const h2 = await wallet.deployContract({
     abi: AgentNFTAbi as never,
@@ -38,7 +43,7 @@ export async function deployContracts(
     chain: wallet.chain,
     args: [],
   });
-  const agentNft = (await pub.waitForTransactionReceipt({ hash: h2 })).contractAddress as Address;
+  const agentNft = deployedAddress(await pub.waitForTransactionReceipt({ hash: h2 }), "AgentNFT");
 
   return { delegateImpl, agentNft };
 }

@@ -140,6 +140,10 @@
     "/^pnpm --filter @intentos/server typecheck 2>&1 \\| grep -E \"error TS\" \\| head; echo \"srv=\\$\\{PIPESTATUS\\[0\\]\\}\"; pnpm --filter @intentos/app typecheck 2>&1 \\| grep -E \"error TS\" \\| head; echo \"app=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^cd /home/araki/2026NYC-ethglobal && pnpm --filter @intentos/runtime build 2>&1 \\| tail -2; echo \"rt=\\$\\{PIPESTATUS\\[0\\]\\}\"; pnpm --filter @intentos/server typecheck 2>&1 \\| grep -E \"error TS\" \\| head; echo \"srv=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }

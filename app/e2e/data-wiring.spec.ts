@@ -81,7 +81,7 @@ const ACTIVE_INTENT = {
       packageHash: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     },
   },
-  startConfig: { loopPeriodSec: 17, ttlMinutes: 23, watcherEnabled: true },
+  startConfig: { loopPeriodSec: 17, ttlMinutes: 5, watcherEnabled: true },
   transcript: [{ role: "owner", text: "API transcript", at: 1_765_000_000_000 }],
 };
 

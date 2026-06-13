@@ -8,6 +8,10 @@ import { ExecutionDelegate7702Abi, type HardGuardState } from "@intentos/shared"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const abi = ExecutionDelegate7702Abi as any;
 
+function assertTxSuccess(status: "success" | "reverted", what: string, hash: Hex) {
+  if (status !== "success") throw new Error(`${what} reverted on-chain (tx ${hash})`);
+}
+
 export interface InitParams {
   guard: HardGuardState;
   sessionKey: Address;
@@ -58,7 +62,8 @@ export async function delegateAndInitialize(
     authorizationList: [authorization],
     chain: wallet.chain,
   });
-  await pub.waitForTransactionReceipt({ hash });
+  const rcpt = await pub.waitForTransactionReceipt({ hash });
+  assertTxSuccess(rcpt.status, "delegate and initialize", hash);
   return hash;
 }
 
@@ -77,6 +82,7 @@ export async function fundGasVault(
     data,
     chain: wallet.chain,
   });
-  await pub.waitForTransactionReceipt({ hash });
+  const rcpt = await pub.waitForTransactionReceipt({ hash });
+  assertTxSuccess(rcpt.status, "fund gas vault", hash);
   return hash;
 }

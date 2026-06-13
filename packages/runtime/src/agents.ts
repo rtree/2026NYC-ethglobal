@@ -34,6 +34,10 @@ function tokenIdFromLogs(logs: readonly { data: Hex; topics: readonly Hex[] }[],
   throw new Error(`mint: ${event} not found in logs`);
 }
 
+function assertTxSuccess(status: "success" | "reverted", what: string, hash: Hex) {
+  if (status !== "success") throw new Error(`${what} reverted on-chain (tx ${hash})`);
+}
+
 export async function mintExecutorNft(
   wallet: WalletClient,
   pub: PublicClient,
@@ -55,6 +59,7 @@ export async function mintExecutorNft(
     chain: wallet.chain,
   });
   const rcpt = await pub.waitForTransactionReceipt({ hash });
+  assertTxSuccess(rcpt.status, "mint executor", hash);
   return { tokenId: tokenIdFromLogs(rcpt.logs as never, "ExecutorMinted"), txHash: hash };
 }
 
@@ -96,6 +101,7 @@ export async function mintWatcherNft(
     chain: wallet.chain,
   });
   const rcpt = await pub.waitForTransactionReceipt({ hash });
+  assertTxSuccess(rcpt.status, "mint watcher", hash);
   return { tokenId: tokenIdFromLogs(rcpt.logs as never, "WatcherMinted"), txHash: hash };
 }
 
@@ -110,7 +116,8 @@ export async function ownerUpdateGuard(
 ): Promise<Hex> {
   const data = encodeFunctionData({ abi: delAbi, functionName: "ownerUpdateGuard", args: [newGuard] });
   const hash = await wallet.sendTransaction({ account: owner, to: owner.address, data, chain: wallet.chain });
-  await pub.waitForTransactionReceipt({ hash });
+  const rcpt = await pub.waitForTransactionReceipt({ hash });
+  assertTxSuccess(rcpt.status, "owner update guard", hash);
   return hash;
 }
 

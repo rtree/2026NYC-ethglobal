@@ -5,6 +5,34 @@ import { ExecutionDelegate7702Abi, type ExecutionRequest, type GuardPatch } from
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const abi = ExecutionDelegate7702Abi as any;
 
+/** Thrown when a relayed tx is mined but REVERTED. Carries the hash so the UI can link to it. */
+export class TxRevertedError extends Error {
+  constructor(public readonly txHash: Hex, what: string) {
+    super(`${what} reverted on-chain (tx ${txHash})`);
+    this.name = "TxRevertedError";
+  }
+}
+
+async function submitAndConfirm(
+  wallet: WalletClient,
+  pub: PublicClient,
+  what: string,
+  args: { address: Address; functionName: string; args: unknown[]; account: Account | Address },
+): Promise<Hex> {
+  const hash = await wallet.writeContract({
+    address: args.address,
+    abi,
+    functionName: args.functionName,
+    args: args.args,
+    account: args.account,
+    chain: wallet.chain,
+  });
+  const receipt = await pub.waitForTransactionReceipt({ hash });
+  // CRITICAL: a mined tx can still have reverted. Surface it instead of reporting false success.
+  if (receipt.status !== "success") throw new TxRevertedError(hash, what);
+  return hash;
+}
+
 export async function relaySubmitExecution(
   wallet: WalletClient,
   pub: PublicClient,
@@ -14,16 +42,12 @@ export async function relaySubmitExecution(
   sig: Hex,
   account: Account | Address,
 ): Promise<Hex> {
-  const hash = await wallet.writeContract({
+  return submitAndConfirm(wallet, pub, "guarded execution", {
     address: delegate,
-    abi,
     functionName: "submitExecutionRequest",
     args: [r, reason, sig],
     account,
-    chain: wallet.chain,
   });
-  await pub.waitForTransactionReceipt({ hash });
-  return hash;
 }
 
 export async function relayWatcherTighten(
@@ -34,16 +58,12 @@ export async function relayWatcherTighten(
   sig: Hex,
   account: Account | Address,
 ): Promise<Hex> {
-  const hash = await wallet.writeContract({
+  return submitAndConfirm(wallet, pub, "watcher tighten", {
     address: delegate,
-    abi,
     functionName: "watcherTighten",
     args: [patch, sig],
     account,
-    chain: wallet.chain,
   });
-  await pub.waitForTransactionReceipt({ hash });
-  return hash;
 }
 
 export async function relayWatcherFreeze(
@@ -53,14 +73,10 @@ export async function relayWatcherFreeze(
   sig: Hex,
   account: Account | Address,
 ): Promise<Hex> {
-  const hash = await wallet.writeContract({
+  return submitAndConfirm(wallet, pub, "watcher freeze", {
     address: delegate,
-    abi,
     functionName: "watcherFreeze",
     args: [sig],
     account,
-    chain: wallet.chain,
   });
-  await pub.waitForTransactionReceipt({ hash });
-  return hash;
 }

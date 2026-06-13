@@ -76,7 +76,7 @@ test.beforeEach(async ({ page }) => {
     executorTokenId: null,
     watcherTokenId: null,
     packages: { executor: draftPkg("EXECUTOR"), watcher: draftPkg("WATCHER") },
-    startConfig: { loopPeriodSec: 5, ttlMinutes: 10, watcherEnabled: true },
+    startConfig: { loopPeriodSec: 10, ttlMinutes: 1, watcherEnabled: true },
     transcript: [],
   };
   await page.route("**/api/intents", (route) => route.fulfill({ json: { intents: [] } }));
@@ -88,7 +88,7 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ json: { intentId: "intent-test", role: "EXECUTOR", packageHash: "0xabc123", packages: INTENT_FIXTURE.packages } }),
   );
   await page.route("**/api/intent/start-config", (route) =>
-    route.fulfill({ json: { intentId: "intent-test", startConfig: { loopPeriodSec: 7, ttlMinutes: 15, watcherEnabled: true } } }),
+    route.fulfill({ json: { intentId: "intent-test", startConfig: { loopPeriodSec: 10, ttlMinutes: 1, watcherEnabled: true } } }),
   );
 });
 

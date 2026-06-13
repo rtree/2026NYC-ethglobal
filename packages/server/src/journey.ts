@@ -42,6 +42,7 @@ import {
   quoteExactInputSingle,
   relaySubmitExecution,
   signExecutionRequest,
+  TxRevertedError,
   voteFreeze,
   voteTighten,
 } from "@intentos/runtime";
@@ -397,33 +398,53 @@ export async function trade(opts?: CreateOpts) {
   // Use the caller's FIXed Executor guard (not a demo fallback) when available, and bind the request
   // to this intent's id so the on-chain evidence references the real intent (not a hardcoded one).
   await ensureSetup(executor, executor?.packageHash);
-  const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
-  const quoted = await quoteExactInputSingle(c.pub, TOKENS.USDC, TOKENS.WETH, AMOUNT_IN);
-  const reason = `BUY 0.001 USDC->WETH (Executor #${session.executorTokenId ?? "?"})`.slice(0, 200);
-  const req = buildExecutionRequest({
-    intentId: intentIdHash(slug),
-    executorTokenId: BigInt(session.executorTokenId ?? "1"),
-    action: Action.BUY,
-    tokenIn: TOKENS.USDC,
-    tokenOut: TOKENS.WETH,
-    recipient: c.delegate,
-    amountIn: AMOUNT_IN,
-    quotedAmountOut: quoted,
-    slippageBps: 250,
-    nonce: BigInt(Date.now()),
-    deadline: BigInt(Math.floor(Date.now() / 1000) + 600),
-    bindingNonce: guard.bindingNonce,
-    reason,
-  });
-  const pre = await previewGuard(c.pub, c.delegate, req);
-  if (!pre.ok) {
-    logAction({ at: Date.now(), action: "trade rejected by Hard Guardrails", ok: false, detail: pre.reason });
-    return { ok: false, reason: pre.reason };
+
+  // A tiny 0.001 USDC->WETH swap is slippage-fragile: the QuoterV2 quote can drift before the tx mines
+  // (same-block price movement), so a 2.5% bound reverts intermittently. Re-quote fresh each attempt and
+  // use the guard's MAX allowed slippage; retry once on a revert. On final failure, return an honest
+  // {ok:false} with the reverted tx hash (do NOT report false success).
+  let lastTx: Hex | undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
+    if (guard.frozen) return { ok: false, reason: "guard is frozen — resume first" };
+    const quoted = await quoteExactInputSingle(c.pub, TOKENS.USDC, TOKENS.WETH, AMOUNT_IN);
+    const reason = `BUY 0.001 USDC->WETH (Executor #${session.executorTokenId ?? "?"})`.slice(0, 200);
+    const req = buildExecutionRequest({
+      intentId: intentIdHash(slug),
+      executorTokenId: BigInt(session.executorTokenId ?? "1"),
+      action: Action.BUY,
+      tokenIn: TOKENS.USDC,
+      tokenOut: TOKENS.WETH,
+      recipient: c.delegate,
+      amountIn: AMOUNT_IN,
+      quotedAmountOut: quoted,
+      slippageBps: guard.slippageCapBps, // use the full allowed band for the tiny swap
+      nonce: BigInt(Date.now()) + BigInt(attempt),
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 600),
+      bindingNonce: guard.bindingNonce,
+      reason,
+    });
+    const pre = await previewGuard(c.pub, c.delegate, req);
+    if (!pre.ok) {
+      logAction({ at: Date.now(), action: "trade rejected by Hard Guardrails", ok: false, detail: pre.reason });
+      return { ok: false, reason: pre.reason };
+    }
+    const sig = await signExecutionRequest(c.delegate, req);
+    try {
+      const txHash = await relaySubmitExecution(c.wallet, c.pub, c.delegate, req, reason, sig, c.platform);
+      logAction({ at: Date.now(), action: "guarded trade executed (USDC->WETH)", txHash, ok: true });
+      return { ok: true, txHash };
+    } catch (e) {
+      if (e instanceof TxRevertedError) {
+        lastTx = e.txHash;
+        if (attempt === 0) continue; // re-quote and retry once
+        logAction({ at: Date.now(), action: "guarded trade reverted (likely slippage)", txHash: e.txHash, ok: false });
+        return { ok: false, reason: "trade reverted on-chain (likely slippage on the tiny swap) — try again", txHash: e.txHash };
+      }
+      throw e;
+    }
   }
-  const sig = await signExecutionRequest(c.delegate, req);
-  const txHash = await relaySubmitExecution(c.wallet, c.pub, c.delegate, req, reason, sig, c.platform);
-  logAction({ at: Date.now(), action: "guarded trade executed (USDC->WETH)", txHash, ok: true });
-  return { ok: true, txHash };
+  return { ok: false, reason: "trade failed", txHash: lastTx };
 }
 
 export async function watcherFreeze() {

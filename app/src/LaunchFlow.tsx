@@ -243,7 +243,12 @@ function ExecutorStep({ state, fixed, pkg, intentId }: { state: ChainState | nul
         <div className="card-head"><h3>Create Executor Agent</h3><span className="pill role-exec">EXECUTOR</span></div>
         <p className="desc">Mint the AgentNFT, delegate the Owner EOA via EIP-7702, and initialize the Hard Guardrails from the fixed package. One real transaction.</p>
         {!fixed && <div className="note">FIX the Executor package in step ① first.</div>}
-        <ActionButton label="Create Executor (mint + EIP-7702 + initialize)" className="btn primary block" run={() => api.createExecutor(intentId)} disabled={!fixed} />
+        <ActionButton
+          label={execId ? `Executor minted #${execId}` : "Create Executor (mint + EIP-7702 + initialize)"}
+          className="btn primary block"
+          run={() => api.createExecutor(intentId)}
+          disabled={!fixed || !!execId}
+        />
         <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
       </div>
       <div className="card pad-lg">
@@ -271,7 +276,12 @@ function WatcherStep({ state, fixed, hasExecutor, pkg, intentId }: { state: Chai
         <p className="desc">Mint the Watcher AgentNFT bound to the Executor. It can only tighten / freeze — never loosen, never move funds.</p>
         {!hasExecutor && <div className="note">Create the Executor Agent (step ②) first.</div>}
         {hasExecutor && !fixed && <div className="note">FIX the Watcher package in step ① first.</div>}
-        <ActionButton label="Create Watcher (mint + bind, quorum 1)" className="btn block" run={() => api.createWatcher(intentId)} disabled={!hasExecutor || !fixed} />
+        <ActionButton
+          label={watchId ? `Watcher minted #${watchId}` : "Create Watcher (mint + bind, quorum 1)"}
+          className="btn block"
+          run={() => api.createWatcher(intentId)}
+          disabled={!hasExecutor || !fixed || !!watchId}
+        />
         <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
       </div>
       <div className="card pad-lg">
@@ -318,7 +328,7 @@ function FundingStep({ state, intentId }: { state: ChainState | null; intentId?:
 
 // ---------- ⑤ Start Conditions ----------
 function StartStep({ state, intent, setIntent }: { state: ChainState | null; intent: IntentDoc | null; setIntent: (d: IntentDoc) => void }) {
-  const cfg = intent?.startConfig ?? { loopPeriodSec: 5, ttlMinutes: 10, watcherEnabled: true };
+  const cfg = intent?.startConfig ?? { loopPeriodSec: 10, ttlMinutes: 1, watcherEnabled: true };
   const [loop, setLoop] = useState(cfg.loopPeriodSec);
   const [ttl, setTtl] = useState(cfg.ttlMinutes);
   const [saved, setSaved] = useState(false);
@@ -351,12 +361,12 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
       <div className="card pad-lg">
         <div className="card-head"><h3>Start conditions</h3><span className="pill">bounded</span></div>
         <label className="field"><span>AgentLoop period (seconds)</span>
-          <input className="input" type="number" min={2} max={60} value={loop} onChange={(e) => setLoop(Number(e.target.value))} />
+          <input className="input" type="number" min={5} max={60} value={loop} onChange={(e) => setLoop(Number(e.target.value))} />
         </label>
         <label className="field" style={{ marginTop: 12 }}><span>Auto-stop after (minutes) — Cloud Run TTL</span>
-          <input className="input" type="number" min={1} max={60} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} />
+          <input className="input" type="number" min={1} max={5} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} />
         </label>
-        <p className="spec-ref" style={{ marginTop: 10 }}>The runtime is bounded: one tick per {loop}s, hard stop after {ttl} min. No infinite loops.</p>
+        <p className="spec-ref" style={{ marginTop: 10 }}>The runtime is bounded: one tick per {loop}s (min 5s), hard stop after {ttl} min (max 5m). No infinite loops.</p>
         <button className="btn primary block" style={{ marginTop: 12 }} onClick={save}>{saved ? "Saved ✓" : "Save start conditions"}</button>
         {err && <p className="pill fund-exhausted" style={{ marginTop: 8 }}>{err.slice(0, 80)}</p>}
       </div>
