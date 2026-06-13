@@ -197,17 +197,12 @@ Intent
 
 ## 2. Agent NFT Model
 
-IntentOS では、ExecutorAI と WatcherAI はどちらも ERC721 / ERC8004-compatible な Agent NFT として存在します。
+IntentOS では、Executor Agent と Watcher Agent はどちらも ERC721 / ERC-8004-compatible な Agent NFT として存在します。
 
-Agent NFT は Agent の identity、Runtime usage right を代表するものです。このため、transfer 可能です。 Transfer で移転するのは Agent identity と Runtime usage right であり、Owner の fund custody ではない。 Runtime Binding は non-transferable である。 Runtime は NFT と一緒に移転するのではなく、新 owner が新しい Runtime Binding を作る。
-
-Agent NFT は transfer 可能である。 Transfer で移転するのは Agent identity と Runtime usage right であり、Owner の fund custody ではない。 Runtime Binding は non-transferable である。 Runtime は NFT と一緒に移転するのではなく、新 owner が新しい Runtime Binding を作る。
-
-Transfer は old Runtime を同期的に停止できなくてもよい。 Transfer された瞬間に old Runtime Binding が構造的に意味を失うためである。 authority-bearing な操作はすべて ownerOf(tokenId) == runtimeOwner を要求する。 Transfer 後の old Runtime は、実行 request、gas reimbursement、watcher vote などの意味ある操作を通せない。 old Runtime は次の stop check で self-stop する。
-
-Agent NFT の tokenURI は ERC-8004-compatible な Agent Registration JSON を指す。 この registration は、Agent の role、capability、Agent Package、Runtime、evidence、IntentOS への導線を外部から発見できる形で公開する。 Reputation Registry / Validation Registry は後から接続できるようにし、まずは Agent Identity registration を成立させる。
-
-Agent ENS / Basename は、Agent NFT mint 後、Runtime Binding 作成前に付与する。 tokenId が確定してから agent-<tokenId>.intentos.base.eth または watcher-<tokenId>.intentos.base.eth を作り、ENSIP-26 text records と ERC-8004 registration を結ぶ。 Runtime や gas funding より前に名前が付くことで、Runtime、evidence、dashboard、WatcherAI が同じ恒久名を参照できる。
+- Agent NFT が表すのは、Agent の identity と Runtime usage right です。これは transfer 可能です。ただし transfer で移るのは identity と usage right だけで、Owner の fund custody は移りません。
+- Runtime Binding は non-transferable です。Runtime は NFT と一緒には移らず、新しい owner が自分で新しい Runtime Binding を作ります。このとき old Runtime を同期的に止める必要はありません。transfer された瞬間に old Runtime Binding が構造的に意味を失うからです。authority-bearing な操作はすべて ownerOf(tokenId) == runtimeOwner を要求するので、transfer 後の old Runtime は実行 request・gas reimbursement・watcher vote のどれも通せず、次の stop check で self-stop します。
+- Agent NFT の tokenURI は、ERC-8004-compatible な Agent Registration JSON を指します。この registration は Agent の role・capability・Agent Package・Runtime・evidence・IntentOS への導線を、外部から発見できる形で公開します。Reputation Registry / Validation Registry は後から接続できるようにしておき、まずは Agent identity の registration を成立させます。
+- Agent の ENS / Basename は、NFT を mint した後、Runtime Binding を作る前に付与します。tokenId が確定してから agent-<tokenId>.intentos.base.eth または watcher-<tokenId>.intentos.base.eth を作り、ENSIP-26 text records と ERC-8004 registration を結びます。Runtime や gas funding より先に名前が付くことで、Runtime・evidence・dashboard・Watcher Agent が同じ恒久名を参照できます。
 
 ```
 Agent identity setup:
@@ -225,7 +220,7 @@ Agent identity setup:
   "schema": "erc8004-agent-registration",
   "schemaVersion": "0.1",
   "name": "IntentOS ExecutorAI #123",
-  "role": "EXECUTOR",
+  "role": "EXECUTOR_AGENT",
   "description": "Executes an Owner Intent through EIP-7702 Hard Guardrails.",
   "agentPackageHash": "0x...",
   "runtimeManifestHash": "0x...",
