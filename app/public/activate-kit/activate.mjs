@@ -21662,9 +21662,14 @@ var CFG = {
   initialWatcherVault: parseEther("0.0002"),
   packageHash: keccak256(toHex("intent-abc/pkg")),
   semanticGuardHash: keccak256(toHex("intent-abc/sem")),
-  // public Base RPCs (viem fallback) — keyless, write-capable
+  // Default panel origin (this kit is downloaded from it). Its /api/rpc is a KEYLESS proxy to the
+  // server's keyed, 7702-aware providers (Alchemy first) — public Base RPCs don't reflect the pending
+  // delegation during eth_estimateGas and reject the activation tx. Override with --panel / --rpc.
+  panelUrl: "https://intentos-panel-41929375451.us-central1.run.app",
+  // public Base RPCs (viem fallback) — keyless but NOT 7702-aware for estimateGas; used only as a last resort.
   rpcs: ["https://mainnet.base.org", "https://base.publicnode.com", "https://base.drpc.org", "https://1rpc.io/base"]
 };
+var ACTIVATION_GAS = 600000n;
 var VAULT_TOTAL = CFG.initialExecVault + CFG.initialWatcherVault;
 var REQUIRED_ETH = VAULT_TOTAL + parseEther("0.0006");
 var INITIALIZE_ABI = [
@@ -21785,11 +21790,16 @@ function cleanupEnv() {
   }
 }
 function makeClients() {
-  const transport = fallback((flagVal("--rpc") ? [flagVal("--rpc")] : CFG.rpcs).map((u) => http(u, { retryCount: 3, retryDelay: 600 })));
+  const transport = fallback(rpcList().map((u) => http(u, { retryCount: 3, retryDelay: 600 })));
   return {
     pub: createPublicClient({ chain: base, transport }),
     wallet: createWalletClient({ chain: base, transport })
   };
+}
+function rpcList() {
+  if (flagVal("--rpc")) return [flagVal("--rpc")];
+  const panel = (flagVal("--panel") ?? CFG.panelUrl).replace(/\/$/, "");
+  return [`${panel}/api/rpc`, ...CFG.rpcs];
 }
 async function loadLedger() {
   warn("Ledger mode is EXPERIMENTAL and requires a recent Ledger Ethereum app that clear-signs EIP-7702.");
@@ -21890,7 +21900,25 @@ async function main() {
   info("Signing EIP-7702 authorization (delegate your EOA to the IntentOS guard)\u2026");
   const authorization = await wallet.signAuthorization({ account, contractAddress: CFG.delegateImpl, executor: "self" });
   info("Broadcasting the activation transaction (delegate + initialize, one type-4 tx)\u2026");
-  const hash3 = await wallet.sendTransaction({ account, to: address, data, authorizationList: [authorization], chain: base });
+  let maxFeePerGas, maxPriorityFeePerGas;
+  try {
+    const fees = await pub.estimateFeesPerGas();
+    maxFeePerGas = fees.maxFeePerGas;
+    maxPriorityFeePerGas = fees.maxPriorityFeePerGas;
+  } catch {
+    maxPriorityFeePerGas = 1000000n;
+    maxFeePerGas = 50000000n;
+  }
+  const hash3 = await wallet.sendTransaction({
+    account,
+    to: address,
+    data,
+    authorizationList: [authorization],
+    chain: base,
+    gas: ACTIVATION_GAS,
+    maxFeePerGas,
+    maxPriorityFeePerGas
+  });
   info(`tx: ${C.cyn}https://basescan.org/tx/${hash3}${C.reset}`);
   const rcpt = await pub.waitForTransactionReceipt({ hash: hash3 });
   if (rcpt.status !== "success") die(`activation reverted on-chain (status ${rcpt.status}). See the tx above.`);

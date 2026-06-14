@@ -29,6 +29,7 @@ import {
 import { issueNonce, siweMessage, verifyAndMint } from "./web3auth.js";
 import { requireUid, authEnabled, rateLimit } from "./authGate.js";
 import { intentChat, fixPackage, setStartConfig, listIntents, getIntentFull } from "./intent.js";
+import { proxyRpc } from "./rpcProxy.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_DIST = process.env.APP_DIST ?? resolve(HERE, "../../../app/dist");
@@ -126,19 +127,6 @@ async function main() {
       return;
     }
 
-    if (path === "/api/state" && req.method === "GET") {
-      try {
-        // Public read of on-chain account state. In connected mode the client passes ?address= so the
-        // panel reflects the visitor's OWN delegated EOA; with no address it's the shared demo Owner.
-        const a = url.searchParams.get("address") ?? "";
-        const addr = /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as `0x${string}`) : undefined;
-        json(res, 200, await getState(addr));
-      } catch (e) {
-        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
-      }
-      return;
-    }
-
     // ---- Web3 login -> Firebase custom token (plan/010 §17) ----
     if (path === "/api/auth/nonce" && req.method === "GET") {
       const address = url.searchParams.get("address") ?? "";
@@ -185,6 +173,18 @@ async function main() {
       return;
     }
 
+
+    // ---- keyless JSON-RPC proxy for the Activation Kit (public; allowlisted methods; key stays server-side) ----
+    if (path === "/api/rpc" && req.method === "POST") {
+      try {
+        const body = await readBody(req);
+        json(res, 200, await proxyRpc(body));
+      } catch (e) {
+        json(res, 400, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+
     // ---- PRODUCT mode: per-user EIP-7702 "Activate" plan (unsigned initialize params; plan/080) ----
     if (path === "/api/activate/plan" && req.method === "GET") {
       let uid: string;
@@ -197,6 +197,20 @@ async function main() {
       try {
         const addr = addressFromUid(uid) ?? undefined;
         json(res, 200, { ownerMode: ownerMode(), ...(await activatePlan(addr)) });
+      } catch (e) {
+        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+
+    // ---- public on-chain state read ----
+    if (path === "/api/state" && req.method === "GET") {
+      try {
+        // Public read of on-chain account state. In connected mode the client passes ?address= so the
+        // panel reflects the visitor's OWN delegated EOA; with no address it's the shared demo Owner.
+        const a = url.searchParams.get("address") ?? "";
+        const addr = /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as `0x${string}`) : undefined;
+        json(res, 200, await getState(addr));
       } catch (e) {
         json(res, 500, { error: e instanceof Error ? e.message : String(e) });
       }

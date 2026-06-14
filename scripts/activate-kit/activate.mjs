@@ -52,9 +52,17 @@ const CFG = {
   initialWatcherVault: parseEther("0.0002"),
   packageHash: keccak256(toHex("intent-abc/pkg")),
   semanticGuardHash: keccak256(toHex("intent-abc/sem")),
-  // public Base RPCs (viem fallback) — keyless, write-capable
+  // Default panel origin (this kit is downloaded from it). Its /api/rpc is a KEYLESS proxy to the
+  // server's keyed, 7702-aware providers (Alchemy first) — public Base RPCs don't reflect the pending
+  // delegation during eth_estimateGas and reject the activation tx. Override with --panel / --rpc.
+  panelUrl: "https://intentos-panel-41929375451.us-central1.run.app",
+  // public Base RPCs (viem fallback) — keyless but NOT 7702-aware for estimateGas; used only as a last resort.
   rpcs: ["https://mainnet.base.org", "https://base.publicnode.com", "https://base.drpc.org", "https://1rpc.io/base"],
 };
+
+// Explicit gas for the activation tx so we DON'T call eth_estimateGas (public Base RPCs estimate against
+// the pre-delegation account and revert the delegate+initialize self-call). The real cost is ~120k-200k.
+const ACTIVATION_GAS = 600000n;
 
 // Minimum ETH the EOA needs at activation: the vault reserve (exec+watcher) MUST be <= balance
 // (`initialize` reverts OVER_ALLOCATED otherwise), plus gas headroom for the type-4 tx itself.
@@ -164,11 +172,18 @@ function cleanupEnv() {
 }
 
 function makeClients() {
-  const transport = fallback((flagVal("--rpc") ? [flagVal("--rpc")] : CFG.rpcs).map((u) => http(u, { retryCount: 3, retryDelay: 600 })));
+  const transport = fallback(rpcList().map((u) => http(u, { retryCount: 3, retryDelay: 600 })));
   return {
     pub: createPublicClient({ chain: base, transport }),
     wallet: createWalletClient({ chain: base, transport }),
   };
+}
+
+/** Ordered RPC list: explicit --rpc, else the panel /api/rpc proxy (keyless, 7702-aware) then public RPCs. */
+function rpcList() {
+  if (flagVal("--rpc")) return [flagVal("--rpc")];
+  const panel = (flagVal("--panel") ?? CFG.panelUrl).replace(/\/$/, "");
+  return [`${panel}/api/rpc`, ...CFG.rpcs];
 }
 
 // ---- key source resolution: interactive (Ledger recommended) -> imported key (hidden -> .env) -------
@@ -282,7 +297,22 @@ async function main() {
   const authorization = await wallet.signAuthorization({ account, contractAddress: CFG.delegateImpl, executor: "self" });
 
   info("Broadcasting the activation transaction (delegate + initialize, one type-4 tx)…");
-  const hash = await wallet.sendTransaction({ account, to: address, data, authorizationList: [authorization], chain: base });
+  // Explicit gas + fees so viem does NOT call eth_estimateGas (which reverts on non-7702-aware nodes
+  // because the delegate code isn't applied during estimation). The panel /api/rpc proxy still serves
+  // gas-price reads. Any unused gas is refunded.
+  let maxFeePerGas, maxPriorityFeePerGas;
+  try {
+    const fees = await pub.estimateFeesPerGas();
+    maxFeePerGas = fees.maxFeePerGas;
+    maxPriorityFeePerGas = fees.maxPriorityFeePerGas;
+  } catch {
+    maxPriorityFeePerGas = 1_000_000n; // 0.001 gwei
+    maxFeePerGas = 50_000_000n; // 0.05 gwei ceiling (Base is cheap)
+  }
+  const hash = await wallet.sendTransaction({
+    account, to: address, data, authorizationList: [authorization], chain: base,
+    gas: ACTIVATION_GAS, maxFeePerGas, maxPriorityFeePerGas,
+  });
   info(`tx: ${C.cyn}https://basescan.org/tx/${hash}${C.reset}`);
 
   const rcpt = await pub.waitForTransactionReceipt({ hash });
