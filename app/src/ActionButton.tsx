@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ApiResult } from "./api";
 import { invalidateChainState } from "./useChainState";
 import { shortHash, txUrl } from "./format";
+import { walletErrorMessage } from "./walletSelfCall";
 
 // A button that runs a write-path API call, shows progress, the resulting tx link or rejection, and
 // refreshes the live chain state on success.
@@ -31,7 +32,7 @@ export function ActionButton({
       setResult(r);
       invalidateChainState();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(walletErrorMessage(e));
     } finally {
       setBusy(false);
     }

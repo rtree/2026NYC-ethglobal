@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
-import { encodeFunctionData, type Abi } from "viem";
+import { encodeFunctionData, type Abi, type Address, type Hex } from "viem";
 import { useChainState, activeStatus, invalidateChainState, type ChainState } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { ActionButton } from "./ActionButton";
@@ -634,6 +634,7 @@ function FundingStep({ state, intentId }: { state: ChainState | null; intentId?:
 
 // ---------- ⑤ Start Conditions ----------
 function StartStep({ state, intent, setIntent }: { state: ChainState | null; intent: IntentDoc | null; setIntent: (d: IntentDoc) => void }) {
+  const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
   const cfg = intent?.startConfig ?? { loopPeriodSec: 10, ttlMinutes: 1, watcherEnabled: true };
   const [loop, setLoop] = useState(cfg.loopPeriodSec);
@@ -687,14 +688,15 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
   const pkg = intent?.packages.executor;
   const runtimeActive = runtimeRecord?.status === "scheduled" || runtimeRecord?.status === "running";
   async function applyIntentGuard() {
-    if (ownerModeCached() !== "connected" || !walletClient || !state?.delegate || !intent?.intentId) return;
+    if (ownerModeCached() !== "connected") return;
+    if (!state?.delegate || !intent?.intentId) throw new Error("active intent not ready");
     const plan = await api.ownerGuardPlan(intent.intentId);
     const data = encodeFunctionData({
       abi: delegateAbi as Abi,
       functionName: "ownerUpdateGuard",
       args: [toGuard(plan.guard)],
     });
-    await walletClient.sendTransaction({ to: state.delegate, data });
+    await sendOwnerSelfCall(walletClient, address, state.delegate, data);
     invalidateChainState();
   }
   return (
@@ -794,4 +796,16 @@ function toGuard(g: GuardWire) {
     frozen: Boolean(g.frozen),
     bindingNonce: BigInt(String(g.bindingNonce)),
   };
+}
+
+async function sendOwnerSelfCall(
+  walletClient: { sendTransaction: (tx: { to: Address; data: Hex }) => Promise<Hex> } | undefined,
+  from: Address | undefined,
+  to: Address,
+  data: Hex,
+): Promise<Hex> {
+  if (walletClient) return walletClient.sendTransaction({ to, data });
+  const eth = (globalThis as unknown as { ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } }).ethereum;
+  if (!eth || !from) throw new Error("wallet client not ready; reconnect your wallet");
+  return (await eth.request({ method: "eth_sendTransaction", params: [{ from, to, data }] })) as Hex;
 }

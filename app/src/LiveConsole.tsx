@@ -9,6 +9,7 @@ import { ActionButton } from "./ActionButton";
 import { api, type GuardWire } from "./api";
 import { authState, ownerModeCached } from "./auth";
 import type { IntentDoc, RuntimeRecord } from "./intentTypes";
+import { sendOwnerSelfCall } from "./walletSelfCall";
 
 // 090 + 100 + 110 merged (plan/010 §15.1): one screen for the running Intent — guard, vaults,
 // balances, shared timeline, Owner controls (trade/resume) AND Watcher controls (freeze/tighten).
@@ -42,31 +43,16 @@ export function LiveConsole() {
   }
 
   async function ownerResume() {
-    if (walletClient && state?.delegate && activeIntentId) {
+    if (ownerModeCached() === "connected") {
+      if (!state?.delegate || !activeIntentId) throw new Error("active intent not ready");
       const plan = await api.ownerGuardPlan(activeIntentId);
       const data = encodeFunctionData({
         abi: delegateAbi as Abi,
         functionName: "ownerUpdateGuard",
         args: [toGuard(plan.guard)],
       });
-      const txHash = await walletClient.sendTransaction({ to: state.delegate, data });
+      const txHash = await sendOwnerSelfCall(walletClient, address, state.delegate, data);
       return { txHash };
-    }
-
-    function toGuard(g: GuardWire) {
-      return {
-        router: g.router,
-        selector: g.selector,
-        tokenA: g.tokenA,
-        tokenB: g.tokenB,
-        poolFee: Number(g.poolFee),
-        amountCapPerTx: BigInt(String(g.amountCapPerTx)),
-        cumulativeCap: BigInt(String(g.cumulativeCap)),
-        slippageCapBps: Number(g.slippageCapBps),
-        expiry: BigInt(String(g.expiry)),
-        frozen: Boolean(g.frozen),
-        bindingNonce: BigInt(String(g.bindingNonce)),
-      };
     }
     return api.ownerResume(activeIntentId);
   }
@@ -275,4 +261,20 @@ function HistoryCard({ history }: { history: IntentDoc[] }) {
       )}
     </div>
   );
+}
+
+function toGuard(g: GuardWire) {
+  return {
+    router: g.router,
+    selector: g.selector,
+    tokenA: g.tokenA,
+    tokenB: g.tokenB,
+    poolFee: Number(g.poolFee),
+    amountCapPerTx: BigInt(String(g.amountCapPerTx)),
+    cumulativeCap: BigInt(String(g.cumulativeCap)),
+    slippageCapBps: Number(g.slippageCapBps),
+    expiry: BigInt(String(g.expiry)),
+    frozen: Boolean(g.frozen),
+    bindingNonce: BigInt(String(g.bindingNonce)),
+  };
 }
