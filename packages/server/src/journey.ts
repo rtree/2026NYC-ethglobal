@@ -267,6 +267,7 @@ async function linkIntent(opts: CreateOpts | undefined, patch: { executorTokenId
 const MAX_PLANNED_TICKS = 12;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const MAX_VERTEX_COST_USD = Number(process.env.INTENTOS_RUNTIME_MAX_VERTEX_USD ?? "5.00");
+const RUNTIME_FIRST_TICK_BUY = (process.env.INTENTOS_RUNTIME_FIRST_TICK_BUY ?? "1") === "1";
 
 /**
  * Start the (bounded) runtime: consume the intent's StartConfig, mark it live, and record the schedule
@@ -312,12 +313,16 @@ export async function runtimeStart(opts?: CreateOpts) {
     loopPeriodSec: cfg.loopPeriodSec,
     plannedTicks,
     executedTicks: 0,
+    runtimeTradesUsed: 0,
+    maxRuntimeTrades: 1,
     llmCallsUsed: 0,
     estimatedInputTokens: 0,
     estimatedOutputTokens: 0,
     estimatedVertexCostUsd: 0,
     maxVertexCostUsd: MAX_VERTEX_COST_USD,
     failureReason: null,
+    lastTickAction: null,
+    lastTickTxHash: null,
     createdAt: startedAt,
     updatedAt: startedAt,
   };
@@ -425,28 +430,55 @@ export async function runtimeTick(opts?: CreateOpts) {
     return { intentId: opts.intentId, runtimeRecord: expired, tick: null };
   }
   const tick = record.executedTicks + 1;
+  const tradesUsed = record.runtimeTradesUsed ?? 0;
+  const maxRuntimeTrades = record.maxRuntimeTrades ?? 1;
   const prompt = [
-    "You are an IntentOS bounded runtime smoke agent.",
-    "Reply with exactly one action word: HOLD.",
+    "You are an IntentOS bounded runtime agent.",
+    "Reply with exactly one action word: BUY or HOLD.",
+    "BUY means request one guarded 0.001 USDC -> WETH trade through IntentOS typed tools.",
+    "HOLD means do nothing this tick.",
+    `runtimeTradesUsed=${tradesUsed}`,
+    `maxRuntimeTrades=${maxRuntimeTrades}`,
+    tradesUsed >= maxRuntimeTrades ? "Trade budget already used. Reply HOLD." : "If this is the first eligible tick and guard/budget context is acceptable, reply BUY; otherwise HOLD.",
     `intentId=${record.intentId}`,
     `tick=${tick}`,
-    "No trading decision is authorized in this smoke tick.",
   ].join("\n");
   const completion = await openClawComplete(prompt);
-  const decision = completion.text;
+  const decision = normalizeRuntimeAction(completion.text);
   const nextExecuted = record.executedTicks + 1;
   const estimatedVertexCostUsd = Number((record.estimatedVertexCostUsd + completion.estimatedCostUsd).toFixed(8));
   const overBudget = estimatedVertexCostUsd >= record.maxVertexCostUsd;
+  let txHash: Hex | null = null;
+  let failureReason = overBudget ? "vertex budget exhausted" : record.failureReason;
+  let runtimeTradesUsed = tradesUsed;
+  let tickStatus = "held";
+  const shouldBuy = decision === "BUY" || (RUNTIME_FIRST_TICK_BUY && tick === 1 && tradesUsed < maxRuntimeTrades);
+  if (!overBudget && shouldBuy && tradesUsed < maxRuntimeTrades) {
+    const tradeResult = await trade(opts);
+    if (tradeResult.ok === false) {
+      failureReason = tradeResult.reason ?? "runtime trade rejected";
+      txHash = (tradeResult.txHash as Hex | undefined) ?? null;
+      tickStatus = "rejected";
+    } else {
+      txHash = tradeResult.txHash as Hex;
+      runtimeTradesUsed += 1;
+      tickStatus = "submitted";
+    }
+  }
   const status = overBudget ? "self-stopped" : nextExecuted >= record.plannedTicks ? "expired" : "running";
   const updated: RuntimeRecord = {
     ...record,
     status,
     executedTicks: nextExecuted,
+    runtimeTradesUsed,
+    maxRuntimeTrades,
     llmCallsUsed: record.llmCallsUsed + 1,
     estimatedInputTokens: record.estimatedInputTokens + completion.estimatedInputTokens,
     estimatedOutputTokens: record.estimatedOutputTokens + completion.estimatedOutputTokens,
     estimatedVertexCostUsd,
-    failureReason: overBudget ? "vertex budget exhausted" : record.failureReason,
+    failureReason,
+    lastTickAction: decision,
+    lastTickTxHash: txHash,
     lastHeartbeatAt: now,
     updatedAt: now,
   };
@@ -456,8 +488,14 @@ export async function runtimeTick(opts?: CreateOpts) {
   return {
     intentId: opts.intentId,
     runtimeRecord: updated,
-    tick: { tick, status: "held", action: decision },
+    tick: { tick, status: tickStatus, action: decision, txHash, reason: failureReason },
   };
+}
+
+function normalizeRuntimeAction(text: string): "BUY" | "HOLD" {
+  const t = text.trim().toUpperCase();
+  if (/\bBUY\b/.test(t)) return "BUY";
+  return "HOLD";
 }
 
 function selfStopRuntime(record: RuntimeRecord, reason: string): RuntimeRecord {
@@ -678,6 +716,8 @@ export async function createWatcher(opts?: CreateOpts) {
 export async function trade(opts?: CreateOpts) {
   const c = await ownerCtx(opts);
   const { slug, executor } = await loadDrafts(opts);
+  const doc = opts?.uid && opts.intentId ? await store().getIntent(opts.uid, opts.intentId) : null;
+  const executorTokenId = doc?.executorTokenId ?? session.executorTokenId ?? "1";
   // Use the caller's FIXed Executor guard (not a demo fallback) when available, and bind the request
   // to this intent's id so the on-chain evidence references the real intent (not a hardcoded one).
   await ensureSetup(c, executor, executor?.packageHash);
@@ -691,10 +731,10 @@ export async function trade(opts?: CreateOpts) {
     const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
     if (guard.frozen) return { ok: false, reason: "guard is frozen — resume first" };
     const quoted = await quoteExactInputSingle(c.pub, TOKENS.USDC, TOKENS.WETH, AMOUNT_IN);
-    const reason = `BUY 0.001 USDC->WETH (Executor #${session.executorTokenId ?? "?"})`.slice(0, 200);
+    const reason = `BUY 0.001 USDC->WETH (Executor #${executorTokenId})`.slice(0, 200);
     const req = buildExecutionRequest({
       intentId: intentIdHash(slug),
-      executorTokenId: BigInt(session.executorTokenId ?? "1"),
+      executorTokenId: BigInt(executorTokenId),
       action: Action.BUY,
       tokenIn: TOKENS.USDC,
       tokenOut: TOKENS.WETH,

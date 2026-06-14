@@ -64,12 +64,16 @@ export interface RuntimeRecord {
   loopPeriodSec: number;
   plannedTicks: number;
   executedTicks: number;
+  runtimeTradesUsed: number;
+  maxRuntimeTrades: number;
   llmCallsUsed: number;
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
   estimatedVertexCostUsd: number;
   maxVertexCostUsd: number;
   failureReason: string | null;
+  lastTickAction: string | null;
+  lastTickTxHash: Hex | null;
   createdAt: number;
   updatedAt: number;
 }
