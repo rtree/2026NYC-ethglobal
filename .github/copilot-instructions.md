@@ -49,3 +49,15 @@ Already configured in this repo — keep these on:
 
 ## GCP
 - Project: `ethglobal-nyc2026-rtree` (number `41929375451`). Region `us-central1`. ADC configured.
+
+## Deploying the panel (MANDATORY — use the scripts, never hand-type gcloud)
+- Build + deploy the `intentos-panel` Cloud Run service ONLY via:
+  `./scripts/build-panel.sh && ./scripts/deploy-panel.sh`
+- Why: a plain/image-only `gcloud run deploy` (or a long comma `--set-env-vars`) **silently drops env
+  vars** — it kept turning World ID off and erasing `WORLDID_*`. The scripts pass **every** env from
+  [scripts/panel-env.sh](scripts/panel-env.sh) (the single source of truth) with a `^@@^` delimiter and
+  re-attach secrets, then **verify `/api/config`** (authRequired + ownerMode:connected + worldIdRequired)
+  and fail if anything was dropped.
+- To change panel config (env, secrets, image, sizing) edit `scripts/panel-env.sh`, then redeploy.
+- `panel-env.sh` holds only secret *references* (`name:version`), never secret values — safe to commit.
+

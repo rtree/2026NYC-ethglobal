@@ -348,6 +348,55 @@ Honest developer feedback from building this, intended to help:
 
 ---
 
+## World ID — Track B: the product breaks without proof of human
+
+> **IntentOS gives each verified human their own always-on cloud trading agent. Without proof of human, that model collapses — so World ID isn't a feature here, it's the precondition.**
+
+### What breaks without it (the honest justification)
+
+Every Owner who onboards gets a **real, always-on OpenClaw Runtime Capsule on Cloud Run** (one per Agent), plus server-side LLM (Vertex) calls and chain indexing — all paid by us, the operator. The whole product is "an autonomous agent that keeps trading while you sleep," which *requires* real provisioned compute per user.
+
+That is exactly the kind of **limited, costly, per-human resource** World ID Track B is about. With only a wallet gate:
+
+- **One person spins up unlimited agents.** A script makes 10,000 EOAs, signs in to each (SIWE is free), and farms 10,000 cloud runtimes + LLM spend. Our compute/model/indexer budget is drained by a single actor. The product is **economically dead on day one**.
+- **No fair allocation.** Any "free runtime for new users", rate limit, or allowlist is meaningless if one human is unlimited wallets.
+
+So personhood is not decoration — **it is the eligibility constraint that makes "one always-on agent per human" possible at all.** Remove it and the core offering can't exist.
+
+### How World ID 4.0 is used as a real constraint
+
+- **One human → one human-verified account.** We use the **Proof of Human** credential (`proofOfHuman`, World ID 4.0 with legacy Orb fallback). The proof's **nullifier** is the per-app, per-action unique human id. We store `(action, nullifier)` with a **uniqueness constraint**, so the same human can't pass the gate on many wallets — `1 human = 1 verified onboarding`.
+- **The gate is the eligibility check for the costly resource.** `humanVerified(uid)` is what unlocks onboarding into the runtime-provisioning flow. The proof is **bound to the Owner's EOA** (`signal = address`), and the server re-checks that binding, so a proof can't be lifted onto another account.
+- **Proof validation happens in our web backend — required and real.** The browser only collects the proof via IDKit; the **server** signs the RP request and forwards the proof **byte-for-byte** to `POST https://developer.world.org/api/v4/verify/{rp_id}`. A client can return any JSON it likes — only the server-side verify is trusted. The RP signing key lives **only in GCP Secret Manager**, never in the bundle.
+
+```
+Browser (IDKit, proofOfHuman, signal = Owner EOA)
+   │  1. POST /api/worldid/sign      → server signs the RP request (key from Secret Manager)
+   │  2. World App makes a ZK proof of human
+   ▼
+Server  3. POST /api/worldid/verify  → forwards proof to developer.world.org/api/v4/verify/{rp_id}
+        4. enforce signal == EOA, store (action, nullifier) UNIQUE, set humanVerified(uid)
+        ⇒ only now can this human onboard their always-on agent
+```
+
+### Qualification checklist (Track B)
+
+| Requirement | IntentOS |
+| --- | --- |
+| **World ID 4.0 as a real constraint** | Proof of Human (`proofOfHuman`) is the **eligibility + uniqueness** gate for per-human cloud runtimes; `1 human = 1 verified onboarding` via nullifier uniqueness |
+| **What breaks without it** | One human → unlimited wallets → unlimited paid cloud runtimes + LLM spend ⇒ the "always-on agent per human" economics collapse (Sybil-farmed compute) |
+| **Working application** | Live (not a mini app): onboarding gate at the panel; `/api/config` advertises `worldIdRequired`, IDKit widget verifies via World App |
+| **Proof validation in a web backend** | Yes — verified server-side via `developer.world.org/api/v4/verify/{rp_id}`; RP signing key in Secret Manager; nullifier persisted with a uniqueness constraint; never trusted from the client |
+
+### Where it lives in the code
+
+- Server: [packages/server/src/worldid.ts](packages/server/src/worldid.ts) (RP signing + server-side verify + signal binding), routes `POST /api/worldid/sign` · `POST /api/worldid/verify` · `GET /api/worldid/status` · `POST /api/worldid/reset` in [packages/server/src/server.ts](packages/server/src/server.ts), nullifier-uniqueness + `humanVerified` persistence in [packages/server/src/store.ts](packages/server/src/store.ts).
+- Client: [app/src/WorldIdButton.tsx](app/src/WorldIdButton.tsx) (IDKit `proofOfHuman`, `signal = address`), gate is **server-driven** (`/api/worldid/status`) in [app/src/gate.ts](app/src/gate.ts) so a stale local flag can't bypass it.
+
+> SDKs: `@worldcoin/idkit@4` (React widget) + `@worldcoin/idkit-core@4` (`signRequest`, `hashSignal`). The IDKit wasm is lazy-loaded so it only downloads when the gate is reached. Design notes: [plan/110-worldid-integration.md](plan/110-worldid-integration.md).
+
+---
+
 # Q&A
 
 ## "Why not just let the AI hold a wallet?"
