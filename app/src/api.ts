@@ -28,7 +28,7 @@ async function postJson<T>(path: string, payload: unknown): Promise<T> {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(path, { headers: await authHeaders() });
+  const res = await fetch(path, { headers: await authHeaders(), cache: "no-store" });
   const body = (await res.json()) as T & { error?: string };
   if (!res.ok && body.error) throw new Error(body.error);
   return body;

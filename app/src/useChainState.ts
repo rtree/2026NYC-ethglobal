@@ -91,7 +91,7 @@ export async function loadChainState(address?: string, intentId?: string): Promi
   const qs = new URLSearchParams();
   if (address) qs.set("address", address);
   if (intentId) qs.set("intentId", intentId);
-  const res = await fetch(qs.size ? `/api/state?${qs.toString()}` : "/api/state");
+  const res = await fetch(qs.size ? `/api/state?${qs.toString()}` : "/api/state", { cache: "no-store" });
   if (!res.ok) throw new Error(`/api/state ${res.status}`);
   const d = await res.json();
   const s = mapState(d);

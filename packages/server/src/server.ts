@@ -51,7 +51,7 @@ const MIME: Record<string, string> = {
 
 function json(res: ServerResponse, status: number, body: unknown) {
   const s = JSON.stringify(body, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   res.end(s);
 }
 

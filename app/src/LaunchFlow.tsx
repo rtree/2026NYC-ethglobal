@@ -658,6 +658,9 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
         .then((r) => {
           if (!active) return;
           setRuntimeRecord(r.runtimeRecord);
+          if (r.runtimeRecord?.status === "scheduled" || r.runtimeRecord?.status === "running" || r.runtimeRecord?.status === "stopping") {
+            invalidateChainState();
+          }
           if (r.runtimeRecord && !["scheduled", "running", "stopping"].includes(r.runtimeRecord.status)) {
             setStarted(null);
           }
@@ -692,10 +695,12 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
     if (ownerModeCached() !== "connected") return;
     if (!state?.delegate || !intent?.intentId) throw new Error("active intent not ready");
     const plan = await api.ownerGuardPlan(intent.intentId);
+    const plannedGuard = toGuard(plan.guard);
+    if (state.guard && guardAlreadyApplied(state.guard, plannedGuard)) return;
     const data = encodeFunctionData({
       abi: delegateAbi as Abi,
       functionName: "ownerUpdateGuard",
-      args: [toGuard(plan.guard)],
+      args: [plannedGuard],
     });
     await sendOwnerSelfCall(walletClient, address, state.delegate, data);
     invalidateChainState();
@@ -797,4 +802,24 @@ function toGuard(g: GuardWire) {
     frozen: Boolean(g.frozen),
     bindingNonce: BigInt(String(g.bindingNonce)),
   };
+}
+
+function sameAddress(a: unknown, b: unknown) {
+  return String(a).toLowerCase() === String(b).toLowerCase();
+}
+
+function guardAlreadyApplied(current: ReturnType<typeof toGuard>, planned: ReturnType<typeof toGuard>) {
+  const enoughRuntime = BigInt(Math.floor(Date.now() / 1000) + 3_600);
+  return (
+    !current.frozen &&
+    sameAddress(current.router, planned.router) &&
+    String(current.selector).toLowerCase() === String(planned.selector).toLowerCase() &&
+    sameAddress(current.tokenA, planned.tokenA) &&
+    sameAddress(current.tokenB, planned.tokenB) &&
+    current.poolFee === planned.poolFee &&
+    current.amountCapPerTx === planned.amountCapPerTx &&
+    current.cumulativeCap === planned.cumulativeCap &&
+    current.slippageCapBps === planned.slippageCapBps &&
+    current.expiry >= enoughRuntime
+  );
 }

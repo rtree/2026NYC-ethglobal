@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import { encodeFunctionData, type Abi } from "viem";
-import { useChainState, activeStatus, hasActiveIntent } from "./useChainState";
+import { useChainState, activeStatus, hasActiveIntent, invalidateChainState } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { delegateAbi, tokenPair } from "./config";
 import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl, tokenTxUrl } from "./format";
@@ -64,7 +64,12 @@ export function LiveConsole() {
       if (!activeIntentId) return;
       try {
         const r = await api.runtimeStatus(activeIntentId);
-        if (active) setRuntimeRecord(r.runtimeRecord);
+        if (active) {
+          setRuntimeRecord(r.runtimeRecord);
+          if (r.runtimeRecord?.status === "scheduled" || r.runtimeRecord?.status === "running" || r.runtimeRecord?.status === "stopping") {
+            invalidateChainState();
+          }
+        }
       } catch {
         /* keep prior runtime status */
       }
