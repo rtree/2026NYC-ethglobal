@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useChainState, activeStatus, type ChainState } from "./useChainState";
+import { useAccount, useWalletClient } from "wagmi";
+import { encodeFunctionData, type Abi } from "viem";
+import { useChainState, activeStatus, invalidateChainState, type ChainState } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { ActionButton } from "./ActionButton";
-import { api, type ChatResponse } from "./api";
-import { authState } from "./auth";
-import { tokenPair } from "./config";
+import { api, type ChatResponse, type ActivatePlan } from "./api";
+import { authState, ownerModeCached, fetchAuthRequired } from "./auth";
+import { tokenPair, delegateAbi } from "./config";
 import { shortAddr, addrUrl, usdc, eth } from "./format";
 import type { AgentPackageDraft, IntentDoc } from "./intentTypes";
 
@@ -23,8 +25,138 @@ const STEPS: { id: StepId; n: string; title: string; sub: string }[] = [
   { id: "start", n: "⑤", title: "Start Conditions", sub: "AgentLoop period + Cloud Run TTL" },
 ];
 
+/**
+ * PRODUCT mode (plan/080): "Activate" gate shown BEFORE the IntentBuilder. The visitor signs ONE
+ * EIP-7702 (type-4) self-tx that delegates their OWN EOA to ExecutionDelegate7702 and initializes the
+ * guard. After this the agent runs strictly inside their guardrails; funds never leave their account.
+ */
+function ActivateGate({ address, onActivated }: { address: `0x${string}`; onActivated: () => void }) {
+  const { data: walletClient } = useWalletClient();
+  const [plan, setPlan] = useState<ActivatePlan | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .activatePlan()
+      .then((p) => {
+        if (!active) return;
+        setPlan(p);
+        if (p.alreadyDelegated) onActivated();
+      })
+      .catch((e) => active && setErr(e instanceof Error ? e.message : String(e)));
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function activate() {
+    if (!plan || !walletClient) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g = plan.initialize.guard as any;
+      const guard = {
+        router: g.router,
+        selector: g.selector,
+        tokenA: g.tokenA,
+        tokenB: g.tokenB,
+        poolFee: Number(g.poolFee),
+        amountCapPerTx: BigInt(g.amountCapPerTx),
+        cumulativeCap: BigInt(g.cumulativeCap),
+        slippageCapBps: Number(g.slippageCapBps),
+        expiry: BigInt(g.expiry),
+        frozen: !!g.frozen,
+        bindingNonce: BigInt(g.bindingNonce),
+      };
+      const data = encodeFunctionData({
+        abi: delegateAbi as Abi,
+        functionName: "initialize",
+        args: [
+          guard,
+          plan.initialize.sessionKey,
+          plan.initialize.watcherKey,
+          plan.initialize.relayer,
+          BigInt(plan.initialize.gasPerTxCap),
+          BigInt(plan.initialize.initialExecVault),
+          BigInt(plan.initialize.initialWatcherVault),
+          plan.initialize.packageHash,
+          plan.initialize.semanticGuardHash,
+        ],
+      });
+      // `executor: "self"` tells viem the signer also sends the tx (nonce handling). One transaction
+      // sets the EOA code to the delegate AND runs initialize() in the same self-call.
+      const auth = await walletClient.signAuthorization({
+        account: walletClient.account,
+        contractAddress: plan.delegateImpl,
+        executor: "self",
+      });
+      const hash = await walletClient.sendTransaction({ to: address, data, authorizationList: [auth] });
+      // Poll the plan until the delegation lands on Base, then proceed. Bounded (~75s).
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const p = await api.activatePlan();
+        if (p.alreadyDelegated) {
+          invalidateChainState();
+          onActivated();
+          return;
+        }
+      }
+      setErr(`activation sent but not yet confirmed — refresh in a moment (tx ${hash.slice(0, 10)}…)`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const elsewhere = !!plan?.delegatedElsewhere && !confirmOverwrite;
+  return (
+    <div className="card pad-lg" style={{ maxWidth: 720 }}>
+      <div className="card-head">
+        <h3>Activate your account</h3>
+        <span className={`pill ${plan ? "" : "muted"}`}>{plan ? "EIP-7702" : "loading…"}</span>
+      </div>
+      <p className="desc">
+        IntentOS is non-custodial: your funds stay in your EOA. Activating points your account at the
+        IntentOS guard (<code>{shortAddr(plan?.delegateImpl ?? "0x")}</code>) and initializes your Hard
+        Guardrails in one transaction. The agent can then only trade inside those rails.
+      </p>
+      <p className="spec-ref">You need a little Base ETH on this EOA (gas + a small gas-vault reserve).</p>
+      {elsewhere && (
+        <div className="pill fund-exhausted" style={{ display: "block", padding: 12, marginBottom: 12 }}>
+          This EOA is already delegated to another contract (e.g. a MetaMask Smart Account at{" "}
+          <code>{shortAddr(plan?.currentImpl ?? "0x")}</code>). Activating will OVERWRITE that delegation.
+          Use a fresh EOA, or confirm to proceed.
+          <button className="btn block" style={{ marginTop: 8 }} onClick={() => setConfirmOverwrite(true)}>
+            I understand — use this EOA anyway
+          </button>
+        </div>
+      )}
+      <button className="btn primary block" disabled={!plan || !walletClient || busy || elsewhere} onClick={activate}>
+        {busy ? "Activating… confirm in your wallet" : `Activate ${shortAddr(address)} (1 transaction)`}
+      </button>
+      {err && <p className="pill fund-exhausted" style={{ marginTop: 10 }}>{err.slice(0, 160)}</p>}
+    </div>
+  );
+}
+
 export function LaunchFlow() {
-  const { state } = useChainState();
+  const { address } = useAccount();
+  const [connectedMode, setConnectedMode] = useState(ownerModeCached() === "connected");
+  const [activated, setActivated] = useState(false);
+  // The SERVER decides the Owner mode (plan/080). In "connected" mode the visitor delegates their OWN
+  // EOA, so read THEIR account and gate the wizard on activation; "demo" mode is unchanged.
+  useEffect(() => {
+    fetchAuthRequired()
+      .then(() => setConnectedMode(ownerModeCached() === "connected"))
+      .catch(() => {});
+  }, []);
+  const { state } = useChainState(12_000, connectedMode && address ? address : undefined);
   const [step, setStep] = useState<StepId>("intent");
   const [intent, setIntent] = useState<IntentDoc | null>(null);
 
@@ -57,6 +189,25 @@ export function LaunchFlow() {
     start: false,
   };
   const requiredMet = done.intent && done.executor && done.funding;
+
+  // PRODUCT mode (plan/080): before building an Intent, the visitor delegates their OWN EOA. This gate
+  // sits in front of the wizard (i.e. before the IntentBuilder) and only appears in connected mode.
+  if (connectedMode && address && !activated) {
+    return (
+      <div className="app">
+        <TopBar status={activeStatus(state)} />
+        <main className="main">
+          <Nav />
+          <div className="page-head" style={{ marginTop: 20 }}>
+            <div className="eyebrow">Launch · activate your account</div>
+            <h1>Activate IntentOS on your EOA</h1>
+            <p>Before building an Intent, delegate your own EOA to the IntentOS guard with one EIP-7702 transaction. After this, the agent operates strictly inside your guardrails — your funds never leave your account.</p>
+          </div>
+          <ActivateGate address={address} onActivated={() => setActivated(true)} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

@@ -81,8 +81,8 @@ function mapState(d: any): ChainState {
   };
 }
 
-export async function loadChainState(): Promise<ChainState> {
-  const res = await fetch("/api/state");
+export async function loadChainState(address?: string): Promise<ChainState> {
+  const res = await fetch(address ? `/api/state?address=${address}` : "/api/state");
   if (!res.ok) throw new Error(`/api/state ${res.status}`);
   const d = await res.json();
   const s = mapState(d);
@@ -108,7 +108,7 @@ export function activeStatus(state: ChainState | null): "running" | "frozen" | u
   return state?.guard?.frozen ? "frozen" : "running";
 }
 
-export function useChainState(pollMs = 12_000) {
+export function useChainState(pollMs = 12_000, address?: string) {
   const [state, setState] = useState<ChainState | null>(lastGood);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!lastGood);
@@ -117,7 +117,7 @@ export function useChainState(pollMs = 12_000) {
     let active = true;
     async function refresh() {
       try {
-        const s = await loadChainState();
+        const s = await loadChainState(address);
         if (active) {
           setState(s);
           setError(null);
@@ -137,7 +137,7 @@ export function useChainState(pollMs = 12_000) {
       clearInterval(t);
       window.removeEventListener("intentos:refresh", onRefresh);
     };
-  }, [pollMs]);
+  }, [pollMs, address]);
 
   return { state, error, loading };
 }

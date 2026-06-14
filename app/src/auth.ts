@@ -50,19 +50,26 @@ export function authState(): { uid: string; address: string } | null {
 // must NOT decide from its own VITE_FIREBASE_API_KEY, or the two can disagree — AUTH-002). Cached after
 // first fetch; falls back to the client key heuristic only if /api/config is unreachable.
 let serverAuthRequired: boolean | null = null;
+let serverOwnerMode: "demo" | "connected" = "demo";
 let authConfigPromise: Promise<boolean> | null = null;
 
 export function authRequiredCached(): boolean {
   return serverAuthRequired ?? !!FIREBASE_API_KEY;
 }
 
+/** Server's on-chain Owner mode (plan/080): "connected" = the visitor delegates their OWN EOA. */
+export function ownerModeCached(): "demo" | "connected" {
+  return serverOwnerMode;
+}
+
 export async function fetchAuthRequired(): Promise<boolean> {
   if (serverAuthRequired !== null) return serverAuthRequired;
   if (!authConfigPromise) {
     authConfigPromise = fetch("/api/config")
-      .then((r) => (r.ok ? (r.json() as Promise<{ authRequired?: boolean }>) : Promise.reject(new Error(String(r.status)))))
+      .then((r) => (r.ok ? (r.json() as Promise<{ authRequired?: boolean; ownerMode?: string }>) : Promise.reject(new Error(String(r.status)))))
       .then((c) => {
         serverAuthRequired = !!c.authRequired;
+        serverOwnerMode = c.ownerMode === "connected" ? "connected" : "demo";
         window.dispatchEvent(new CustomEvent("intentos:auth"));
         return serverAuthRequired;
       })

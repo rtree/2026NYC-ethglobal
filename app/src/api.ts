@@ -48,6 +48,27 @@ export interface ChatResponse {
   llm: "vertex" | "mock";
 }
 
+// PRODUCT-mode "Activate" plan (plan/080): the UNSIGNED initialize() params the browser signs to
+// delegate the visitor's OWN EOA to ExecutionDelegate7702. bigints arrive as strings.
+export interface ActivatePlan {
+  ownerMode: "demo" | "connected";
+  delegateImpl: `0x${string}`;
+  alreadyDelegated: boolean;
+  delegatedElsewhere: boolean;
+  currentImpl: `0x${string}` | null;
+  initialize: {
+    guard: Record<string, string | number | boolean>;
+    sessionKey: `0x${string}`;
+    watcherKey: `0x${string}`;
+    relayer: `0x${string}`;
+    gasPerTxCap: string;
+    initialExecVault: string;
+    initialWatcherVault: string;
+    packageHash: `0x${string}`;
+    semanticGuardHash: `0x${string}`;
+  };
+}
+
 export const api = {
   createExecutor: (intentId?: string) => postJson<ApiResult>("/api/executor/create", { intentId }),
   createWatcher: (intentId?: string) => postJson<ApiResult>("/api/watcher/create", { intentId }),
@@ -71,4 +92,5 @@ export const api = {
     postJson<{ intentId: string; startConfig: StartConfig }>("/api/intent/start-config", { intentId, ...cfg }),
   listIntents: () => getJson<{ intents: IntentDoc[] }>("/api/intents"),
   getIntent: (intentId: string) => getJson<IntentDoc & { transcript: { role: string; text: string; at: number }[] }>(`/api/intents/${intentId}`),
+  activatePlan: () => getJson<ActivatePlan>("/api/activate/plan"),
 };
