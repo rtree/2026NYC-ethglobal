@@ -1,6 +1,10 @@
 # 080 — Refactoring Plan: Per-User EIP-7702 ("PRODUCT mode")
 
-Status: **proposed**. Owner sign-off needed before Phase 1.
+Status: **DECIDED — self-delegate maintained; building per-user now.** Owner confirmed the direction
+(2026-06-13): keep our **own** `ExecutionDelegate7702` (Option A; not ERC-7579 modules, not per-user
+contract deploys); add an **Activate** step **after sign-in and before the IntentBuilder** that
+delegates the user's **own** EOA. Demo (shared-Owner) mode stays behind a toggle as a fund-less-judge
+fallback. ERC-7579 module path is explicitly **future-only** (see §1.3 / §9).
 Closes / advances QA rows: `ARCH-001` (primary), `GAS-001`, `AUTH-004`, `RPC-001`, `STORE-001`,
 `WORLDID-001`. See [plan/070-qa-register.md](070-qa-register.md).
 
@@ -147,27 +151,57 @@ and (b) the server `ctx()` is a **singleton** bound to that one Owner.
 
 ## 4. Target design (PRODUCT mode)
 
-1. **Server stops holding owner authority.** `ctx()` becomes **per-connected-address** (uid is already
-   `eip155:8453:<addr>`), and `owner` becomes a **view-only address**, not a signer. The server never
-   signs an owner self-call.
-2. **New endpoint `POST /api/executor/plan`** returns the **unsigned** `initialize(...)` parameters
-   computed from the user's FIXed Executor package: the `HardGuardState` struct, `sessionKey`,
-   `watcherKey`, `relayer` (platform), `gasPerTxCap`, `initialExecVault`, `initialWatcherVault`,
-   `packageHash`, `semanticGuardHash`. (No signing; just the calldata the browser will send.)
-3. **Browser does the one owner transaction** in the Executor step:
-   - `signAuthorization({ contractAddress: impl, executor: "self" })`
-     (wagmi `useSignAuthorization` / viem `walletClient.signAuthorization`).
-   - `sendTransaction({ to: account.address, data: initialize(plan), authorizationList: [auth] })`
-     — a single EIP-7702 (type-4) self-tx; user pays gas; the vault reserve is backed by the user's own
-     ETH balance (no extra `value` transfer needed).
-   - On confirm, notify the server "this EOA is delegated"; AgentNFT mint can stay server-side.
-4. **State + trade read/write the user's account.** `/api/state.delegate` and `trade()` use the
-   connected EOA; SessionKey(KMS) signing + relayer submit are unchanged.
-5. **Demo-mode toggle stays.** Keep the shared-Owner path behind a flag for fund-less judges
-   (`INTENTOS_OWNER=demo|connected`, default `connected` in PRODUCT mode).
+The launch flow gets a new **Step 0 "Activate"** placed **after sign-in and before the IntentBuilder**
+(the Owner's request). Becoming an IntentOS account is now an explicit, upfront act — "upgrade your EOA
+into a guarded IntentOS account" — rather than something buried inside the Executor mint.
 
-Funds the user must hold on Base: **~0.001 USDC** (trade) + **a little ETH** (init-tx gas + gas-vault
-reserve). Tiny amounts only, per repo policy.
+0. **Activate (NEW, before IntentBuilder).** The browser signs **one** EIP-7702 (type-4) self-tx that
+   **delegates the user's own EOA** to `ExecutionDelegate7702` and `initialize()`s it with a **default
+   conservative guard** (the demo rails), the executor/watcher SessionKeys, the platform relayer, a
+   small initial gas-vault reserve (from the user's own ETH), and a generic IntentOS `packageHash`:
+   - `signAuthorization({ contractAddress: impl, executor: "self" })` (wagmi `useSignAuthorization` /
+     viem `walletClient.signAuthorization`).
+   - `sendTransaction({ to: account.address, data: initialize(defaultPlan), authorizationList: [auth] })`.
+   - After this the user's EOA **is** a live IntentOS guarded account. User pays gas; the vault reserve
+     is backed by the user's own ETH (no extra `value` transfer). **One signature.**
+   - **Why initialize upfront with a default guard:** `initialize()` is **once-only** and `_packageHash`
+     is **permanent** (no setter; `ownerUpdateGuard` updates the guard only — verified in
+     [ExecutionDelegate7702.sol](../contracts/src/ExecutionDelegate7702.sol#L77-L103)). This matches how
+     the system already works (packageHash set once; per-intent specificity comes from the guard + the
+     off-chain FIXed draft). Binding a per-intent `packageHash` on-chain is a future refinement.
+1. **Server stops holding owner authority.** `ctx()` becomes **per-connected-address** (uid is already
+   `eip155:8453:<addr>`); `owner` becomes a **view-only address**, not a signer.
+2. **New endpoint `POST /api/activate/plan`** returns the **unsigned** `initialize(...)` params (default
+   guard via `guardFromDraft(null)`, SessionKeys, relayer, caps, small vault, generic packageHash) —
+   just the calldata the browser will send. No signing server-side. (No FIXed package needed; this runs
+   before the IntentBuilder.)
+3. **Executor step (after FIX) = mint + optional guard update.** Mint the AgentNFT (server-side, keyed
+   to the connected EOA). If the FIXed package's guard differs from the on-chain guard, the browser
+   signs `ownerUpdateGuard` (one more sig); for the MVP everything clamps to the same demo rails, so
+   this is normally a **no-op**. delegate+initialize is no longer here (moved to Activate).
+4. **State + trade read/write the user's account.** `/api/state.delegate` and `trade()` use the
+   connected EOA; SessionKey(KMS) signing + relayer submit are unchanged. Gas-vault top-ups
+   (`fundGasVault`, `onlyOwner`) also become browser-signed.
+5. **Demo-mode toggle stays.** Keep the shared-Owner path behind a flag for fund-less judges
+   (`INTENTOS_OWNER=demo|connected`). Build `connected` **alongside** `demo` so the live demo never
+   breaks; flip the default once the per-user path is proven.
+
+Funds the user must hold on Base: **~0.001 USDC** (trade) + **a little ETH** (Activate-tx gas + gas-vault
+reserve, ~0.003 ETH). Tiny amounts only, per repo policy.
+
+### New launch-flow step order
+
+| # | Step | On-chain owner signature? | Notes |
+|---|---|---|---|
+| 0 | **Activate** (NEW) | **Yes — 1 tx** (delegate + initialize) | after sign-in, before IntentBuilder; gates the rest |
+| 1 | Intent & Agent Packages (IntentBuilder) | no | unchanged |
+| 2 | Executor | only if guard ≠ on-chain (usually no-op) | mint AgentNFT (server) + optional `ownerUpdateGuard` |
+| 3 | Watcher | no (mint) | unchanged |
+| 4 | Gas Funding | yes, if topping up (`fundGasVault`) | optional; Activate seeds an initial reserve |
+| 5 | Start Conditions | no | unchanged |
+
+After Activate, recurring guarded trades are **server-side** (SessionKey + relayer) — **zero further
+user signatures** for normal operation.
 
 ---
 
@@ -187,24 +221,27 @@ UX/honesty cleanups the refactor touches, **P3** = remaining product gaps.
    can grow. Pick one and record it. (Current deploys have drifted between 1 and 2.)
 
 ### Phase 1 (P1) — per-user EIP-7702 core (`ARCH-001`)
+Build the `connected` path **alongside** `demo` (INTENTOS_OWNER toggle) so the live demo never breaks.
 1.1 **Server `ctx()` → per-address.** Replace the singleton in
    [journey.ts](../packages/server/src/journey.ts#L88-L113) with a small per-address cache; derive the
-   address from the authenticated uid; make `owner` a view-only `Address` (no signer).
-1.2 **Add `POST /api/executor/plan`** → returns the unsigned `initialize(...)` params (§4.2). Reuse
-   `guardFromDraft()` clamping to demo rails (≤2000/tx, ≤0.1 cumulative).
-1.3 **Browser owner-tx in the Executor step** of
-   [app/src/LaunchFlow.tsx](../app/src/LaunchFlow.tsx): `signAuthorization` + `initialize` self-tx via
-   wagmi/viem; show MetaMask "delegate + initialize" as **one** transaction; confirm → notify server.
-1.4 **Thread the connected address** through `/api/state` (`delegate`), `trade()`, `fundGas()`,
-   `ownerResume()`, `reset()` so they read/write the **user's** account. Remove server-side owner
-   signing for these (owner-authority ones become browser-driven; `fundGasVault` & `ownerUpdateGuard`
-   move to the same browser self-tx pattern as needed).
-1.5 **Mint flow** keys AgentNFT to the connected EOA (mint can stay server-side; just pass the address).
-1.6 **Guardrail: refuse to delegate an already-delegated non-IntentOS account by default.** Detect
-   `0xef0100‖<other impl>` and warn ("this would overwrite your MetaMask Smart Account — use a fresh
-   EOA"). Allow an explicit override. (Implements the §1.3 demo rule.)
-1.7 **Tests.** Fork/e2e: per-address ctx; `/api/executor/plan` shape; browser-tx mocked in Playwright;
-   one real tiny per-user delegate+trade on Base with a fresh EOA.
+   address from the authenticated uid; in `connected` mode `owner` is a view-only `Address` (no signer).
+1.2 **Add `POST /api/activate/plan`** → returns the unsigned `initialize(...)` params with a **default**
+   conservative guard (`guardFromDraft(null)`), SessionKeys, relayer, caps, a small vault, and a generic
+   packageHash. (No FIXed package needed — runs before the IntentBuilder.)
+1.3 **New "Activate" step in [app/src/LaunchFlow.tsx](../app/src/LaunchFlow.tsx)** placed **before** the
+   Intent step: `signAuthorization` + `initialize` self-tx via wagmi/viem (one type-4 tx); confirm →
+   notify server. Gate the rest of the wizard on `state.delegated` for the connected EOA.
+1.4 **Executor step = mint + optional guard update.** Remove delegate+initialize from here; mint the
+   AgentNFT keyed to the connected EOA; if the FIXed guard differs from on-chain, browser-sign
+   `ownerUpdateGuard` (else no-op).
+1.5 **Thread the connected address** through `/api/state` (`delegate`), `trade()`, `fundGas()`,
+   `ownerResume()`, `reset()` so they read/write the **user's** account. `fundGasVault` &
+   `ownerUpdateGuard` become browser-signed (owner-authority).
+1.6 **Guardrail: detect an already-delegated non-IntentOS account.** If the connected EOA's code is
+   `0xef0100‖<other impl>` (e.g. a MetaMask Smart Account), warn ("Activating overwrites your current
+   smart-account delegation — use a fresh EOA") and require explicit confirm. (§1.3 demo rule.)
+1.7 **Tests.** Fork/e2e: per-address ctx; `/api/activate/plan` shape; Activate browser-tx mocked in
+   Playwright; one real tiny per-user delegate+trade on Base with a fresh EOA.
 
 ### Phase 2 (P2) — UX / honesty the refactor touches
 2.1 **`GAS-001` — gas-funding model.** With per-user funding, decide the copy/UX: either keep two lanes
@@ -244,8 +281,9 @@ UX/honesty cleanups the refactor touches, **P3** = remaining product gaps.
 
 ## 7. Acceptance criteria (definition of done for Phase 1)
 
-- A **fresh plain EOA** connects, signs in, and in the Executor step signs **one** MetaMask transaction
-  that delegates **its own** account to `ExecutionDelegate7702` and initializes the guard.
+- A **fresh plain EOA** connects, signs in, and in the **Activate** step (before the IntentBuilder)
+  signs **one** MetaMask transaction that delegates **its own** account to `ExecutionDelegate7702` and
+  initializes the guard.
 - `/api/state.delegate` shows the **connected EOA** (not `0xeEa9…0f01`); guard/vaults/balances are read
   from that account.
 - A guarded USDC→WETH trade executes via SessionKey + relayer, reimbursed from the **user's** gas vault,
@@ -261,3 +299,43 @@ UX/honesty cleanups the refactor touches, **P3** = remaining product gaps.
    overwriting `0x7B79…2A2e`'s MetaMask Smart Account?
 2. **Funding?** Can that EOA hold **~0.001 USDC + a little Base ETH**?
 3. **Scale/nonce decision** (§5.0.3): keep `--max-instances 1`, or move the nonce store to Firestore?
+
+---
+
+## 9. Appendix: EIP-7702 vs ERC-7579 (why self-delegate now, modules later)
+
+The Owner asked how 7702 and 7579 differ. They are **different layers and do not compete** — they
+compose. This is why "keep our own delegate" (now) and "become a module" (future) are both coherent.
+
+| | **EIP-7702** | **ERC-7579** |
+|---|---|---|
+| Layer | Core **protocol** (Pectra, 2025-05) | App-level **interface standard** (ERC, Draft) |
+| Decides | **How an EOA sets its code** (`0xef0100‖impl` delegation designator, tx type `0x04`) | **How a smart account is structured** as installable modules |
+| Unit | EOA's **single** code slot → one implementation | One implementation hosting **many** modules |
+| Module types | n/a | Validator (1), Executor (2), Fallback (3), Hook (4) |
+| Solves | "Upgrade my EOA into a smart account" | "Reuse modules across wallets; avoid vendor lock-in" |
+| Depends on | nothing (L1) | ERC-4337 validation flow (bundler/paymaster/EntryPoint) |
+| IntentOS today | **used** (EOA → our own delegate) | **not used** (our delegate is monolithic, non-modular) |
+
+**Why this matters for IntentOS.** Our `ExecutionDelegate7702` is a **monolithic** 7702 delegate: it
+occupies the EOA's whole code slot and hard-codes guard + SwapRouter + SessionKey + relayer + gas
+vault. That is exactly why it **cannot co-exist** with a MetaMask Smart Account (one code slot, mutual
+exclusion). It also means adding features needs an impl redeploy + everyone re-delegating.
+
+**Future Option C (post-hackathon).** Express IntentOS guardrails as **installable modules** on a
+generic modular account (which itself wears 7702 code), instead of replacing the account's code:
+- **Executor module (type 2)** — perform swaps inside the guard.
+- **Hook module (type 4)** — enforce HardGuard in `preCheck`/`postCheck` around every execution.
+- **Validator module (type 1)** — verify SessionKey signatures.
+Because modules are **installed, not substituted**, this **removes the MetaMask conflict** and lets a
+user keep their existing smart account. Two sub-paths: **C1** = MetaMask **Delegation Framework**
+caveats (MetaMask-native); **C2** = an **ERC-7579** account (Safe7579 / Kernel / Nexus) where IntentOS
+is a module. Trade-off: 7579 pulls in **ERC-4337** infra, a medium-to-large re-architecture.
+
+**Reuse signal found during research.** The 7579 ecosystem already ships primitives IntentOS hand-rolls
+— **Smart Sessions** with `SpendingLimits` / `TimeFrame` / `ValueLimit` / `UsageLimit` policies (= our
+SessionKey + hard rails) and a **Scheduled Orders** executor with `getSwapOrderData` (= our periodic
+swap). So Option C is not just compatible; it lets us **stand on standard modules** and focus IntentOS
+on its real differentiator: the **Watcher + EvidenceCommitted** monitoring/tighten/freeze layer. The
+long-term vision is "**IntentOS = a Watcher/Evidence Hook module**" that plugs into any modular account.
+**Out of scope for the hackathon** — recorded so we don't lose it.
