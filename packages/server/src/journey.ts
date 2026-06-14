@@ -48,6 +48,7 @@ import {
 } from "@intentos/runtime";
 import { store } from "./store.js";
 import { openClawComplete } from "./openclaw.js";
+import { isProductionRuntime } from "./authGate.js";
 import type { AgentPackageDraft, RuntimeRecord } from "./intentTypes.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,11 +73,17 @@ function deployments(): Deployments {
 
 // On-chain Owner identity (plan/080 ARCH-001). "demo" = the shared platform demo Owner signs
 // server-side (judges need no funds). "connected" = the visitor's OWN EOA is the Owner; they sign the
-// EIP-7702 delegation + initialize in the browser and the server only relays SessionKey-signed
-// executions. Default "demo" so the live showcase never breaks until the per-user path is proven.
+// EIP-7702 delegation locally (Activation Kit) and the server only relays SessionKey-signed executions.
+// DEFAULT: "connected" on production runtimes (the real product is the single live URL — plan/080), but
+// "demo" locally (so dev/e2e don't hit the Activate gate). Set INTENTOS_OWNER explicitly to override.
+// Defaulting in code (not just env) keeps the deployed URL on the real per-user path even if a deploy
+// forgets the env var.
 export type OwnerMode = "demo" | "connected";
 export function ownerMode(): OwnerMode {
-  return (process.env.INTENTOS_OWNER ?? "demo").toLowerCase() === "connected" ? "connected" : "demo";
+  const v = (process.env.INTENTOS_OWNER ?? "").toLowerCase();
+  if (v === "connected") return "connected";
+  if (v === "demo") return "demo";
+  return isProductionRuntime() ? "connected" : "demo";
 }
 
 /** Connected EOA from the CAIP-10 uid `eip155:<chainId>:<address>` (web3auth.ts). */
@@ -268,11 +275,13 @@ const MAX_VERTEX_COST_USD = Number(process.env.INTENTOS_RUNTIME_MAX_VERTEX_USD ?
  * loop / tiny-amounts safety policy. Requires an Executor to exist for this session.
  */
 export async function runtimeStart(opts?: CreateOpts) {
-  if (!session.executorTokenId) throw new Error("create the Executor Agent first");
   if (!opts?.uid || !opts?.intentId) throw new Error("intentId required");
   const c = await ownerCtx(opts);
   const doc = await store().getIntent(opts.uid, opts.intentId);
   if (!doc) throw new Error("intent not found");
+  const executorTokenId = session.executorTokenId ?? doc.executorTokenId;
+  const watcherTokenId = session.watcherTokenId ?? doc.watcherTokenId;
+  if (!executorTokenId) throw new Error("create the Executor Agent first");
   const existing = await store().getRuntime(opts.uid, opts.intentId);
   if (existing && ["scheduled", "running"].includes(existing.status)) {
     await store().putIntent(opts.uid, { ...doc, status: "live", runtime: runtimeState(existing), runtimeId: existing.runtimeId });
@@ -283,13 +292,13 @@ export async function runtimeStart(opts?: CreateOpts) {
   const autoStopAt = startedAt + cfg.ttlMinutes * 60_000;
   const plannedTicks = Math.max(1, Math.min(MAX_PLANNED_TICKS, Math.floor((cfg.ttlMinutes * 60) / Math.max(1, cfg.loopPeriodSec))));
   const executor = doc.packages.executor.fixed ? doc.packages.executor : null;
-  const runtimeId = `rt-${doc.intentId}-${session.executorTokenId}-${startedAt}`;
+  const runtimeId = `rt-${doc.intentId}-${executorTokenId}-${startedAt}`;
   const record: RuntimeRecord = {
     runtimeId,
     ownerUid: opts.uid,
     intentId: doc.intentId,
-    executorTokenId: session.executorTokenId,
-    watcherTokenId: session.watcherTokenId,
+    executorTokenId,
+    watcherTokenId,
     delegate: c.delegate,
     role: "EXECUTOR",
     packageHash: executor?.packageHash ?? pkgHash,
