@@ -21632,8 +21632,9 @@ function mnemonicToAccount(mnemonic, { passphrase, ...hdKeyOpts } = {}) {
 }
 
 // scripts/activate-kit/activate.mjs
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, chmodSync, unlinkSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
+import { Writable } from "node:stream";
 import { stdin, stdout, argv, env, exit } from "node:process";
 var CFG = {
   chainId: 8453,
@@ -21666,7 +21667,6 @@ var CFG = {
 };
 var VAULT_TOTAL = CFG.initialExecVault + CFG.initialWatcherVault;
 var REQUIRED_ETH = VAULT_TOTAL + parseEther("0.0006");
-var RECOMMENDED_USDC = 1000n;
 var INITIALIZE_ABI = [
   {
     type: "function",
@@ -21709,16 +21709,80 @@ var ok = (s) => log(`${C.grn}\u2714${C.reset} ${s}`);
 var info = (s) => log(`${C.cyn}\u2192${C.reset} ${s}`);
 var warn = (s) => log(`${C.yel}!${C.reset} ${s}`);
 var die = (s) => {
+  try {
+    cleanupEnv();
+  } catch {
+  }
   log(`${C.red}\u2716 ${s}${C.reset}`);
   exit(1);
 };
 var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+process.on("SIGINT", () => {
+  stdout.write("\n");
+  try {
+    cleanupEnv();
+  } catch {
+  }
+  exit(130);
+});
 function hasFlag(f) {
   return argv.includes(f);
 }
 function flagVal(f) {
   const i = argv.indexOf(f);
   return i >= 0 ? argv[i + 1] : void 0;
+}
+var ENV_PATH = flagVal("--env-file") ?? ".env";
+async function ask(q) {
+  const rl = createInterface({ input: stdin, output: stdout });
+  const a = (await rl.question(q)).trim();
+  rl.close();
+  return a;
+}
+async function askHidden(q) {
+  let muted = false;
+  const masked = new Writable({ write(chunk, enc, cb) {
+    if (!muted) stdout.write(chunk, enc);
+    cb();
+  } });
+  const rl = createInterface({ input: stdin, output: masked, terminal: true });
+  stdout.write(q);
+  muted = true;
+  const a = (await rl.question("")).trim();
+  rl.close();
+  stdout.write("\n");
+  return a;
+}
+function readEnvFile(path) {
+  const out = {};
+  try {
+    for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/);
+      if (m) out[m[1]] = m[2];
+    }
+  } catch {
+  }
+  return out;
+}
+function writeEnvKey(path, key) {
+  const varName = /^0x[0-9a-fA-F]{64}$/.test(key) ? "PRIVATE_KEY" : "MNEMONIC";
+  writeFileSync(path, `# IntentOS activation kit \u2014 TEMPORARY secret. Delete this file when done.
+${varName}=${key}
+`, { mode: 384 });
+  try {
+    chmodSync(path, 384);
+  } catch {
+  }
+}
+function cleanupEnv() {
+  if (hasFlag("--keep-env") || !existsSync(ENV_PATH)) return;
+  try {
+    writeFileSync(ENV_PATH, "\n");
+    unlinkSync(ENV_PATH);
+    info(`Removed the temporary ${ENV_PATH} (key not left on disk).`);
+  } catch {
+    warn(`Could not remove ${ENV_PATH} \u2014 delete it yourself; it holds your key.`);
+  }
 }
 function makeClients() {
   const transport = fallback((flagVal("--rpc") ? [flagVal("--rpc")] : CFG.rpcs).map((u) => http(u, { retryCount: 3, retryDelay: 600 })));
@@ -21727,33 +21791,43 @@ function makeClients() {
     wallet: createWalletClient({ chain: base, transport })
   };
 }
-async function resolveAccount() {
-  if (hasFlag("--ledger")) {
-    warn("Ledger mode is EXPERIMENTAL and requires a recent Ledger Ethereum app that clear-signs EIP-7702.");
-    const { ledgerAccount } = await import("./ledger.mjs").catch(() => {
-      die("Ledger support needs the optional native packages. Run:\n    npm i @ledgerhq/hw-transport-node-hid @ledgerhq/hw-app-eth\n  then re-run with --ledger. (Or import a dedicated key instead.)");
-    });
-    const path = flagVal("--hd-path") ?? "m/44'/60'/0'/0/0";
-    return ledgerAccount(path);
-  }
-  let secret = env.PRIVATE_KEY || env.MNEMONIC || null;
-  const keyFile = flagVal("--key-file");
-  if (!secret && keyFile) secret = readFileSync(keyFile, "utf8").trim();
-  if (!secret) {
-    warn("No Ledger (--ledger) and no PRIVATE_KEY/MNEMONIC/--key-file provided.");
-    warn("Ledger is RECOMMENDED. If you must import a key, use a DEDICATED low-value EOA \u2014 never your main seed.");
-    const rl = createInterface({ input: stdin, output: stdout });
-    secret = (await rl.question("Paste mnemonic or 0x-private-key (input is visible \u2014 prefer --key-file): ")).trim();
-    rl.close();
-  }
-  if (!secret) die("no signer provided");
+async function loadLedger() {
+  warn("Ledger mode is EXPERIMENTAL and requires a recent Ledger Ethereum app that clear-signs EIP-7702.");
+  const mod3 = await import("./ledger.mjs").catch(() => {
+    die("Ledger support needs the optional native packages. Run:\n    npm i @ledgerhq/hw-transport-node-hid @ledgerhq/hw-app-eth\n  then re-run. (Or import a dedicated key instead.)");
+  });
+  return mod3.ledgerAccount(flagVal("--hd-path") ?? "m/44'/60'/0'/0/0");
+}
+function accountFromSecret(secret) {
   try {
-    const acct = /^0x[0-9a-fA-F]{64}$/.test(secret) ? privateKeyToAccount(secret) : mnemonicToAccount(secret);
-    secret = null;
-    return acct;
+    return /^0x[0-9a-fA-F]{64}$/.test(secret) ? privateKeyToAccount(secret) : mnemonicToAccount(secret);
   } catch (e) {
     die(`could not parse key: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+async function resolveAccount() {
+  if (hasFlag("--ledger")) return loadLedger();
+  const fileKey = flagVal("--key-file") ? readFileSync(flagVal("--key-file"), "utf8").trim() : null;
+  const direct = env.PRIVATE_KEY || env.MNEMONIC || fileKey;
+  if (direct) return accountFromSecret(direct);
+  const saved = readEnvFile(ENV_PATH);
+  if (saved.PRIVATE_KEY || saved.MNEMONIC) {
+    info(`Using the signer saved in ${ENV_PATH}.`);
+    return accountFromSecret(saved.PRIVATE_KEY || saved.MNEMONIC);
+  }
+  log(`${C.b}How do you want to sign the activation?${C.reset}`);
+  log(`  ${C.b}[1]${C.reset} Ledger hardware wallet   ${C.grn}(recommended \u2014 key never leaves the device)${C.reset}`);
+  log(`  ${C.b}[2]${C.reset} Paste a private key / mnemonic   ${C.dim}(hidden input; saved to ${ENV_PATH} for this run, then deleted)${C.reset}`);
+  const choice = await ask("Choose [1/2]: ");
+  if (choice === "1") return loadLedger();
+  if (choice !== "2") die("please choose 1 or 2.");
+  warn("Use a DEDICATED, low-value EOA \u2014 never your main wallet's seed phrase.");
+  const secret = await askHidden("Paste your private key (0x\u2026) or mnemonic, then press Enter (input hidden): ");
+  if (!secret) die("no key entered");
+  const account = accountFromSecret(secret);
+  writeEnvKey(ENV_PATH, secret);
+  ok(`Saved your signer to ${ENV_PATH} for this run (it will be deleted when finished).`);
+  return account;
 }
 async function main() {
   log(`${C.b}IntentOS \u2014 Local Activation Kit (EIP-7702)${C.reset}`);
@@ -21769,6 +21843,7 @@ async function main() {
   if (isDelegated && currentImpl.toLowerCase() === CFG.delegateImpl.toLowerCase()) {
     ok("This EOA is already delegated to the IntentOS guard. Nothing to do.");
     info(`Sign in to the panel with ${address} and build your Intent.`);
+    cleanupEnv();
     return;
   }
   if (isDelegated) {
@@ -21777,9 +21852,6 @@ async function main() {
     if (!hasFlag("--force")) die("Re-run with --force to overwrite, or use a fresh EOA.");
     warn("--force set: proceeding to overwrite.");
   }
-  info(`Fund ${C.b}${address}${C.reset} on ${C.b}Base mainnet${C.reset}:`);
-  log(`    \u2022 ${C.b}${formatEther(REQUIRED_ETH)} ETH${C.reset} minimum (recommend ~0.002 ETH: gas + ${formatEther(VAULT_TOTAL)} gas-vault reserve)`);
-  log(`    \u2022 ${C.b}0.001 USDC${C.reset} for your first guarded trade (optional now)`);
   let warned = false;
   for (; ; ) {
     const [bal, usdc] = await Promise.all([
@@ -21787,12 +21859,12 @@ async function main() {
       pub.readContract({ address: CFG.usdc, abi: ERC20_ABI, functionName: "balanceOf", args: [address] }).catch(() => 0n)
     ]);
     if (bal >= REQUIRED_ETH) {
-      ok(`Funded: ${formatEther(bal)} ETH${usdc >= RECOMMENDED_USDC ? `, ${Number(usdc) / 1e6} USDC` : ""}`);
-      if (usdc < RECOMMENDED_USDC) warn(`USDC is ${Number(usdc) / 1e6} (< 0.001). You can add it before trading.`);
+      ok(`EOA has ${formatEther(bal)} ETH${usdc > 0n ? `, ${Number(usdc) / 1e6} USDC` : ""} \u2014 enough to activate.`);
       break;
     }
     if (!warned) {
-      info(`Waiting for ETH\u2026 (have ${formatEther(bal)}, need ${formatEther(REQUIRED_ETH)}). Ctrl-C to abort.`);
+      info(`Deposit the funds you'll use for trading into your EOA: ${C.b}${address}${C.reset}`);
+      log(`    ${C.dim}(needs a little Base ETH for gas; if this wallet already holds ETH you're set). Ctrl-C to abort.${C.reset}`);
       warned = true;
     }
     await sleep(6e3);
@@ -21829,6 +21901,7 @@ async function main() {
   ok(`${C.b}Activated.${C.reset} ${address} is now an IntentOS guarded account on Base mainnet.`);
   info(`Next: open the IntentOS panel, sign in with ${C.b}${address}${C.reset}, build your Intent, and run a guarded trade.`);
   log(`${C.dim}Executions are signed by the platform SessionKey and paid by the relayer, reimbursed from your gas vault. No more signatures from you.${C.reset}`);
+  cleanupEnv();
 }
 main().catch((e) => die(e instanceof Error ? e.message : String(e)));
 /*! Bundled license information:

@@ -64,6 +64,11 @@ export interface RuntimeRecord {
   loopPeriodSec: number;
   plannedTicks: number;
   executedTicks: number;
+  llmCallsUsed: number;
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+  estimatedVertexCostUsd: number;
+  maxVertexCostUsd: number;
   failureReason: string | null;
   createdAt: number;
   updatedAt: number;

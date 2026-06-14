@@ -37,6 +37,17 @@ async function authedFetch(url: string, init: RequestInit): Promise<Response> {
 }
 
 export async function openClawChat(prompt: string): Promise<string> {
+  return (await openClawComplete(prompt)).text;
+}
+
+export interface OpenClawCompletion {
+  text: string;
+  estimatedInputTokens: number;
+  estimatedOutputTokens: number;
+  estimatedCostUsd: number;
+}
+
+export async function openClawComplete(prompt: string): Promise<OpenClawCompletion> {
   const base = (process.env.OPENCLAW_GATEWAY_URL ?? DEFAULT_GATEWAY_URL).replace(/\/+$/, "");
   const token = await gatewayToken();
   const res = await authedFetch(`${base}/v1/chat/completions`, {
@@ -53,5 +64,22 @@ export async function openClawChat(prompt: string): Promise<string> {
   if (!res.ok) throw new Error(`openclaw chat ${res.status}: ${body.error?.message ?? JSON.stringify(body).slice(0, 200)}`);
   const text = body.choices?.[0]?.message?.content?.trim();
   if (!text) throw new Error("openclaw chat returned empty content");
-  return text;
+  const estimatedInputTokens = estimateTokens(prompt);
+  const estimatedOutputTokens = estimateTokens(text);
+  return {
+    text,
+    estimatedInputTokens,
+    estimatedOutputTokens,
+    estimatedCostUsd: vertexFlashCostUsd(estimatedInputTokens, estimatedOutputTokens),
+  };
+}
+
+function estimateTokens(text: string): number {
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function vertexFlashCostUsd(inputTokens: number, outputTokens: number): number {
+  const input = (inputTokens / 1_000_000) * 0.30;
+  const output = (outputTokens / 1_000_000) * 2.50;
+  return input + output;
 }

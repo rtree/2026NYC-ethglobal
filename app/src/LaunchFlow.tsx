@@ -611,6 +611,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
             <tr><td className="k">Runtime status</td><td className="v">{runtimeRecord.status}</td></tr>
             <tr><td className="k">Runtime id</td><td className="v">{runtimeRecord.runtimeId}</td></tr>
             <tr><td className="k">Executed ticks</td><td className="v">{runtimeRecord.executedTicks} / {runtimeRecord.plannedTicks}</td></tr>
+            <tr><td className="k">LLM budget</td><td className="v">${runtimeRecord.estimatedVertexCostUsd.toFixed(4)} / ${runtimeRecord.maxVertexCostUsd.toFixed(2)} · {runtimeRecord.llmCallsUsed} calls</td></tr>
           </tbody></table>
         )}
         {runtimeActive && (

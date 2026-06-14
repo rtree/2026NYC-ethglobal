@@ -47,7 +47,7 @@ import {
   voteTighten,
 } from "@intentos/runtime";
 import { store } from "./store.js";
-import { openClawChat } from "./openclaw.js";
+import { openClawComplete } from "./openclaw.js";
 import type { AgentPackageDraft, RuntimeRecord } from "./intentTypes.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -259,6 +259,7 @@ async function linkIntent(opts: CreateOpts | undefined, patch: { executorTokenId
 // Hard ceiling on planned AgentLoop ticks regardless of TTL/period (tiny-amounts + bounded policy).
 const MAX_PLANNED_TICKS = 12;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const MAX_VERTEX_COST_USD = Number(process.env.INTENTOS_RUNTIME_MAX_VERTEX_USD ?? "5.00");
 
 /**
  * Start the (bounded) runtime: consume the intent's StartConfig, mark it live, and record the schedule
@@ -302,6 +303,11 @@ export async function runtimeStart(opts?: CreateOpts) {
     loopPeriodSec: cfg.loopPeriodSec,
     plannedTicks,
     executedTicks: 0,
+    llmCallsUsed: 0,
+    estimatedInputTokens: 0,
+    estimatedOutputTokens: 0,
+    estimatedVertexCostUsd: 0,
+    maxVertexCostUsd: MAX_VERTEX_COST_USD,
     failureReason: null,
     createdAt: startedAt,
     updatedAt: startedAt,
@@ -398,6 +404,12 @@ export async function runtimeTick(opts?: CreateOpts) {
   if (!["scheduled", "running"].includes(record.status)) {
     return { intentId: opts.intentId, runtimeRecord: record, tick: null };
   }
+  if (record.estimatedVertexCostUsd >= record.maxVertexCostUsd) {
+    const stopped = selfStopRuntime(record, "vertex budget exhausted before tick");
+    await store().putRuntime(opts.uid, stopped);
+    logRuntimeSelfStop(stopped, "vertex_budget_exhausted");
+    return { intentId: opts.intentId, runtimeRecord: stopped, tick: null };
+  }
   if (record.autoStopAt <= now || record.executedTicks >= record.plannedTicks) {
     const expired: RuntimeRecord = { ...record, status: "expired", updatedAt: now };
     await store().putRuntime(opts.uid, expired);
@@ -411,23 +423,52 @@ export async function runtimeTick(opts?: CreateOpts) {
     `tick=${tick}`,
     "No trading decision is authorized in this smoke tick.",
   ].join("\n");
-  const decision = await openClawChat(prompt);
+  const completion = await openClawComplete(prompt);
+  const decision = completion.text;
   const nextExecuted = record.executedTicks + 1;
-  const status = nextExecuted >= record.plannedTicks ? "expired" : "running";
+  const estimatedVertexCostUsd = Number((record.estimatedVertexCostUsd + completion.estimatedCostUsd).toFixed(8));
+  const overBudget = estimatedVertexCostUsd >= record.maxVertexCostUsd;
+  const status = overBudget ? "self-stopped" : nextExecuted >= record.plannedTicks ? "expired" : "running";
   const updated: RuntimeRecord = {
     ...record,
     status,
     executedTicks: nextExecuted,
+    llmCallsUsed: record.llmCallsUsed + 1,
+    estimatedInputTokens: record.estimatedInputTokens + completion.estimatedInputTokens,
+    estimatedOutputTokens: record.estimatedOutputTokens + completion.estimatedOutputTokens,
+    estimatedVertexCostUsd,
+    failureReason: overBudget ? "vertex budget exhausted" : record.failureReason,
     lastHeartbeatAt: now,
     updatedAt: now,
   };
   await store().putRuntime(opts.uid, updated);
+  if (overBudget) logRuntimeSelfStop(updated, "vertex_budget_exhausted");
   logAction({ at: now, action: `OpenClaw tick ${tick}: ${decision.slice(0, 40)}`, ok: true });
   return {
     intentId: opts.intentId,
     runtimeRecord: updated,
     tick: { tick, status: "held", action: decision },
   };
+}
+
+function selfStopRuntime(record: RuntimeRecord, reason: string): RuntimeRecord {
+  return { ...record, status: "self-stopped", failureReason: reason, updatedAt: Date.now() };
+}
+
+function logRuntimeSelfStop(record: RuntimeRecord, reason: string) {
+  console.log(JSON.stringify({
+    severity: "NOTICE",
+    event: "runtime_self_stop",
+    reason,
+    runtimeId: record.runtimeId,
+    ownerUid: record.ownerUid,
+    intentId: record.intentId,
+    executorTokenId: record.executorTokenId,
+    executedTicks: record.executedTicks,
+    llmCallsUsed: record.llmCallsUsed,
+    estimatedVertexCostUsd: record.estimatedVertexCostUsd,
+    maxVertexCostUsd: record.maxVertexCostUsd,
+  }));
 }
 
 /**

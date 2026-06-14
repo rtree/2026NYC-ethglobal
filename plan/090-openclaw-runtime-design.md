@@ -443,6 +443,7 @@ defaultTickIntervalSeconds: 10
 maxTicks: 60
 maxConcurrentRuntimeSessionsPerOwner: 1
 maxConcurrentRuntimeSessionsPerIntent: 1
+maxVertexCostUsd: 5.00
 ```
 
 The runtime service should use Cloud Run request timeout >= `maxRuntimeMinutes` plus startup margin, but
@@ -927,6 +928,7 @@ Runtime execution must remain bounded:
 Billing/cost gates:
 
 - per-runtime max Vertex calls;
+- per-runtime max estimated Vertex cost in USD;
 - per-runtime max quote/simulation calls;
 - per-runtime max relay attempts;
 - per-owner daily runtime creation cap;
@@ -963,6 +965,16 @@ Cloud Run cost guardrails:
 - per-owner active runtime cap = 1;
 - UI start button disabled while status is `scheduled`, `running`, or `stopping`;
 - stop request is Owner-authenticated and sets status `STOPPING` immediately.
+
+LLM budget self-stop:
+
+- every OpenClaw/Vertex call increments `llmCallsUsed`, `estimatedInputTokens`,
+  `estimatedOutputTokens`, and `estimatedVertexCostUsd`;
+- token counts may be approximate when the gateway does not return authoritative usage;
+- if `estimatedVertexCostUsd >= maxVertexCostUsd`, runtime status becomes `SELF_STOPPED`;
+- Cloud Logging emits a structured `runtime_self_stop` event with `runtimeId`, `intentId`,
+  `llmCallsUsed`, `estimatedVertexCostUsd`, and the reason;
+- runtime must not call the model again after this terminal status.
 
 ## 15. Implementation order
 
