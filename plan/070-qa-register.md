@@ -82,3 +82,39 @@ When one issue is found, search for the same pattern across the app:
 - New buttons must include a test that captures the request body and verifies the endpoint and
   `intentId`/payload.
 - New live displays must be tested with API fixture values that differ from demo constants.
+
+---
+
+## ⚠️ Deploy coordination — READ BEFORE deploying `intentos-panel` (copy-paste to other agents)
+
+There is **ONE** live Cloud Run service and it must stay on **ONE** URL in **connected** (real per-user
+EIP-7702) mode. Multiple agents deploying to the same service have repeatedly seized 100% traffic and
+silently flipped the live URL back to demo mode. To stop that:
+
+> **Message to paste to any agent/human about to deploy the panel:**
+>
+> The single live product URL is `https://intentos-panel-41929375451.us-central1.run.app` and it must
+> serve **`INTENTOS_OWNER=connected`** (the real per-user EIP-7702 flow + Activation Kit). This is the
+> URL judges see — do **not** revert it to demo mode and do **not** create extra tag URLs.
+>
+> If you deploy `intentos-panel`, you MUST include **all** of these env vars (omitting any will change
+> behavior — e.g. dropping `INTENTOS_OWNER` flips it to demo via env, though code now defaults to
+> connected on Cloud Run as a backstop):
+>
+> ```
+> --set-env-vars INTENTOS_AUTH=firebase,INTENTOS_STORE=firestore,INTENTOS_LLM=vertex,GOOGLE_CLOUD_PROJECT=ethglobal-nyc2026-rtree,INTENTOS_OWNER=connected,OPENCLAW_GATEWAY_URL=https://intentos-openclaw-gateway-hjx3x7yweq-uc.a.run.app
+> ```
+>
+> Prefer building the image via `cloudbuild.yaml` (it bakes the Firebase Web API key) and deploying that
+> image, rather than `--source .`. Use `--max-instances 1` (in-memory nonce store / single-tester demo).
+> **After ANY deploy, verify:** `curl -s <URL>/api/config` returns `{"authRequired":true,"ownerMode":"connected"}`.
+> If it doesn't, re-pin: `gcloud run services update-traffic intentos-panel --region us-central1 --to-latest`
+> on a connected revision, and remove stray tags with `--remove-tags demo,connected`.
+>
+> If you only need to test something in demo mode, do it **locally**
+> (`PANEL_AUTH=off INTENTOS_AUTH=off INTENTOS_STORE=memory INTENTOS_LLM=mock node packages/server/dist/server.js`),
+> **not** by deploying demo mode to the shared service.
+
+Backstop in code: `ownerMode()` (in `packages/server/src/journey.ts`) now defaults to **connected on
+production runtimes** (Cloud Run) and demo only locally, so a deploy that forgets `INTENTOS_OWNER` still
+keeps the live URL on the real path. Keep that default.
