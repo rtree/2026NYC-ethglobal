@@ -311,7 +311,7 @@ So EIP-7702 is the correct trust model for agent self-custody. **The problem is 
 
 ### The blocker: browsers can't delegate an EOA to a dApp-chosen contract
 
-Activating EIP-7702 means signing an **authorization** that points your EOA at our `ExecutionDelegate7702` implementation. We found — and this is reproduced in the screenshots in [plan/XXX-ScreenShots.md](plan/XXX-ScreenShots.md) — that **browser/injected wallets refuse to do this**:
+Activating EIP-7702 means signing an **authorization** that points your EOA at our `ExecutionDelegate7702` implementation. We found that **browser/injected wallets refuse to do this**:
 
 ```
 Account type "json-rpc" is not supported.
@@ -345,8 +345,6 @@ Honest developer feedback from building this, intended to help:
 - **Clear-signing for a type-4 tx that carries an `authorizationList`.** It is not obvious how the device surfaces "you are delegating this EOA to contract `0x…`" to the user. Documented Clear Signing artifacts for the delegation target (so the device shows the impl address and the "initialize" intent in human terms) would make this dramatically safer to ship.
 - **Node HID transport packaging.** `@ledgerhq/hw-transport-node-hid` is a native module and **cannot be bundled** (we ship it as an external the user installs once). A documented "install-free / bundler-friendly" transport story, or an official note on the expected externals, would smooth distribution of CLI tools like our kit.
 - **What worked well.** The viem `toAccount` custom-account pattern made wrapping the Ledger signer for both `signAuthorization` and `signTransaction` clean once the signature normalization (r/s/v → `yParity`) was understood.
-
-> Screenshots of the browser-wallet failure and the Ledger activation flow: [plan/XXX-ScreenShots.md](plan/XXX-ScreenShots.md).
 
 ---
 
