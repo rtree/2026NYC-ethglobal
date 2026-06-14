@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
-import { encodeFunctionData, type Abi, type Address, type Hex } from "viem";
+import { encodeFunctionData, type Abi } from "viem";
 import { useChainState, activeStatus, invalidateChainState, type ChainState } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { ActionButton } from "./ActionButton";
@@ -9,6 +9,7 @@ import { authState, ownerModeCached, fetchAuthRequired } from "./auth";
 import { tokenPair, delegateAbi } from "./config";
 import { shortAddr, shortHash, addrUrl, txUrl, usdc, eth } from "./format";
 import type { AgentPackageDraft, IntentDoc, RuntimeRecord } from "./intentTypes";
+import { sendOwnerSelfCall } from "./walletSelfCall";
 
 // 030/040/050/060/070/080 collapsed into ONE master/detail screen (plan/010 §15.1). Left = step nav,
 // right = the controls for the selected step. No route hops. The IntentBuilder authors BOTH Agent
@@ -796,16 +797,4 @@ function toGuard(g: GuardWire) {
     frozen: Boolean(g.frozen),
     bindingNonce: BigInt(String(g.bindingNonce)),
   };
-}
-
-async function sendOwnerSelfCall(
-  walletClient: { sendTransaction: (tx: { to: Address; data: Hex }) => Promise<Hex> } | undefined,
-  from: Address | undefined,
-  to: Address,
-  data: Hex,
-): Promise<Hex> {
-  if (walletClient) return walletClient.sendTransaction({ to, data });
-  const eth = (globalThis as unknown as { ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> } }).ethereum;
-  if (!eth || !from) throw new Error("wallet client not ready; reconnect your wallet");
-  return (await eth.request({ method: "eth_sendTransaction", params: [{ from, to, data }] })) as Hex;
 }

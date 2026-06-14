@@ -51,9 +51,13 @@ This matches existing QA entries:
 
 Planner review result: this is an already-known QA path, not a new protocol flow gap. Priority is P0 live-test/fix connected Owner `ownerUpdateGuard` through Resume and Start, with EIP-1193 fallback and readable wallet errors.
 
-## Fix in progress
+Manager review result: live config is correct, so this is not a Cloud Run env-drop/deploy issue. The connected Owner is genuinely frozen on Base, contract/server behavior is correctly blocking execution, and the user-visible confusion is concentrated in active-intent timeline filtering plus poor wallet error normalization.
 
-Local changes started:
+Tech Lead review result: root cause is likely frontend race + wallet UX, not contract. `ownerModeCached()` defaults to `demo` until `/api/config` loads, while the route gate previously allowed entry before `configLoaded`; Live Console could therefore call server `/api/owner/resume`, which correctly fails in connected mode. Live logs reportedly confirm `POST /api/owner/resume failed: connected mode: resume...`.
+
+## Mitigation / fix status
+
+Current code state:
 
 - Added `app/src/walletSelfCall.ts`
   - extracts readable messages from wallet/RPC object errors
@@ -61,11 +65,13 @@ Local changes started:
   - if that fails, falls back to `window.ethereum.request({ method: "eth_sendTransaction" })`
 - Updated `app/src/ActionButton.tsx` to avoid `[object Object]` and show a real error message.
 - Updated `app/src/LiveConsole.tsx` to use the shared self-call helper.
+- Updated `app/src/LaunchFlow.tsx` to use the same shared self-call helper for Start-time guard reset.
+- Updated `app/src/gate.ts` so gated routes cannot pass until `/api/config` has loaded, preventing the connected-vs-demo ownerMode race.
+- `pnpm typecheck` passed.
+- `pnpm build` passed.
 
 Remaining local cleanup:
 
-- Wire `app/src/LaunchFlow.tsx` to the shared helper and remove duplicated self-call code.
-- Run typecheck/build.
 - Deploy only via `./scripts/build-panel.sh && ./scripts/deploy-panel.sh`.
 - Live retest with Owner `0x5E9041E731E10727d923D79B1e83290f6E83a221`:
   1. click Resume / unfreeze
@@ -75,7 +81,5 @@ Remaining local cleanup:
 
 ## Open investigation threads
 
-- Manager and Tech Lead sub-agent reviews are still running at the time this note was created.
 - Need Cloud Run logs around the exact failed Resume click if the readable error still does not explain the wallet/provider failure.
 - If both viem and raw `eth_sendTransaction` fail, next fallback candidate is using the existing Activation Kit transaction path for `ownerUpdateGuard`.
-

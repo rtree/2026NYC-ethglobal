@@ -81,5 +81,5 @@ export function useGate() {
   }, [signedIn]);
 
   const authOk = !authRequired || signedIn;
-  return { isConnected, address, verified, signedIn, authRequired, worldIdRequired, configLoaded: loaded, passed: isConnected && authOk && verified };
+  return { isConnected, address, verified, signedIn, authRequired, worldIdRequired, configLoaded: loaded, passed: loaded && isConnected && authOk && verified };
 }
