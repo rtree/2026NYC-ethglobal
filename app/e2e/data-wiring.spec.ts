@@ -204,7 +204,7 @@ test("Start runtime button posts intentId to /api/runtime/start", async ({ page 
   });
   await page.goto("/#/launch");
   await page.getByText("Start Conditions", { exact: true }).first().click();
-  await page.getByRole("button", { name: /Save runtime schedule/ }).click();
+  await page.getByRole("button", { name: /Start OpenClaw runtime session/ }).click();
   await expect.poll(() => startBody).toEqual({ intentId: ACTIVE_INTENT.intentId });
   await expect(page.getByText(/runtime schedule saved/)).toBeVisible();
   await expect(page.getByText(RUNTIME_RECORD.runtimeId)).toBeVisible();

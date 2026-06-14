@@ -571,8 +571,8 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
           <input className="input" type="number" min={1} max={5} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} />
         </label>
         <p className="spec-ref" style={{ marginTop: 10 }}>
-          This arms a bounded runtime schedule only: one planned tick per {loop}s (min 5s), hard stop
-          after {ttl} min (max 5m). OpenClaw/Cloud Run AgentLoop provisioning is not wired in this MVP.
+          This starts a bounded OpenClaw session: one tick every {loop}s after the previous tick
+          completes, hard stop after {ttl} min (max 5m here), with Owner stop and budget self-stop.
         </p>
         <button className="btn primary block" style={{ marginTop: 12 }} onClick={save}>{saved ? "Saved ✓" : "Save start conditions"}</button>
         {err && <p className="pill fund-exhausted" style={{ marginTop: 8 }}>{err.slice(0, 80)}</p>}
@@ -595,13 +595,18 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
           </div>
         ) : (
           <ActionButton
-            label="Save runtime schedule (OpenClaw not provisioned)"
+            label="Start OpenClaw runtime session"
             className="btn primary block"
             disabled={!hasExecutor}
             run={async () => {
               const r = await api.runtimeStart(intent?.intentId);
               setStarted(r.runtime);
               setRuntimeRecord(r.runtimeRecord ?? null);
+              // Fire the bounded resident session as a separate request so the UI can immediately show
+              // status/stop controls. The server enforces TTL/tick/budget bounds.
+              api.runtimeRun(intent?.intentId)
+                .then((out) => setRuntimeRecord(out.runtimeRecord))
+                .catch((e) => setErr(e instanceof Error ? e.message : String(e)));
               return { ok: true } as const;
             }}
           />
