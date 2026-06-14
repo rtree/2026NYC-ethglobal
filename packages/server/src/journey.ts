@@ -69,10 +69,26 @@ function deployments(): Deployments {
   return JSON.parse(readFileSync(path, "utf8")) as Deployments;
 }
 
-// ---- cached singletons ----
-let _ctx: Awaited<ReturnType<typeof buildCtx>> | null = null;
+// On-chain Owner identity (plan/080 ARCH-001). "demo" = the shared platform demo Owner signs
+// server-side (judges need no funds). "connected" = the visitor's OWN EOA is the Owner; they sign the
+// EIP-7702 delegation + initialize in the browser and the server only relays SessionKey-signed
+// executions. Default "demo" so the live showcase never breaks until the per-user path is proven.
+export type OwnerMode = "demo" | "connected";
+export function ownerMode(): OwnerMode {
+  return (process.env.INTENTOS_OWNER ?? "demo").toLowerCase() === "connected" ? "connected" : "demo";
+}
 
-async function buildCtx() {
+/** Connected EOA from the CAIP-10 uid `eip155:<chainId>:<address>` (web3auth.ts). */
+export function addressFromUid(uid: string): Address | null {
+  const a = uid.split(":")[2] ?? "";
+  return /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as Address) : null;
+}
+
+// ---- cached contexts: demo singleton + a per-delegate cache for connected (per-user) accounts ----
+let _ctx: Awaited<ReturnType<typeof buildCtx>> | null = null;
+const _ctxByDelegate = new Map<string, Awaited<ReturnType<typeof buildCtx>>>();
+
+async function buildCtx(delegateOverride?: Address) {
   // Multiple Base RPCs behind a viem fallback() transport: a single endpoint failing (rate-limit,
   // 5xx, the Infura "no access" blip) auto-fails over to the next, and viem ranks healthier ones first.
   const rpcs = await getBaseRpcUrls();
@@ -93,6 +109,7 @@ async function buildCtx() {
     getKmsEthAddress(keyVersion(KMS.watcherSessionKey)),
   ]);
   const d = deployments();
+  const delegate = (delegateOverride ?? (owner.address as Address)) as Address;
   return {
     pub,
     wallet,
@@ -100,15 +117,38 @@ async function buildCtx() {
     platform: platform as Account,
     sessionKey,
     watcherKey,
-    delegate: owner.address as Address,
+    delegate,
+    // true when the Owner is the connected user's OWN EOA (not the shared demo Owner): the server must
+    // NOT sign owner-authority calls (delegate/initialize/fund/updateGuard) — the browser does (080).
+    connected: delegate.toLowerCase() !== (owner.address as string).toLowerCase(),
     delegateImpl: d.contracts.executionDelegate7702Impl,
     agentNft: d.contracts.agentNFT,
   };
 }
 
-export async function ctx() {
-  if (!_ctx) _ctx = await buildCtx();
-  return _ctx;
+export type Ctx = Awaited<ReturnType<typeof buildCtx>>;
+
+/** Context for the active Owner account. With no override → the demo singleton; with a delegate address
+ *  (connected mode) → a per-user context whose reads/relays target THAT EOA. */
+export async function ctx(delegateOverride?: Address): Promise<Ctx> {
+  if (!delegateOverride) {
+    if (!_ctx) _ctx = await buildCtx();
+    return _ctx;
+  }
+  const key = delegateOverride.toLowerCase();
+  let c = _ctxByDelegate.get(key);
+  if (!c) {
+    c = await buildCtx(delegateOverride);
+    _ctxByDelegate.set(key, c);
+  }
+  return c;
+}
+
+/** Resolve the Owner context for a write call: in connected mode use the caller's EOA (from uid) as the
+ *  delegate; in demo mode (or when no uid) use the shared demo Owner. */
+async function ownerCtx(opts?: CreateOpts): Promise<Ctx> {
+  const addr = opts?.uid && ownerMode() === "connected" ? addressFromUid(opts.uid) : null;
+  return ctx(addr ?? undefined);
 }
 
 // ---- in-memory session (which agents exist this demo run) ----
@@ -239,9 +279,42 @@ export async function runtimeStart(opts?: CreateOpts) {
   return { intentId: doc.intentId, runtime };
 }
 
+/**
+ * PRODUCT-mode "Activate" (plan/080 §4): return the UNSIGNED initialize() params the browser needs to
+ * delegate its OWN EOA to ExecutionDelegate7702 and initialize the guard in one EIP-7702 self-tx. The
+ * server signs nothing here — it only supplies the default conservative guard, the platform relayer, and
+ * the SessionKeys so the user's account trusts the same execution authority the demo uses. bigints are
+ * JSON-serialized to strings; the browser converts them back when encoding calldata.
+ */
+export async function activatePlan(delegateAddr?: Address) {
+  const c = await ctx(delegateAddr);
+  const code = delegateAddr ? await c.pub.getCode({ address: delegateAddr }) : undefined;
+  const isDelegated = !!code && code.toLowerCase().startsWith("0xef0100");
+  // 7702 code is `0xef0100‖<impl>` — extract the impl to tell OUR delegate from e.g. a MetaMask SA.
+  const currentImpl = isDelegated ? (("0x" + code!.slice(8, 48)) as Address) : null;
+  const alreadyOurs = !!currentImpl && currentImpl.toLowerCase() === c.delegateImpl.toLowerCase();
+  return {
+    delegateImpl: c.delegateImpl,
+    alreadyDelegated: alreadyOurs,
+    delegatedElsewhere: isDelegated && !alreadyOurs,
+    currentImpl,
+    initialize: {
+      guard: DEMO_GUARD(1n),
+      sessionKey: c.sessionKey,
+      watcherKey: c.watcherKey,
+      relayer: c.platform.address,
+      gasPerTxCap: parseEther("0.0002"),
+      initialExecVault: parseEther("0.002"),
+      initialWatcherVault: parseEther("0.001"),
+      packageHash: pkgHash,
+      semanticGuardHash: semHash,
+    },
+  };
+}
+
 // ---- state ----
-export async function getState() {
-  const c = await ctx();
+export async function getState(delegateAddr?: Address) {
+  const c = await ctx(delegateAddr);
   const code = await c.pub.getCode({ address: c.delegate });
   const delegated = !!code && code.toLowerCase().startsWith("0xef0100");
 
@@ -309,10 +382,15 @@ export async function getState() {
   };
 }
 
-async function ensureSetup(execDraft?: AgentPackageDraft | null, pkgHashOverride?: Hex) {
-  const c = await ctx();
+async function ensureSetup(c: Ctx, execDraft?: AgentPackageDraft | null, pkgHashOverride?: Hex) {
   const code = await c.pub.getCode({ address: c.delegate });
   const delegated = !!code && code.toLowerCase().startsWith("0xef0100");
+  if (c.connected) {
+    // PRODUCT mode: the user's browser already delegated + initialized their OWN EOA (the "Activate"
+    // step). The server never signs owner-authority calls, so just require the account to be active.
+    if (!delegated) throw new Error("activate your account first (sign the EIP-7702 delegation in your wallet)");
+    return;
+  }
   const desiredGuard = guardFromDraft(execDraft ?? null, 1n);
   if (!delegated) {
     const tx = await delegateAndInitialize(c.wallet, c.pub, c.owner, c.delegateImpl, {
@@ -339,12 +417,12 @@ async function ensureSetup(execDraft?: AgentPackageDraft | null, pkgHashOverride
 }
 
 export async function createExecutor(opts?: CreateOpts) {
-  const c = await ctx();
+  const c = await ownerCtx(opts);
   const { slug, executor } = await loadDrafts(opts);
   // Production correctness: the on-chain guard + hashes come from the user's FIXed Executor package,
   // not a hardcoded "intent-abc". Falls back to demo values only when no FIXed draft is available.
   const pkgHashReal = executor?.packageHash ?? pkgHash;
-  await ensureSetup(executor, pkgHashReal);
+  await ensureSetup(c, executor, pkgHashReal);
   const r = await mintExecutorNft(c.wallet, c.pub, c.platform, c.agentNft, c.delegate, {
     agentManifestHash: pkgHashReal,
     runtimeManifestHash: runtimeHash,
@@ -361,8 +439,9 @@ export async function createExecutor(opts?: CreateOpts) {
 const WATCHER_VAULT_MIN = parseEther("0.0003");
 
 /** Ensure the watcher gas-vault lane has funds (votes reimburse the relayer from it). Owner self-call. */
-async function ensureWatcherVault() {
-  const c = await ctx();
+async function ensureWatcherVault(c: Ctx) {
+  // Connected mode: the watcher lane was seeded at Activate; the user tops up from their own wallet.
+  if (c.connected) return;
   const gv = (await c.pub.readContract({ address: c.delegate, abi, functionName: "gasVaults" })) as readonly bigint[];
   if (gv[1] >= WATCHER_VAULT_MIN) return;
   const tx = await fundGasVault(c.wallet, c.pub, c.owner, true, parseEther("0.0008"));
@@ -370,7 +449,7 @@ async function ensureWatcherVault() {
 }
 
 export async function createWatcher(opts?: CreateOpts) {
-  const c = await ctx();
+  const c = await ownerCtx(opts);
   if (!session.executorTokenId) throw new Error("create the Executor Agent first");
   const { slug, executor, watcher } = await loadDrafts(opts);
   const execPkgHash = executor?.packageHash ?? pkgHash;
@@ -388,16 +467,16 @@ export async function createWatcher(opts?: CreateOpts) {
   session.watcherTokenId = r.tokenId.toString();
   await linkIntent(opts, { watcherTokenId: r.tokenId.toString() });
   logAction({ at: Date.now(), action: `mint Watcher Agent NFT #${r.tokenId} (quorum 1)`, txHash: r.txHash, ok: true });
-  await ensureWatcherVault();
+  await ensureWatcherVault(c);
   return { tokenId: r.tokenId.toString(), txHash: r.txHash };
 }
 
 export async function trade(opts?: CreateOpts) {
-  const c = await ctx();
+  const c = await ownerCtx(opts);
   const { slug, executor } = await loadDrafts(opts);
   // Use the caller's FIXed Executor guard (not a demo fallback) when available, and bind the request
   // to this intent's id so the on-chain evidence references the real intent (not a hardcoded one).
-  await ensureSetup(executor, executor?.packageHash);
+  await ensureSetup(c, executor, executor?.packageHash);
 
   // A tiny 0.001 USDC->WETH swap is slippage-fragile: the QuoterV2 quote can drift before the tx mines
   // (same-block price movement), so a 2.5% bound reverts intermittently. Re-quote fresh each attempt and
@@ -447,18 +526,18 @@ export async function trade(opts?: CreateOpts) {
   return { ok: false, reason: "trade failed", txHash: lastTx };
 }
 
-export async function watcherFreeze() {
-  const c = await ctx();
-  await ensureWatcherVault();
+export async function watcherFreeze(opts?: CreateOpts) {
+  const c = await ownerCtx(opts);
+  await ensureWatcherVault(c);
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
   const txHash = await voteFreeze(c.wallet, c.pub, c.delegate, guard.bindingNonce, c.platform);
   logAction({ at: Date.now(), action: "Watcher VOTE_FREEZE (quorum 1)", txHash, ok: true });
   return { txHash };
 }
 
-export async function watcherTighten() {
-  const c = await ctx();
-  await ensureWatcherVault();
+export async function watcherTighten(opts?: CreateOpts) {
+  const c = await ownerCtx(opts);
+  await ensureWatcherVault(c);
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
   const patch: GuardPatch = {
     amountCapPerTx: guard.amountCapPerTx > 1n ? guard.amountCapPerTx / 2n : 1n,
@@ -472,7 +551,8 @@ export async function watcherTighten() {
 }
 
 export async function ownerResume(opts?: CreateOpts) {
-  const c = await ctx();
+  const c = await ownerCtx(opts);
+  if (c.connected) throw new Error("connected mode: resume (ownerUpdateGuard) is signed in your wallet");
   const { executor } = await loadDrafts(opts);
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
   // Resume restores the caller's FIXed guard (unfrozen) when available, else the demo guard.
@@ -483,8 +563,9 @@ export async function ownerResume(opts?: CreateOpts) {
 }
 
 /** Fund a gas-vault lane explicitly (Gas Funding step). lane: "executor" | "watcher". */
-export async function fundGas(lane: "executor" | "watcher", _opts?: CreateOpts) {
-  const c = await ctx();
+export async function fundGas(lane: "executor" | "watcher", opts?: CreateOpts) {
+  const c = await ownerCtx(opts);
+  if (c.connected) throw new Error("connected mode: fund your gas vault from your wallet");
   const isWatcher = lane === "watcher";
   const amount = isWatcher ? parseEther("0.0008") : parseEther("0.001");
   const tx = await fundGasVault(c.wallet, c.pub, c.owner, isWatcher, amount);
@@ -493,12 +574,18 @@ export async function fundGas(lane: "executor" | "watcher", _opts?: CreateOpts) 
 }
 
 export async function reset(opts?: CreateOpts) {
+  const c = await ownerCtx(opts);
   // Mark the off-chain intent stopped + unlink agents (so history is honest), then clear the session.
   if (opts?.uid && opts?.intentId) {
     await linkIntent(opts, { status: "stopped" });
   }
   session.executorTokenId = null;
   session.watcherTokenId = null;
+  if (c.connected) {
+    // Connected mode: guard reset/unfreeze is an owner action signed in the user's wallet.
+    logAction({ at: Date.now(), action: "reset (off-chain; resume guard from your wallet)", ok: true });
+    return { ok: true };
+  }
   const r = await ownerResume(opts);
   logAction({ at: Date.now(), action: "demo reset", txHash: r.txHash, ok: true });
   return r;
