@@ -75,6 +75,21 @@ export async function fixPackage(uid: string, intentId: string, role: "EXECUTOR"
   return { intentId, role, packageHash: draft.packageHash, packages: next.packages };
 }
 
+export async function updatePackageSemantic(uid: string, intentId: string, role: "EXECUTOR" | "WATCHER", semantic: unknown) {
+  const doc = await store().getIntent(uid, intentId);
+  if (!doc) throw new Error("intent not found");
+  const key = role === "EXECUTOR" ? "executor" : "watcher";
+  const current = doc.packages[key];
+  if (current.fixed) throw new Error("package is already FIXed");
+  const items = Array.isArray(semantic)
+    ? semantic.map((v) => String(v).trim()).filter(Boolean).slice(0, 8)
+    : [];
+  if (items.length === 0) throw new Error("semantic guardrails required");
+  const next = { ...doc, packages: { ...doc.packages, [key]: { ...current, semantic: items } } };
+  await store().putIntent(uid, next);
+  return { intentId, role, packages: next.packages };
+}
+
 export async function setStartConfig(uid: string, intentId: string, cfg: Partial<StartConfig>) {
   const doc = await store().getIntent(uid, intentId);
   if (!doc) throw new Error("intent not found");

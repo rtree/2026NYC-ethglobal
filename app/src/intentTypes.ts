@@ -77,6 +77,7 @@ export interface RuntimeRecord {
   lastTickAction: string | null;
   lastTickTxHash: Hex | null;
   lastWatcherAction: string | null;
+  lastWatcherReason: string | null;
   lastWatcherTxHash: Hex | null;
   createdAt: number;
   updatedAt: number;

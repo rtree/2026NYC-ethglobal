@@ -85,6 +85,11 @@ export const api = {
       "/api/intent/fix",
       { intentId, role },
     ),
+  updatePackageSemantic: (intentId: string, role: "EXECUTOR" | "WATCHER", semantic: string[]) =>
+    postJson<{ intentId: string; role: string; packages: { executor: AgentPackageDraft; watcher: AgentPackageDraft } }>(
+      "/api/intent/semantic",
+      { intentId, role, semantic },
+    ),
   setStartConfig: (intentId: string, cfg: Partial<StartConfig>) =>
     postJson<{ intentId: string; startConfig: StartConfig }>("/api/intent/start-config", { intentId, ...cfg }),
   listIntents: () => getJson<{ intents: IntentDoc[] }>("/api/intents"),

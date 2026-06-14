@@ -4,7 +4,7 @@ import { encodeFunctionData, type Abi } from "viem";
 import { useChainState, activeStatus, hasActiveIntent } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { delegateAbi, tokenPair } from "./config";
-import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl } from "./format";
+import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl, tokenTxUrl } from "./format";
 import { ActionButton } from "./ActionButton";
 import { api } from "./api";
 import { authState, ownerModeCached } from "./auth";
@@ -56,7 +56,22 @@ export function LiveConsole() {
 
   useEffect(() => {
     if (!activeIntentId) return;
-    api.runtimeStatus(activeIntentId).then((r) => setRuntimeRecord(r.runtimeRecord)).catch(() => {});
+    let active = true;
+    async function refreshRuntime() {
+      if (!activeIntentId) return;
+      try {
+        const r = await api.runtimeStatus(activeIntentId);
+        if (active) setRuntimeRecord(r.runtimeRecord);
+      } catch {
+        /* keep prior runtime status */
+      }
+    }
+    refreshRuntime();
+    const t = setInterval(refreshRuntime, 3000);
+    return () => {
+      active = false;
+      clearInterval(t);
+    };
   }, [activeIntentId]);
 
   return (
@@ -127,7 +142,9 @@ export function LiveConsole() {
                   <tr><td className="k">ticks</td><td className="v">{runtimeRecord.executedTicks} / {runtimeRecord.plannedTicks}</td></tr>
                   <tr><td className="k">last action</td><td className="v">{runtimeRecord.lastTickAction ?? "—"}{runtimeRecord.lastTickTxHash ? ` · ${shortHash(runtimeRecord.lastTickTxHash)}` : ""}</td></tr>
                   <tr><td className="k">watcher action</td><td className="v">{runtimeRecord.lastWatcherAction ?? "—"}{runtimeRecord.lastWatcherTxHash ? ` · ${shortHash(runtimeRecord.lastWatcherTxHash)}` : ""}</td></tr>
+                  {runtimeRecord.lastWatcherReason && <tr><td className="k">watcher reason</td><td className="v">{runtimeRecord.lastWatcherReason}</td></tr>}
                   <tr><td className="k">LLM budget</td><td className="v">${runtimeRecord.estimatedVertexCostUsd.toFixed(4)} / ${runtimeRecord.maxVertexCostUsd.toFixed(2)} · {runtimeRecord.llmCallsUsed} calls</td></tr>
+                  <tr><td className="k">updated</td><td className="v">{new Date(runtimeRecord.updatedAt).toLocaleTimeString()}</td></tr>
                   {runtimeRecord.failureReason && <tr><td className="k">stop reason</td><td className="v">{runtimeRecord.failureReason}</td></tr>}
                 </tbody></table>
                 {runtimeActive && (
@@ -187,7 +204,18 @@ export function LiveConsole() {
                     </>
                   )}
                   <table className="kv" style={{ marginTop: 12 }}><tbody>
-                    <tr><td className="k">Owner EOA (7702)</td><td className="v">{state ? <a href={addrUrl(state.delegate)} target="_blank" rel="noreferrer">{shortAddr(state.delegate)}</a> : "—"}</td></tr>
+                    <tr>
+                      <td className="k">Owner EOA (7702)</td>
+                      <td className="v">
+                        {state ? (
+                          <>
+                            <a href={addrUrl(state.delegate)} target="_blank" rel="noreferrer">{shortAddr(state.delegate)}</a>
+                            {" · "}
+                            <a href={tokenTxUrl(state.delegate)} target="_blank" rel="noreferrer">token txns</a>
+                          </>
+                        ) : "—"}
+                      </td>
+                    </tr>
                     <tr><td className="k">Delegated</td><td className="v">{String(state.delegated)}</td></tr>
                   </tbody></table>
                 </div>

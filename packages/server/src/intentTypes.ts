@@ -21,6 +21,8 @@ export interface AgentPackageDraft {
   packageHash?: Hex;
 }
 
+export type EditableAgentPackageDraft = Omit<AgentPackageDraft, "role"> & { role?: "EXECUTOR" | "WATCHER" };
+
 export interface StartConfig {
   loopPeriodSec: number;
   ttlMinutes: number;
@@ -79,6 +81,7 @@ export interface RuntimeRecord {
   lastTickAction: string | null;
   lastTickTxHash: Hex | null;
   lastWatcherAction: string | null;
+  lastWatcherReason: string | null;
   lastWatcherTxHash: Hex | null;
   createdAt: number;
   updatedAt: number;

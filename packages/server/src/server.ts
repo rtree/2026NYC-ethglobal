@@ -28,7 +28,7 @@ import {
 } from "./journey.js";
 import { issueNonce, siweMessage, verifyAndMint } from "./web3auth.js";
 import { requireUid, authEnabled, rateLimit } from "./authGate.js";
-import { intentChat, fixPackage, setStartConfig, listIntents, getIntentFull } from "./intent.js";
+import { intentChat, fixPackage, setStartConfig, updatePackageSemantic, listIntents, getIntentFull } from "./intent.js";
 import { proxyRpc } from "./rpcProxy.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -66,7 +66,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 // Write-path handlers receive the authenticated uid and the (already-parsed) request body, so the
 // create/trade/resume/reset endpoints use the caller's FIXed Agent Package (intentId) instead of a
 // hardcoded one. Gas funding takes an explicit lane.
-type WriteBody = { intentId?: string; lane?: "executor" | "watcher"; reason?: string };
+type WriteBody = { intentId?: string; lane?: "executor" | "watcher"; reason?: string; role?: "EXECUTOR" | "WATCHER"; semantic?: unknown };
 const API: Record<string, (uid: string, body: WriteBody) => Promise<unknown>> = {
   "POST /api/executor/create": (uid, b) => createExecutor({ uid, intentId: b.intentId }),
   "POST /api/watcher/create": (uid, b) => createWatcher({ uid, intentId: b.intentId }),
@@ -80,6 +80,10 @@ const API: Record<string, (uid: string, body: WriteBody) => Promise<unknown>> = 
   "POST /api/watcher/tighten": (uid, b) => watcherTighten({ uid, intentId: b.intentId }),
   "POST /api/owner/resume": (uid, b) => ownerResume({ uid, intentId: b.intentId }),
   "POST /api/reset": (uid, b) => reset({ uid, intentId: b.intentId }),
+  "POST /api/intent/semantic": (uid, b) => {
+    if (!b.intentId || !b.role) throw new Error("intentId and role required");
+    return updatePackageSemantic(uid, b.intentId, b.role, b.semantic);
+  },
 };
 
 async function serveStatic(res: ServerResponse, urlPath: string) {

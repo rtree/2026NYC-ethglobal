@@ -338,6 +338,7 @@ export async function runtimeStart(opts?: CreateOpts) {
     lastTickAction: null,
     lastTickTxHash: null,
     lastWatcherAction: null,
+    lastWatcherReason: null,
     lastWatcherTxHash: null,
     createdAt: startedAt,
     updatedAt: startedAt,
@@ -510,6 +511,7 @@ export async function runtimeTick(opts?: CreateOpts) {
   let watcherActionsUsed = record.watcherActionsUsed ?? 0;
   const maxWatcherActions = record.maxWatcherActions ?? 1;
   let lastWatcherAction = record.lastWatcherAction;
+  let lastWatcherReason = record.lastWatcherReason;
   let lastWatcherTxHash = record.lastWatcherTxHash;
   const shouldBuy = decision === "BUY" || (RUNTIME_FIRST_TICK_BUY && tick === 1 && tradesUsed < maxRuntimeTrades);
   if (!overBudget && shouldBuy && tradesUsed < maxRuntimeTrades) {
@@ -544,10 +546,17 @@ export async function runtimeTick(opts?: CreateOpts) {
     overBudget = estimatedVertexCostUsd >= record.maxVertexCostUsd;
     const watcherDecision = normalizeWatcherAction(watcherCompletion.text);
     lastWatcherAction = watcherDecision;
+    lastWatcherReason =
+      watcherDecision === "VOTE_TIGHTEN"
+        ? "Watcher saw a successful BUY and narrowed future per-tx capability conservatively."
+        : watcherDecision === "REPORT_SUSPICIOUS"
+          ? "Watcher marked the post-trade execution suspicious and requested tighter guardrails."
+          : "Watcher judged the post-trade execution within semantic guardrails.";
     if (!overBudget && (watcherDecision === "VOTE_TIGHTEN" || watcherDecision === "REPORT_SUSPICIOUS")) {
       try {
         const vote = await watcherTighten(opts);
         lastWatcherAction = "VOTE_TIGHTEN";
+        lastWatcherReason = "Watcher tightened after observing the Executor's BUY evidence; future trades are capped lower.";
         lastWatcherTxHash = vote.txHash as Hex;
         watcherActionsUsed += 1;
       } catch (e) {
@@ -575,6 +584,7 @@ export async function runtimeTick(opts?: CreateOpts) {
     lastTickAction: decision,
     lastTickTxHash: txHash,
     lastWatcherAction,
+    lastWatcherReason,
     lastWatcherTxHash,
     lastHeartbeatAt: now,
     updatedAt: now,
@@ -688,9 +698,9 @@ export async function getState(delegateAddr?: Address) {
       if (ev.eventName === "EvidenceCommitted")
         timeline.push({ kind: "evidence", title: "EvidenceCommitted", reason: String(ev.args.reason ?? ""), txHash: log.transactionHash as Hex, blockNumber: String(log.blockNumber) });
       else if (ev.eventName === "GuardTightened")
-        timeline.push({ kind: "tighten", title: "Watcher · VOTE_TIGHTEN", reason: "Future capability narrowed", txHash: log.transactionHash as Hex, blockNumber: String(log.blockNumber) });
+        timeline.push({ kind: "tighten", title: "Watcher · VOTE_TIGHTEN", reason: "Watcher narrowed future per-tx capability after recent execution evidence", txHash: log.transactionHash as Hex, blockNumber: String(log.blockNumber) });
       else if (ev.eventName === "GuardFrozen")
-        timeline.push({ kind: "freeze", title: "Watcher · VOTE_FREEZE", reason: "Execution frozen", txHash: log.transactionHash as Hex, blockNumber: String(log.blockNumber) });
+        timeline.push({ kind: "freeze", title: "Watcher · VOTE_FREEZE", reason: "Execution frozen; only the Owner can resume/unfreeze", txHash: log.transactionHash as Hex, blockNumber: String(log.blockNumber) });
     } catch {
       /* not ours */
     }
@@ -699,8 +709,11 @@ export async function getState(delegateAddr?: Address) {
 
   const ser = (g: HardGuardState | null) =>
     g && {
+      router: g.router,
+      selector: g.selector,
       tokenA: g.tokenA,
       tokenB: g.tokenB,
+      poolFee: g.poolFee,
       amountCapPerTx: g.amountCapPerTx.toString(),
       cumulativeCap: g.cumulativeCap.toString(),
       slippageCapBps: g.slippageCapBps,
@@ -764,6 +777,10 @@ async function ensureSetup(c: Ctx, execDraft?: AgentPackageDraft | null, pkgHash
 
 export async function createExecutor(opts?: CreateOpts) {
   const c = await ownerCtx(opts);
+  const existingDoc = opts?.uid && opts.intentId ? await store().getIntent(opts.uid, opts.intentId) : null;
+  if (existingDoc?.executorTokenId) {
+    return { tokenId: existingDoc.executorTokenId, txHash: existingDoc.executorTxHash ?? undefined };
+  }
   const { slug, executor } = await loadDrafts(opts);
   // Production correctness: the on-chain guard + hashes come from the user's FIXed Executor package,
   // not a hardcoded "intent-abc". Falls back to demo values only when no FIXed draft is available.
@@ -796,6 +813,10 @@ async function ensureWatcherVault(c: Ctx) {
 
 export async function createWatcher(opts?: CreateOpts) {
   const c = await ownerCtx(opts);
+  const existingDoc = opts?.uid && opts.intentId ? await store().getIntent(opts.uid, opts.intentId) : null;
+  if (existingDoc?.watcherTokenId) {
+    return { tokenId: existingDoc.watcherTokenId, txHash: existingDoc.watcherTxHash ?? undefined };
+  }
   const doc = opts?.uid && opts.intentId ? await store().getIntent(opts.uid, opts.intentId) : null;
   const watchedExecutorTokenId = doc?.executorTokenId ?? session.executorTokenId;
   if (!watchedExecutorTokenId) throw new Error("create the Executor Agent first");

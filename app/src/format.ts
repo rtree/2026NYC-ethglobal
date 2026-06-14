@@ -7,3 +7,4 @@ export const eth = (v: bigint) => `${Number(formatUnits(v, 18)).toFixed(6)} ETH`
 export const weth = (v: bigint) => `${Number(formatUnits(v, 18)).toFixed(8)} WETH`;
 export const txUrl = (h: Hex) => `https://basescan.org/tx/${h}`;
 export const addrUrl = (a: string) => `https://basescan.org/address/${a}`;
+export const tokenTxUrl = (a: string) => `https://basescan.org/address/${a}#tokentxns`;

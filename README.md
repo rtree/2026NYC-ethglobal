@@ -270,17 +270,83 @@ sequenceDiagram
 
 # Tech Stack
 
-| Layer | Technology |
-| --- | --- |
-| Chain | Base mainnet, EIP-7702 delegated accounts |
-| Assets | USDC, WETH |
-| Execution | EIP-7702 ExecutionContract, Hard Guardrails, ExecutionGasVault |
-| Agents | Executor Agent, Watcher Agent |
-| Runtime | OpenClaw Runtime Capsules on Cloud Run |
-| Keys | GCP KMS SessionKey signing |
-| Identity | Agent NFT, ERC-721 / ERC-8004, ENS agent namespace |
-| Trading | Uniswap quote / swap flow |
-| Evidence | Onchain events, quote hashes, simulation hashes, reasoning hashes |
+| Layer | Technology | Why it's notable |
+| --- | --- | --- |
+| Chain | Base mainnet, EIP-7702 delegated accounts | Real production network; per-EOA delegation (each Owner wears the same guard code with its own storage and funds) |
+| Assets | USDC, WETH | Fixed pair for the MVP guardrails |
+| Execution | EIP-7702 `ExecutionDelegate7702`, Hard Guardrails, `ExecutionGasVault` | The Owner's EOA *is* the policy-enforcing account; `onlyOwner` = `msg.sender == address(this)` self-call |
+| **Owner identity (login)** | **SIWE (EIP-4361) Web3 sign-in → Firebase custom token → Firebase Auth** | **The wallet signature is the primary credential; the server mints a Firebase custom token from the verified SIWE message, so per-wallet data (drafts, history, runtime state) is scoped to the signed-in address with no passwords** |
+| **EIP-7702 activation** | **Local Activation Kit — Ledger-first `signAuthorization` + type-4 self-tx** | **Browser wallets refuse to sign a 7702 authorization for a dApp-chosen contract (`Account type "json-rpc" is not supported`), so delegation is signed locally; Ledger is the safe hardware path (see Sponsor Tracks → Ledger)** |
+| **RPC** | **Keyless server-side RPC proxy (Alchemy → Infura failover, 7702-aware)** | **The downloadable kit reaches a 7702-aware node through `POST /api/rpc` so the provider key never ships in public code; method-allowlisted + size-capped** |
+| Agents | Executor Agent, Watcher Agent (quorum=1, tighten/freeze only) | Reasoning is never trusted; the contract checks typed constraints mechanically |
+| Runtime | OpenClaw Runtime Capsules on Cloud Run | Always-on isolated runtime; receives a SessionKey that can only sign typed `ExecutionRequest`s, never a fund-moving key |
+| Keys | GCP KMS SessionKey signing (HSM, sign-only, 0 ETH) | Signer (SessionKey) ≠ sender (Relayer) ≠ fund owner (EOA) ≠ authority (contract) |
+| Agent identity | Agent NFT, ERC-721 / ERC-8004, ENS agent namespace | NFT = identity + package-hash binding + runtime access right; never custody |
+| Frontend | React + Vite + wagmi + viem | Connect → SIWE → `ActivateGate` → IntentBuilder |
+| Backend | Node on Cloud Run, Firestore store, Vertex AI (LLM) | Stateless write-path gated by verified Firebase ID token |
+| Trading | Uniswap SwapRouter02 quote / swap flow (USDC/WETH, fee 500) | Bounded `exactInputSingle` only; target + selector allow-listed in the guard |
+| Evidence | Onchain events, quote hashes, simulation hashes, reasoning hashes | `EvidenceCommitted` is the audit origin, not an offchain log |
+
+> **Engineering highlights worth a second look**
+> - **Web3 login wired into Firebase Auth.** SIWE (EIP-4361) is the credential; a verified signature is exchanged server-side for a Firebase custom token, then a Firebase ID token gates every money/LLM write. No email, no password — your wallet *is* your account.
+> - **Ledger was effectively mandatory to register the EIP-7702 contract.** A browser wallet cannot delegate an EOA to a dApp-chosen implementation, so without a local/hardware signer there is no way to start. Ledger makes that one-time delegation safe (key never leaves the device).
+> - **A keyless RPC proxy** lets an install-free, publicly downloadable activation kit talk to a 7702-aware node without ever shipping an API key.
+
+---
+
+# Sponsor Tracks
+
+## Ledger — device-backed trust as the *enabler*, not a badge
+
+> **Ledger is not decoration in IntentOS — it is the only safe way to start the protocol at all.**
+
+### Why an AI agent needs EIP-7702 self-custody (and why that needs Ledger)
+
+To let an AI agent trade *without* taking custody of funds, the policy has to live **on the user's own EOA**. EIP-7702 is the right primitive for exactly this:
+
+- **EIP-7702 = true self-custody.** The Owner's EOA carries delegated guard code, but the funds, storage, and final authority stay on that same EOA. The Owner can **un-delegate at any moment** and instantly return to a plain EOA — there is nothing else to exit.
+- **A contract wallet (Safe-style) is *not* this.** Moving assets into a smart-contract wallet means the funds now live **away from the EOA**, behind that contract's own rules and signer set. If the user wants to stop, they must migrate funds back out — there is no instant, unilateral "it's just my EOA again." For an agent that holds spending power, that delay is the whole risk. EIP-7702 keeps the off-switch in the user's hand.
+
+So EIP-7702 is the correct trust model for agent self-custody. **The problem is starting it.**
+
+### The blocker: browsers can't delegate an EOA to a dApp-chosen contract
+
+Activating EIP-7702 means signing an **authorization** that points your EOA at our `ExecutionDelegate7702` implementation. We found — and this is reproduced in the screenshots in [plan/XXX-ScreenShots.md](plan/XXX-ScreenShots.md) — that **browser/injected wallets refuse to do this**:
+
+```
+Account type "json-rpc" is not supported.
+The signAuthorization Action does not support JSON-RPC Accounts.
+```
+
+MetaMask (and injected wallets generally) will **only** 7702-delegate to **their own** smart-account implementation. There is no JSON-RPC method for a dApp to request delegation to an arbitrary implementation. `signAuthorization` is a **local-account-only** action. So the browser path is a dead end — and signing a 7702 authorization by **pasting a raw private key** is exactly the catastrophic key-handling pattern we never want users to do.
+
+### Ledger is what makes it safe — and therefore effectively mandatory
+
+A hardware wallet is the clean way out: the **authorization tuple and the type-4 transaction are signed on the device, and the private key never leaves it.** That is precisely the operation our Local Activation Kit performs through Ledger:
+
+- [scripts/activate-kit/ledger.mjs](scripts/activate-kit/ledger.mjs) wraps the Ledger Ethereum app as a viem **custom account** exposing the two operations activation needs:
+  - `signAuthorization(...)` — sign the **EIP-7702 authorization tuple**
+  - `signTransaction(...)` — sign the **EIP-7702 (type-4) self-transaction** (delegate + `initialize` in one tx)
+- [scripts/activate-kit/activate.mjs](scripts/activate-kit/activate.mjs) is install-free (viem inlined), offers **[1] Ledger (recommended)** or **[2] dedicated imported key**, detects an existing delegation, and broadcasts one type-4 tx that delegates the EOA and initializes the Hard Guardrails.
+
+**Without device-backed signing, onboarding to an agent-trading protocol means either a wallet that won't sign, or a user pasting a seed phrase. Ledger is the difference between "impossible / dangerous" and "safe and one-click." That is why it is the explicit control layer of IntentOS, not a logo.**
+
+### How this maps to the track
+
+- **Device-backed security is central, not bolted on** — the product cannot be entered safely without a hardware (or dedicated local) signer; Ledger is the recommended, safe default.
+- **Human-in-the-loop for the one sensitive action** — the single high-risk, authority-granting step (delegating your EOA) is the step we route to the device. Everything *after* that runs inside hard guardrails with a sign-only SessionKey, so recurring trades need zero further signatures while the irreversible authority grant stays on the device.
+- **Concrete use of Ledger primitives, not branding** — we call `signAuthorization` + type-4 `signTransaction` via `@ledgerhq/hw-app-eth` over `@ledgerhq/hw-transport-node-hid`, not just "connect a Ledger."
+
+### Feedback on Ledger docs & SDKs (qualification)
+
+Honest developer feedback from building this, intended to help:
+
+- **EIP-7702 authorization signing is the biggest gap.** It was unclear from `@ledgerhq/hw-app-eth` docs whether/which firmware + Ethereum-app versions can clear-sign an **EIP-7702 authorization tuple** (not just a normal tx). We had to treat it as experimental and fail loudly with a fallback. A first-class, documented `signEIP7702Authorization` example — with the minimum app/firmware version stated up front — would remove the single biggest unknown for any 7702 onboarding flow.
+- **Clear-signing for a type-4 tx that carries an `authorizationList`.** It is not obvious how the device surfaces "you are delegating this EOA to contract `0x…`" to the user. Documented Clear Signing artifacts for the delegation target (so the device shows the impl address and the "initialize" intent in human terms) would make this dramatically safer to ship.
+- **Node HID transport packaging.** `@ledgerhq/hw-transport-node-hid` is a native module and **cannot be bundled** (we ship it as an external the user installs once). A documented "install-free / bundler-friendly" transport story, or an official note on the expected externals, would smooth distribution of CLI tools like our kit.
+- **What worked well.** The viem `toAccount` custom-account pattern made wrapping the Ledger signer for both `signAuthorization` and `signTransaction` clean once the signature normalization (r/s/v → `yParity`) was understood.
+
+> Screenshots of the browser-wallet failure and the Ledger activation flow: [plan/XXX-ScreenShots.md](plan/XXX-ScreenShots.md).
 
 ---
 
