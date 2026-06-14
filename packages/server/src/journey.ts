@@ -47,6 +47,7 @@ import {
   voteTighten,
 } from "@intentos/runtime";
 import { store } from "./store.js";
+import { openClawChat } from "./openclaw.js";
 import type { AgentPackageDraft, RuntimeRecord } from "./intentTypes.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -332,6 +333,64 @@ export async function runtimeStatus(opts?: CreateOpts) {
     }
   }
   return { intentId: opts.intentId, runtimeRecord: record };
+}
+
+export async function runtimeStop(opts?: CreateOpts, reason = "owner requested stop") {
+  if (!opts?.uid || !opts.intentId) throw new Error("intentId required");
+  const record = await store().getRuntime(opts.uid, opts.intentId);
+  if (!record) return { intentId: opts.intentId, runtimeRecord: null };
+  const now = Date.now();
+  const stopped: RuntimeRecord = {
+    ...record,
+    status: "stopped",
+    failureReason: reason,
+    updatedAt: now,
+  };
+  await store().putRuntime(opts.uid, stopped);
+  const doc = await store().getIntent(opts.uid, opts.intentId);
+  if (doc) await store().putIntent(opts.uid, { ...doc, runtime: runtimeState(stopped), runtimeId: stopped.runtimeId });
+  logAction({ at: now, action: `runtime stopped (${reason})`, ok: true });
+  return { intentId: opts.intentId, runtimeRecord: stopped };
+}
+
+export async function runtimeTick(opts?: CreateOpts) {
+  if (!opts?.uid || !opts.intentId) throw new Error("intentId required");
+  const record = await store().getRuntime(opts.uid, opts.intentId);
+  if (!record) throw new Error("runtime not started");
+  const now = Date.now();
+  if (!["scheduled", "running"].includes(record.status)) {
+    return { intentId: opts.intentId, runtimeRecord: record, tick: null };
+  }
+  if (record.autoStopAt <= now || record.executedTicks >= record.plannedTicks) {
+    const expired: RuntimeRecord = { ...record, status: "expired", updatedAt: now };
+    await store().putRuntime(opts.uid, expired);
+    return { intentId: opts.intentId, runtimeRecord: expired, tick: null };
+  }
+  const tick = record.executedTicks + 1;
+  const prompt = [
+    "You are an IntentOS bounded runtime smoke agent.",
+    "Reply with exactly one action word: HOLD.",
+    `intentId=${record.intentId}`,
+    `tick=${tick}`,
+    "No trading decision is authorized in this smoke tick.",
+  ].join("\n");
+  const decision = await openClawChat(prompt);
+  const nextExecuted = record.executedTicks + 1;
+  const status = nextExecuted >= record.plannedTicks ? "expired" : "running";
+  const updated: RuntimeRecord = {
+    ...record,
+    status,
+    executedTicks: nextExecuted,
+    lastHeartbeatAt: now,
+    updatedAt: now,
+  };
+  await store().putRuntime(opts.uid, updated);
+  logAction({ at: now, action: `OpenClaw tick ${tick}: ${decision.slice(0, 40)}`, ok: true });
+  return {
+    intentId: opts.intentId,
+    runtimeRecord: updated,
+    tick: { tick, status: "held", action: decision },
+  };
 }
 
 /**

@@ -4,7 +4,7 @@
 // Docs are scoped users/{uid}/intents/{intentId}; transcript at .../transcript/{turnId}.
 import { accessToken, PROJECT_ID } from "./gcp.js";
 import { isProductionRuntime } from "./authGate.js";
-import type { IntentDoc, TranscriptTurn } from "./intentTypes.js";
+import type { IntentDoc, RuntimeRecord, TranscriptTurn } from "./intentTypes.js";
 
 export interface Store {
   listIntents(uid: string): Promise<IntentDoc[]>;
@@ -12,12 +12,15 @@ export interface Store {
   putIntent(uid: string, doc: IntentDoc): Promise<void>;
   appendTurn(uid: string, intentId: string, turn: TranscriptTurn): Promise<void>;
   getTranscript(uid: string, intentId: string): Promise<TranscriptTurn[]>;
+  getRuntime(uid: string, intentId: string): Promise<RuntimeRecord | null>;
+  putRuntime(uid: string, record: RuntimeRecord): Promise<void>;
 }
 
 // ---------- memory ----------
 class MemoryStore implements Store {
   private intents = new Map<string, IntentDoc>();
   private turns = new Map<string, TranscriptTurn[]>();
+  private runtimes = new Map<string, RuntimeRecord>();
   private k(uid: string, id: string) {
     return `${uid}/${id}`;
   }
@@ -41,6 +44,12 @@ class MemoryStore implements Store {
   }
   async getTranscript(uid: string, intentId: string) {
     return this.turns.get(this.k(uid, intentId)) ?? [];
+  }
+  async getRuntime(uid: string, intentId: string) {
+    return this.runtimes.get(this.k(uid, intentId)) ?? null;
+  }
+  async putRuntime(uid: string, record: RuntimeRecord) {
+    this.runtimes.set(this.k(uid, record.intentId), record);
   }
 }
 
@@ -98,6 +107,22 @@ async function fsFetch(path: string, init?: RequestInit) {
   return res;
 }
 
+async function fsPutDocument(path: string, documentId: string, obj: Record<string, unknown>) {
+  const create = await fsFetch(
+    `${path}?documentId=${encodeURIComponent(documentId)}`,
+    { method: "POST", body: JSON.stringify({ fields: docToFields(obj) }) },
+  );
+  if (create.status === 409) {
+    const patch = await fsFetch(
+      `${path}/${encodeURIComponent(documentId)}`,
+      { method: "PATCH", body: JSON.stringify({ fields: docToFields(obj) }) },
+    );
+    if (!patch.ok) throw new Error(`firestore patch ${path}/${documentId} ${patch.status}`);
+    return;
+  }
+  if (!create.ok) throw new Error(`firestore put ${path}/${documentId} ${create.status}`);
+}
+
 class FirestoreStore implements Store {
   private enc(uid: string) {
     return encodeURIComponent(uid);
@@ -118,20 +143,11 @@ class FirestoreStore implements Store {
     return fieldsToDoc(data.fields) as unknown as IntentDoc;
   }
   async putIntent(uid: string, doc: IntentDoc): Promise<void> {
-    const res = await fsFetch(
-      `/users/${this.enc(uid)}/intents?documentId=${encodeURIComponent(doc.intentId)}`,
-      { method: "POST", body: JSON.stringify({ fields: docToFields(doc as unknown as Record<string, unknown>) }) },
+    await fsPutDocument(
+      `/users/${this.enc(uid)}/intents`,
+      doc.intentId,
+      doc as unknown as Record<string, unknown>,
     );
-    if (res.status === 409) {
-      // exists -> overwrite via PATCH
-      const patch = await fsFetch(
-        `/users/${this.enc(uid)}/intents/${encodeURIComponent(doc.intentId)}`,
-        { method: "PATCH", body: JSON.stringify({ fields: docToFields(doc as unknown as Record<string, unknown>) }) },
-      );
-      if (!patch.ok) throw new Error(`firestore patch ${patch.status}`);
-      return;
-    }
-    if (!res.ok) throw new Error(`firestore put ${res.status}`);
   }
   async appendTurn(uid: string, intentId: string, turn: TranscriptTurn): Promise<void> {
     const res = await fsFetch(
@@ -148,6 +164,18 @@ class FirestoreStore implements Store {
     return (data.documents ?? [])
       .map((d) => fieldsToDoc(d.fields) as unknown as TranscriptTurn)
       .sort((a, b) => a.at - b.at);
+  }
+  async getRuntime(uid: string, intentId: string): Promise<RuntimeRecord | null> {
+    const res = await fsFetch(`/users/${this.enc(uid)}/runtimeRecords/${encodeURIComponent(intentId)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`firestore runtime get ${res.status}`);
+    const data = (await res.json()) as { fields: Record<string, unknown> };
+    return fieldsToDoc(data.fields) as unknown as RuntimeRecord;
+  }
+  async putRuntime(uid: string, record: RuntimeRecord): Promise<void> {
+    const obj = record as unknown as Record<string, unknown>;
+    await fsPutDocument(`/users/${this.enc(uid)}/runtimeRecords`, record.intentId, obj);
+    await fsPutDocument(`/runtimeRecords`, record.runtimeId, obj);
   }
 }
 

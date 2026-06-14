@@ -90,6 +90,9 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/intent/start-config", (route) =>
     route.fulfill({ json: { intentId: "intent-test", startConfig: { loopPeriodSec: 10, ttlMinutes: 1, watcherEnabled: true } } }),
   );
+  await page.route("**/api/runtime/status**", (route) =>
+    route.fulfill({ json: { intentId: "intent-test", runtimeRecord: null } }),
+  );
 });
 
 test("010 onboarding gate blocks entry until wallet + World ID", async ({ page }) => {

@@ -1,6 +1,6 @@
 // Client for the control-panel write-path API (same origin in prod; Vite proxy in dev).
 import { bearer } from "./auth";
-import type { AgentPackageDraft, IntentDoc, StartConfig } from "./intentTypes";
+import type { AgentPackageDraft, IntentDoc, RuntimeRecord, StartConfig } from "./intentTypes";
 
 export interface ApiResult {
   ok?: boolean;
@@ -73,7 +73,9 @@ export const api = {
   createExecutor: (intentId?: string) => postJson<ApiResult>("/api/executor/create", { intentId }),
   createWatcher: (intentId?: string) => postJson<ApiResult>("/api/watcher/create", { intentId }),
   fundGas: (lane: "executor" | "watcher", intentId?: string) => postJson<ApiResult & { lane?: string }>("/api/gas/fund", { lane, intentId }),
-  runtimeStart: (intentId?: string) => postJson<{ intentId: string; runtime: { startedAt: number; autoStopAt: number; loopPeriodSec: number; plannedTicks: number } }>("/api/runtime/start", { intentId }),
+  runtimeStart: (intentId?: string) => postJson<{ intentId: string; runtime: { startedAt: number; autoStopAt: number; loopPeriodSec: number; plannedTicks: number }; runtimeRecord?: RuntimeRecord }>("/api/runtime/start", { intentId }),
+  runtimeStatus: (intentId: string) => getJson<{ intentId: string; runtimeRecord: RuntimeRecord | null }>(`/api/runtime/status?intentId=${encodeURIComponent(intentId)}`),
+  runtimeTick: (intentId?: string) => postJson<{ intentId: string; runtimeRecord: RuntimeRecord; tick: { tick: number; status: string; action: string } | null }>("/api/runtime/tick", { intentId }),
   trade: (intentId?: string) => postJson<ApiResult>("/api/trade", { intentId }),
   watcherFreeze: () => post("/api/watcher/freeze"),
   watcherTighten: () => post("/api/watcher/tighten"),

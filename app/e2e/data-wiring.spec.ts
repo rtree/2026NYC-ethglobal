@@ -101,6 +101,30 @@ const EMPTY_STATE_WITH_EXECUTOR = {
   session: { executorTokenId: "77", watcherTokenId: null },
 };
 
+const RUNTIME_RECORD = {
+  runtimeId: "rt-intent-live-api-77-test",
+  ownerUid: "eip155:8453:0xtest",
+  intentId: ACTIVE_INTENT.intentId,
+  executorTokenId: "77",
+  watcherTokenId: "88",
+  delegate: API_STATE.delegate,
+  role: "EXECUTOR",
+  packageHash: ACTIVE_INTENT.packages.executor.packageHash,
+  runtimeOwner: API_STATE.delegate,
+  bindingNonce: "42",
+  cloudRunService: "manual-control-panel",
+  status: "scheduled",
+  startedAt: Date.now(),
+  lastHeartbeatAt: null,
+  autoStopAt: Date.now() + 600_000,
+  loopPeriodSec: 5,
+  plannedTicks: 3,
+  executedTicks: 0,
+  failureReason: null,
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+};
+
 async function setupApi(page: Page, state = API_STATE) {
   await page.addInitScript(injectMockWallet);
   await page.route("**/api/state", (route) => route.fulfill({ json: state }));
@@ -121,6 +145,9 @@ async function setupApi(page: Page, state = API_STATE) {
   await page.route("**/api/intents/*", (route) => route.fulfill({ json: ACTIVE_INTENT }));
   await page.route("**/api/intent/start-config", (route) =>
     route.fulfill({ json: { intentId: ACTIVE_INTENT.intentId, startConfig: ACTIVE_INTENT.startConfig } }),
+  );
+  await page.route("**/api/runtime/status**", (route) =>
+    route.fulfill({ json: { intentId: ACTIVE_INTENT.intentId, runtimeRecord: null } }),
   );
 }
 
@@ -168,13 +195,14 @@ test("Start runtime button posts intentId to /api/runtime/start", async ({ page 
   let startBody: unknown = null;
   await page.route("**/api/runtime/start", async (route) => {
     startBody = route.request().postData() ? JSON.parse(route.request().postData()!) : {};
-    await route.fulfill({ json: { intentId: ACTIVE_INTENT.intentId, runtime: { startedAt: Date.now(), autoStopAt: Date.now() + 600000, loopPeriodSec: 5, plannedTicks: 3 } } });
+    await route.fulfill({ json: { intentId: ACTIVE_INTENT.intentId, runtime: { startedAt: RUNTIME_RECORD.startedAt, autoStopAt: RUNTIME_RECORD.autoStopAt, loopPeriodSec: 5, plannedTicks: 3 }, runtimeRecord: RUNTIME_RECORD } });
   });
   await page.goto("/#/launch");
   await page.getByText("Start Conditions", { exact: true }).first().click();
   await page.getByRole("button", { name: /Save runtime schedule/ }).click();
   await expect.poll(() => startBody).toEqual({ intentId: ACTIVE_INTENT.intentId });
   await expect(page.getByText(/runtime schedule saved/)).toBeVisible();
+  await expect(page.getByText(RUNTIME_RECORD.runtimeId)).toBeVisible();
 });
 
 test("Intent List active card should render current intent API values", async ({ page }) => {

@@ -33,6 +33,40 @@ export interface RuntimeState {
   plannedTicks: number;
 }
 
+export type RuntimeStatus =
+  | "scheduled"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "expired"
+  | "failed"
+  | "self-stopped"
+  | "unbound";
+
+export interface RuntimeRecord {
+  runtimeId: string;
+  ownerUid: string;
+  intentId: string;
+  executorTokenId: string;
+  watcherTokenId: string | null;
+  delegate: Address;
+  role: "EXECUTOR";
+  packageHash: Hex;
+  runtimeOwner: Address;
+  bindingNonce: string;
+  cloudRunService: string;
+  status: RuntimeStatus;
+  startedAt: number;
+  lastHeartbeatAt: number | null;
+  autoStopAt: number;
+  loopPeriodSec: number;
+  plannedTicks: number;
+  executedTicks: number;
+  failureReason: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface IntentDoc {
   intentId: string;
   title: string;
@@ -43,4 +77,5 @@ export interface IntentDoc {
   packages: { executor: AgentPackageDraft; watcher: AgentPackageDraft };
   startConfig: StartConfig;
   runtime?: RuntimeState | null;
+  runtimeId?: string | null;
 }

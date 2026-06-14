@@ -18,6 +18,9 @@ import {
   ownerResume,
   reset,
   runtimeStart,
+  runtimeStatus,
+  runtimeStop,
+  runtimeTick,
   trade,
   watcherFreeze,
   watcherTighten,
@@ -67,6 +70,8 @@ const API: Record<string, (uid: string, body: WriteBody) => Promise<unknown>> = 
   "POST /api/watcher/create": (uid, b) => createWatcher({ uid, intentId: b.intentId }),
   "POST /api/gas/fund": (uid, b) => fundGas(b.lane === "watcher" ? "watcher" : "executor", { uid, intentId: b.intentId }),
   "POST /api/runtime/start": (uid, b) => runtimeStart({ uid, intentId: b.intentId }),
+  "POST /api/runtime/stop": (uid, b) => runtimeStop({ uid, intentId: b.intentId }),
+  "POST /api/runtime/tick": (uid, b) => runtimeTick({ uid, intentId: b.intentId }),
   "POST /api/trade": (uid, b) => trade({ uid, intentId: b.intentId }),
   "POST /api/watcher/freeze": (uid, b) => watcherFreeze({ uid, intentId: b.intentId }),
   "POST /api/watcher/tighten": (uid, b) => watcherTighten({ uid, intentId: b.intentId }),
@@ -152,6 +157,28 @@ async function main() {
         json(res, 200, out);
       } catch (e) {
         json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+
+    // ---- Runtime Registry status (auth-gated; plan/090) ----
+    if (path === "/api/runtime/status" && req.method === "GET") {
+      let uid: string;
+      try {
+        uid = await requireUid(req);
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      const intentId = url.searchParams.get("intentId") ?? "";
+      if (!intentId) {
+        json(res, 400, { error: "intentId required" });
+        return;
+      }
+      try {
+        json(res, 200, await runtimeStatus({ uid, intentId }));
+      } catch (e) {
+        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
       }
       return;
     }

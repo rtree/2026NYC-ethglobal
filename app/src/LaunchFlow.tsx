@@ -8,7 +8,7 @@ import { api, type ChatResponse, type ActivatePlan } from "./api";
 import { authState, ownerModeCached, fetchAuthRequired } from "./auth";
 import { tokenPair, delegateAbi } from "./config";
 import { shortAddr, addrUrl, usdc, eth } from "./format";
-import type { AgentPackageDraft, IntentDoc } from "./intentTypes";
+import type { AgentPackageDraft, IntentDoc, RuntimeRecord } from "./intentTypes";
 
 // 030/040/050/060/070/080 collapsed into ONE master/detail screen (plan/010 §15.1). Left = step nav,
 // right = the controls for the selected step. No route hops. The IntentBuilder authors BOTH Agent
@@ -485,11 +485,18 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [started, setStarted] = useState<{ autoStopAt: number; plannedTicks: number } | null>(intent?.runtime ?? null);
+  const [runtimeRecord, setRuntimeRecord] = useState<RuntimeRecord | null>(null);
 
   useEffect(() => {
     setLoop(cfg.loopPeriodSec);
     setTtl(cfg.ttlMinutes);
     setStarted(intent?.runtime ?? null);
+    setRuntimeRecord(null);
+    if (intent?.intentId) {
+      api.runtimeStatus(intent.intentId)
+        .then((r) => setRuntimeRecord(r.runtimeRecord))
+        .catch(() => {});
+    }
   }, [intent?.intentId]);
 
   async function save() {
@@ -548,9 +555,17 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
             run={async () => {
               const r = await api.runtimeStart(intent?.intentId);
               setStarted(r.runtime);
+              setRuntimeRecord(r.runtimeRecord ?? null);
               return { ok: true } as const;
             }}
           />
+        )}
+        {runtimeRecord && (
+          <table className="kv" style={{ marginTop: 12 }}><tbody>
+            <tr><td className="k">Runtime status</td><td className="v">{runtimeRecord.status}</td></tr>
+            <tr><td className="k">Runtime id</td><td className="v">{runtimeRecord.runtimeId}</td></tr>
+            <tr><td className="k">Executed ticks</td><td className="v">{runtimeRecord.executedTicks} / {runtimeRecord.plannedTicks}</td></tr>
+          </tbody></table>
         )}
         {!hasExecutor && <p className="spec-ref" style={{ marginTop: 8 }}>Create the Executor Agent first (step ②).</p>}
         <a className="btn block" style={{ marginTop: 10 }} href="#/console">Go to Live Console →</a>
