@@ -7,6 +7,7 @@ import type { AgentPackageDraft } from "./intentTypes.js";
 
 const LOCATION = process.env.INTENTOS_VERTEX_LOCATION ?? "us-central1";
 const MODEL = process.env.INTENTOS_VERTEX_MODEL ?? "gemini-2.5-flash";
+const MAX_OUTPUT_TOKENS = Number(process.env.INTENTOS_VERTEX_MAX_OUTPUT_TOKENS ?? "20480");
 
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const WETH = "0x4200000000000000000000000000000000000006";
@@ -78,7 +79,7 @@ export function normalize(p: { executor: AgentPackageDraft; watcher: AgentPackag
   const fix = (draft: AgentPackageDraft, fallback: AgentPackageDraft): AgentPackageDraft => ({
     role: fallback.role,
     summary: ascii(draft.summary, fallback.summary, 280),
-    agents: ascii(draft.agents, fallback.agents, 1200),
+    agents: ascii(draft.agents, fallback.agents, 12_000),
     soul: ascii(draft.soul, fallback.soul, 600),
     constraints: {
       tokenA: USDC,
@@ -135,7 +136,7 @@ async function callVertex(transcript: Turn[]): Promise<ChatResult> {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents,
-      generationConfig: { temperature: 0.3, maxOutputTokens: 2048, responseMimeType: "application/json" },
+      generationConfig: { temperature: 0.3, maxOutputTokens: MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
     }),
   });
   if (!res.ok) throw new Error(`vertex ${res.status}: ${(await res.text()).slice(0, 160)}`);

@@ -8,6 +8,56 @@ Resolution update: restored at 2026-06-14 06:58 EDT by local Owner-signed unfree
 
 Follow-up UX update: auto-refresh was too passive during runtime execution. `GET` API calls and `/api/state` now use `cache:no-store`, server JSON responses send `cache-control:no-store`, and runtime status polling forces chain-state refresh while a runtime is scheduled/running/stopping.
 
+## Open issue: IntentBuilder sometimes emits nearly empty AGENTS.md
+
+Reported 2026-06-14 07:13 EDT. Not fixed here; handing off to another team.
+
+User-visible symptom:
+
+- In the Launch IntentBuilder, the generated Agent Package `AGENTS.md` is sometimes almost empty, e.g. only a name like `DCAExecutor` instead of the expected objective/tools/never/default content.
+- This appears intermittent: other generations produce normal `AGENTS.md`.
+
+Known implementation facts:
+
+- IntentBuilder lives in `packages/server/src/vertex.ts`.
+- Production defaults to Vertex AI (`INTENTOS_LLM=vertex` or production runtime default) using model `INTENTOS_VERTEX_MODEL ?? "gemini-2.5-flash"` and location `INTENTOS_VERTEX_LOCATION ?? "us-central1"`.
+- Vertex call uses `generationConfig: { temperature: 0.3, maxOutputTokens: 2048, responseMimeType: "application/json" }`.
+- The prompt asks for strict JSON with `executor.agents` and `watcher.agents`, but does not specify a minimum length or required section headings for each `agents` field.
+- `normalize()` preserves any non-empty string from the model: `agents: ascii(draft.agents, fallback.agents, 1200)`. Because `ascii()` only falls back on empty/non-string values, a too-short non-empty string like `DCAExecutor` is accepted and stored.
+- `normalize()` also truncates `agents` to 1200 chars. This does not directly explain a one-word output, but it is another size constraint to review if richer AgentMD is desired.
+- `intentChat()` persists the generated packages immediately unless a package is already FIXed (`packages/server/src/intent.ts`). A bad-but-non-empty `agents` value therefore becomes the visible draft and can be FIXed by the user.
+- UI renders `pkg.agents` directly in LaunchFlow `PackageCard` under `AGENTS.md`; there is no client-side quality gate.
+
+Current hypothesis:
+
+1. `maxOutputTokens: 2048` may be too small for two full packages (reply + executor summary/agents/soul/constraints/semantic + watcher summary/agents/soul/constraints/semantic) in strict JSON, so Gemini may compress the long `agents` fields.
+2. More importantly, the server lacks a quality/minimum-content validator: any non-empty `agents` string passes. Even if token size is raised, the model can still emit a terse label unless the prompt and validator require structure.
+
+Recommended fix direction for next team:
+
+1. Increase Vertex `maxOutputTokens` for IntentBuilder, likely to 4096 or 8192, preferably via env such as `INTENTOS_VERTEX_MAX_OUTPUT_TOKENS`. First mitigation applied: default is now `20480` (10x previous `2048`) and AGENTS.md normalization cap is now `12000` chars.
+2. Strengthen the system prompt: require `agents` to be full AGENTS.md with explicit sections (`# Executor Agent`, `Objective`, `Tools`, `Never`, `Default`, `Evidence`, etc.) and minimum detail.
+3. Add server-side validation/repair in `normalize()`:
+   - Treat `agents` as invalid if trimmed length is below a threshold (e.g. `< 180` or missing `Objective:`/`Tools:`/`Never:`).
+   - Fall back to default package `agents` or merge the model-specific text into the default template rather than accepting a one-word value.
+   - Consider logging a warning with lengths (not raw user prompt/secrets) when repair happens.
+4. Consider exposing AGENTS.md editing before FIX, similar to existing semantic guardrail editing, so the user can correct a bad AgentMD without regenerating.
+5. Add a regression test for `normalize()` with `{ agents: "DCAExecutor" }` and assert it falls back/repairs instead of preserving the terse string.
+
+Fast verification commands for next team:
+
+```bash
+pnpm --filter @intentos/server typecheck
+INTENTOS_LLM=vertex INTENTOS_LLM_STRICT=1 pnpm --filter @intentos/server exec tsx src/scripts/m5-live-check.ts
+```
+
+Relevant files:
+
+- `packages/server/src/vertex.ts` — prompt, Vertex `maxOutputTokens`, `normalize()`/`ascii()`.
+- `packages/server/src/intent.ts` — generated draft persistence and FIX behavior.
+- `app/src/LaunchFlow.tsx` — AGENTS.md display in PackageCard.
+- `packages/server/src/intentTypes.ts` — AgentPackageDraft shape.
+
 ## User-visible symptom
 
 - Live Console shows the connected Owner account as `frozen`.
