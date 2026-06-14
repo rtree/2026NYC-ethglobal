@@ -62,6 +62,8 @@ export interface ActivatePlan {
   };
 }
 
+export type GuardWire = Record<string, string | number | boolean>;
+
 export const api = {
   createExecutor: (intentId?: string) => postJson<ApiResult>("/api/executor/create", { intentId }),
   createWatcher: (intentId?: string) => postJson<ApiResult>("/api/watcher/create", { intentId }),
@@ -74,6 +76,7 @@ export const api = {
   trade: (intentId?: string) => postJson<ApiResult>("/api/trade", { intentId }),
   watcherFreeze: (intentId?: string) => postJson<ApiResult>("/api/watcher/freeze", { intentId }),
   watcherTighten: (intentId?: string) => postJson<ApiResult>("/api/watcher/tighten", { intentId }),
+  ownerGuardPlan: (intentId?: string) => postJson<{ intentId: string; guard: GuardWire }>("/api/owner/guard-plan", { intentId }),
   ownerResume: (intentId?: string) => postJson<ApiResult>("/api/owner/resume", { intentId }),
   reset: (intentId?: string) => postJson<ApiResult>("/api/reset", { intentId }),
 
@@ -95,4 +98,10 @@ export const api = {
   listIntents: () => getJson<{ intents: IntentDoc[] }>("/api/intents"),
   getIntent: (intentId: string) => getJson<IntentDoc & { transcript: { role: string; text: string; at: number }[] }>(`/api/intents/${intentId}`),
   activatePlan: () => getJson<ActivatePlan>("/api/activate/plan"),
+  // World ID (plan/110): backend signs the RP request; backend verifies the proof + stores nullifier.
+  worldIdSign: (action?: string) =>
+    postJson<{ sig: string; nonce: string; created_at: number; expires_at: number }>("/api/worldid/sign", { action }),
+  worldIdVerify: (payload: unknown) => postJson<{ verified: boolean }>("/api/worldid/verify", { payload }),
+  worldIdStatus: () => getJson<{ required: boolean; verified: boolean }>("/api/worldid/status"),
+  worldIdReset: () => postJson<{ reset: boolean }>("/api/worldid/reset", {}),
 };

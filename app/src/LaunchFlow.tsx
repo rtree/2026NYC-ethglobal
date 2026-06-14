@@ -4,7 +4,7 @@ import { encodeFunctionData, type Abi } from "viem";
 import { useChainState, activeStatus, invalidateChainState, type ChainState } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
 import { ActionButton } from "./ActionButton";
-import { api, type ChatResponse, type ActivatePlan } from "./api";
+import { api, type ChatResponse, type ActivatePlan, type GuardWire } from "./api";
 import { authState, ownerModeCached, fetchAuthRequired } from "./auth";
 import { tokenPair, delegateAbi } from "./config";
 import { shortAddr, shortHash, addrUrl, txUrl, usdc, eth } from "./format";
@@ -164,8 +164,8 @@ function ActivateGate({ address, onActivated }: { address: `0x${string}`; onActi
         <span className={`pill ${plan ? "" : "muted"}`}>{plan ? "EIP-7702" : "loading…"}</span>
       </div>
       <p className="desc">
-        IntentOS is non-custodial: your funds stay in your EOA. Activating points your account at the
-        IntentOS guard (<code>{shortAddr(plan?.delegateImpl ?? "0x")}</code>) and initializes your Hard
+        intentOS is non-custodial: your funds stay in your EOA. Activating points your account at the
+        intentOS guard (<code>{shortAddr(plan?.delegateImpl ?? "0x")}</code>) and initializes your Hard
         Guardrails in one transaction. The agent can then only trade inside those rails.
       </p>
       <p className="spec-ref">You need a little Base ETH on this EOA (gas + a small gas-vault reserve).</p>
@@ -245,8 +245,8 @@ export function LaunchFlow() {
           <Nav />
           <div className="page-head" style={{ marginTop: 20 }}>
             <div className="eyebrow">Launch · activate your account</div>
-            <h1>Activate IntentOS on your EOA</h1>
-            <p>Before building an Intent, delegate your own EOA to the IntentOS guard with one EIP-7702 transaction. After this, the agent operates strictly inside your guardrails — your funds never leave your account.</p>
+            <h1>Activate intentOS on your EOA</h1>
+            <p>Before building an Intent, delegate your own EOA to the intentOS guard with one EIP-7702 transaction. After this, the agent operates strictly inside your guardrails — your funds never leave your account.</p>
           </div>
           <ActivateGate address={address} onActivated={() => setActivated(true)} />
         </main>
@@ -299,7 +299,7 @@ export function LaunchFlow() {
             {step === "start" && <StartStep state={state} intent={intent} setIntent={setIntent} />}
           </div>
         </div>
-        <p className="footer-note">IntentOS · ETHGlobal NYC 2026 · launch</p>
+        <p className="footer-note">intentOS · ETHGlobal NYC 2026 · launch</p>
       </main>
     </div>
   );
@@ -634,6 +634,7 @@ function FundingStep({ state, intentId }: { state: ChainState | null; intentId?:
 
 // ---------- ⑤ Start Conditions ----------
 function StartStep({ state, intent, setIntent }: { state: ChainState | null; intent: IntentDoc | null; setIntent: (d: IntentDoc) => void }) {
+  const { data: walletClient } = useWalletClient();
   const cfg = intent?.startConfig ?? { loopPeriodSec: 10, ttlMinutes: 1, watcherEnabled: true };
   const [loop, setLoop] = useState(cfg.loopPeriodSec);
   const [ttl, setTtl] = useState(cfg.ttlMinutes);
@@ -685,6 +686,17 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
   const hasExecutor = !!intent?.executorTokenId;
   const pkg = intent?.packages.executor;
   const runtimeActive = runtimeRecord?.status === "scheduled" || runtimeRecord?.status === "running";
+  async function applyIntentGuard() {
+    if (ownerModeCached() !== "connected" || !walletClient || !state?.delegate || !intent?.intentId) return;
+    const plan = await api.ownerGuardPlan(intent.intentId);
+    const data = encodeFunctionData({
+      abi: delegateAbi as Abi,
+      functionName: "ownerUpdateGuard",
+      args: [toGuard(plan.guard)],
+    });
+    await walletClient.sendTransaction({ to: state.delegate, data });
+    invalidateChainState();
+  }
   return (
     <div className="grid cols-2">
       <div className="card pad-lg">
@@ -724,6 +736,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
             className="btn primary block"
             disabled={!hasExecutor}
             run={async () => {
+              await applyIntentGuard();
               const r = await api.runtimeStart(intent?.intentId);
               setStarted(r.runtime);
               setRuntimeRecord(r.runtimeRecord ?? null);
@@ -740,8 +753,11 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
           <table className="kv" style={{ marginTop: 12 }}><tbody>
             <tr><td className="k">Runtime status</td><td className="v">{runtimeRecord.status}</td></tr>
             <tr><td className="k">Runtime id</td><td className="v">{runtimeRecord.runtimeId}</td></tr>
+            <tr><td className="k">Executor package</td><td className="v">{shortHash(runtimeRecord.packageHash)}</td></tr>
+            {runtimeRecord.watcherPackageHash && <tr><td className="k">Watcher package</td><td className="v">{shortHash(runtimeRecord.watcherPackageHash)}</td></tr>}
             <tr><td className="k">Executed ticks</td><td className="v">{runtimeRecord.executedTicks} / {runtimeRecord.plannedTicks}</td></tr>
             <tr><td className="k">Last action</td><td className="v">{runtimeRecord.lastTickAction ?? "—"}</td></tr>
+            {runtimeRecord.lastOpenClawResponse && <tr><td className="k">OpenClaw</td><td className="v">{runtimeRecord.lastOpenClawResponse}</td></tr>}
             <tr><td className="k">Watcher</td><td className="v">{runtimeRecord.lastWatcherAction ?? "—"}</td></tr>
             <tr><td className="k">LLM budget</td><td className="v">${runtimeRecord.estimatedVertexCostUsd.toFixed(4)} / ${runtimeRecord.maxVertexCostUsd.toFixed(2)} · {runtimeRecord.llmCallsUsed} calls</td></tr>
           </tbody></table>
@@ -762,4 +778,20 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
       </div>
     </div>
   );
+}
+
+function toGuard(g: GuardWire) {
+  return {
+    router: g.router,
+    selector: g.selector,
+    tokenA: g.tokenA,
+    tokenB: g.tokenB,
+    poolFee: Number(g.poolFee),
+    amountCapPerTx: BigInt(String(g.amountCapPerTx)),
+    cumulativeCap: BigInt(String(g.cumulativeCap)),
+    slippageCapBps: Number(g.slippageCapBps),
+    expiry: BigInt(String(g.expiry)),
+    frozen: Boolean(g.frozen),
+    bindingNonce: BigInt(String(g.bindingNonce)),
+  };
 }

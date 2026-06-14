@@ -112,7 +112,7 @@ section.howitworks h2{font-size:38px;margin-bottom:6px;}
 
 <!-- _class: opener -->
 
-<div class="kicker">ETHGlobal NYC · 2026 — IntentOS · ① Problem &amp; Solution</div>
+<div class="kicker">ETHGlobal NYC · 2026 — intentOS · ① Problem &amp; Solution</div>
 
 ## You want an agent to trade <span class="mono">USDC↔WETH</span> while you sleep.<br/>The risk isn't a rogue AI — it's <span class="bad">a wrong intent, optimized perfectly.</span>
 
@@ -181,7 +181,7 @@ IntentOS solves it by aligning the agent at three layers. Initial: an Intent Bui
 
 <div class="keycopy" style="margin-top:18px;">Autonomous agents need <span class="hl">alignment</span>, not trust.</div>
 
-<div class="footer">IntentOS · ETHGlobal NYC 2026 — next: live demo on Base mainnet</div>
+<div class="footer">intentOS · ETHGlobal NYC 2026 — next: live demo on Base mainnet</div>
 
 <!--
 EN presenter note (assertive, fact-first — this is the slide you cut from into the live demo):

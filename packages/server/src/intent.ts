@@ -70,6 +70,7 @@ export async function fixPackage(uid: string, intentId: string, role: "EXECUTOR"
   const key = role === "EXECUTOR" ? "executor" : "watcher";
   const draft = { ...doc.packages[key], fixed: true };
   draft.packageHash = packageHash(draft);
+  await store().putPackageSnapshot({ ...draft, packageHash: draft.packageHash, intentId, createdAt: Date.now() });
   const next: IntentDoc = { ...doc, packages: { ...doc.packages, [key]: draft } };
   await store().putIntent(uid, next);
   return { intentId, role, packageHash: draft.packageHash, packages: next.packages };

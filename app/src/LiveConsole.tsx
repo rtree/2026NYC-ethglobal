@@ -6,7 +6,7 @@ import { TopBar, Nav } from "./Chrome";
 import { delegateAbi, tokenPair } from "./config";
 import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl, tokenTxUrl } from "./format";
 import { ActionButton } from "./ActionButton";
-import { api } from "./api";
+import { api, type GuardWire } from "./api";
 import { authState, ownerModeCached } from "./auth";
 import type { IntentDoc, RuntimeRecord } from "./intentTypes";
 
@@ -16,12 +16,7 @@ import type { IntentDoc, RuntimeRecord } from "./intentTypes";
 export function LiveConsole() {
   const { address } = useAccount();
   const connectedMode = ownerModeCached() === "connected";
-  const { state, error, loading } = useChainState(12_000, connectedMode && address ? address : undefined);
   const { data: walletClient } = useWalletClient();
-  const g = state?.guard;
-  const status = activeStatus(state);
-  const active = hasActiveIntent(state);
-  const terminal = status ?? "owner-stopped";
   const [history, setHistory] = useState<IntentDoc[]>([]);
   const [runtimeRecord, setRuntimeRecord] = useState<RuntimeRecord | null>(null);
 
@@ -32,6 +27,11 @@ export function LiveConsole() {
   // The active Intent for this session (its FIXed guard/draft is what trade/resume/reset bind to).
   const activeIntent = history.find((i) => i.status === "live") ?? history.find((i) => i.executorTokenId);
   const activeIntentId = activeIntent?.intentId;
+  const { state, error, loading } = useChainState(12_000, connectedMode && address ? address : undefined, activeIntentId);
+  const g = state?.guard;
+  const status = activeStatus(state);
+  const active = hasActiveIntent(state);
+  const terminal = status ?? "owner-stopped";
   const consoleTitle = activeIntent ? `${activeIntent.intentId} · ${activeIntent.title}` : "Running Intent";
   const runtimeActive = runtimeRecord?.status === "scheduled" || runtimeRecord?.status === "running" || runtimeRecord?.status === "stopping";
 
@@ -42,14 +42,31 @@ export function LiveConsole() {
   }
 
   async function ownerResume() {
-    if (walletClient && state?.delegate && g) {
+    if (walletClient && state?.delegate && activeIntentId) {
+      const plan = await api.ownerGuardPlan(activeIntentId);
       const data = encodeFunctionData({
         abi: delegateAbi as Abi,
         functionName: "ownerUpdateGuard",
-        args: [{ ...g, frozen: false }],
+        args: [toGuard(plan.guard)],
       });
       const txHash = await walletClient.sendTransaction({ to: state.delegate, data });
       return { txHash };
+    }
+
+    function toGuard(g: GuardWire) {
+      return {
+        router: g.router,
+        selector: g.selector,
+        tokenA: g.tokenA,
+        tokenB: g.tokenB,
+        poolFee: Number(g.poolFee),
+        amountCapPerTx: BigInt(String(g.amountCapPerTx)),
+        cumulativeCap: BigInt(String(g.cumulativeCap)),
+        slippageCapBps: Number(g.slippageCapBps),
+        expiry: BigInt(String(g.expiry)),
+        frozen: Boolean(g.frozen),
+        bindingNonce: BigInt(String(g.bindingNonce)),
+      };
     }
     return api.ownerResume(activeIntentId);
   }
@@ -139,9 +156,15 @@ export function LiveConsole() {
                 <div className="card-head"><h3>OpenClaw runtime</h3><span className={`pill ${runtimeRecord.status === "running" ? "running" : ""}`}>{runtimeRecord.status}</span></div>
                 <table className="kv"><tbody>
                   <tr><td className="k">runtimeId</td><td className="v">{runtimeRecord.runtimeId}</td></tr>
+                  <tr><td className="k">executor package</td><td className="v">{shortHash(runtimeRecord.packageHash)}</td></tr>
+                  {runtimeRecord.executorSemanticSnapshot && <tr><td className="k">executor semantic</td><td className="v">{runtimeRecord.executorSemanticSnapshot.join(" · ")}</td></tr>}
+                  {runtimeRecord.watcherPackageHash && <tr><td className="k">watcher package</td><td className="v">{shortHash(runtimeRecord.watcherPackageHash)}</td></tr>}
+                  {runtimeRecord.watcherSemanticSnapshot && <tr><td className="k">watcher semantic</td><td className="v">{runtimeRecord.watcherSemanticSnapshot.join(" · ")}</td></tr>}
                   <tr><td className="k">ticks</td><td className="v">{runtimeRecord.executedTicks} / {runtimeRecord.plannedTicks}</td></tr>
                   <tr><td className="k">last action</td><td className="v">{runtimeRecord.lastTickAction ?? "—"}{runtimeRecord.lastTickTxHash ? ` · ${shortHash(runtimeRecord.lastTickTxHash)}` : ""}</td></tr>
+                  {runtimeRecord.lastOpenClawResponse && <tr><td className="k">OpenClaw Executor</td><td className="v">{runtimeRecord.lastOpenClawResponse}</td></tr>}
                   <tr><td className="k">watcher action</td><td className="v">{runtimeRecord.lastWatcherAction ?? "—"}{runtimeRecord.lastWatcherTxHash ? ` · ${shortHash(runtimeRecord.lastWatcherTxHash)}` : ""}</td></tr>
+                  {runtimeRecord.lastWatcherResponse && <tr><td className="k">OpenClaw Watcher</td><td className="v">{runtimeRecord.lastWatcherResponse}</td></tr>}
                   {runtimeRecord.lastWatcherReason && <tr><td className="k">watcher reason</td><td className="v">{runtimeRecord.lastWatcherReason}</td></tr>}
                   <tr><td className="k">LLM budget</td><td className="v">${runtimeRecord.estimatedVertexCostUsd.toFixed(4)} / ${runtimeRecord.maxVertexCostUsd.toFixed(2)} · {runtimeRecord.llmCallsUsed} calls</td></tr>
                   <tr><td className="k">updated</td><td className="v">{new Date(runtimeRecord.updatedAt).toLocaleTimeString()}</td></tr>
@@ -160,10 +183,10 @@ export function LiveConsole() {
               {/* left: shared timeline */}
               <div className="card pad-lg">
                 <div className="card-head">
-                  <h3>Shared execution timeline</h3>
+                  <h3>{activeIntentId ? "Active Intent evidence timeline" : "Shared execution timeline"}</h3>
                   <span className="pill">{state.timeline.length} events</span>
                 </div>
-                {state.timeline.length === 0 && <p className="muted">No events in the recent window.</p>}
+                {state.timeline.length === 0 && <p className="muted">No active-intent evidence in the recent window. Guard state is account-level and may reflect prior Watcher votes.</p>}
                 <ul className="timeline">
                   {state.timeline.map((t) => (
                     <li key={t.txHash + String(t.blockNumber)} className={t.kind === "evidence" ? "evidence" : t.kind === "freeze" ? "guard" : "watch"}>
@@ -225,7 +248,7 @@ export function LiveConsole() {
             <HistoryCard history={history} />
           </>
         )}
-        <p className="footer-note">IntentOS · ETHGlobal NYC 2026 · live console</p>
+        <p className="footer-note">intentOS · ETHGlobal NYC 2026 · live console</p>
       </main>
     </div>
   );

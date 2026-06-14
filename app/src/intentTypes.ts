@@ -20,6 +20,12 @@ export interface AgentPackageDraft {
   packageHash?: Hex;
 }
 
+export interface PackageSnapshot extends AgentPackageDraft {
+  packageHash: Hex;
+  intentId: string;
+  createdAt: number;
+}
+
 export interface StartConfig {
   loopPeriodSec: number;
   ttlMinutes: number;
@@ -52,6 +58,9 @@ export interface RuntimeRecord {
   delegate: Address;
   role: "EXECUTOR";
   packageHash: Hex;
+  watcherPackageHash: Hex | null;
+  executorSemanticSnapshot?: string[] | null;
+  watcherSemanticSnapshot?: string[] | null;
   runtimeOwner: Address;
   bindingNonce: string;
   cloudRunService: string;
@@ -75,8 +84,10 @@ export interface RuntimeRecord {
   maxVertexCostUsd: number;
   failureReason: string | null;
   lastTickAction: string | null;
+  lastOpenClawResponse: string | null;
   lastTickTxHash: Hex | null;
   lastWatcherAction: string | null;
+  lastWatcherResponse: string | null;
   lastWatcherReason: string | null;
   lastWatcherTxHash: Hex | null;
   createdAt: number;

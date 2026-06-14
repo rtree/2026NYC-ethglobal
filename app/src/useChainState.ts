@@ -87,8 +87,11 @@ function mapState(d: any): ChainState {
   };
 }
 
-export async function loadChainState(address?: string): Promise<ChainState> {
-  const res = await fetch(address ? `/api/state?address=${address}` : "/api/state");
+export async function loadChainState(address?: string, intentId?: string): Promise<ChainState> {
+  const qs = new URLSearchParams();
+  if (address) qs.set("address", address);
+  if (intentId) qs.set("intentId", intentId);
+  const res = await fetch(qs.size ? `/api/state?${qs.toString()}` : "/api/state");
   if (!res.ok) throw new Error(`/api/state ${res.status}`);
   const d = await res.json();
   const s = mapState(d);
@@ -114,7 +117,7 @@ export function activeStatus(state: ChainState | null): "running" | "frozen" | u
   return state?.guard?.frozen ? "frozen" : "running";
 }
 
-export function useChainState(pollMs = 12_000, address?: string) {
+export function useChainState(pollMs = 12_000, address?: string, intentId?: string) {
   const [state, setState] = useState<ChainState | null>(lastGood);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(!lastGood);
@@ -123,7 +126,7 @@ export function useChainState(pollMs = 12_000, address?: string) {
     let active = true;
     async function refresh() {
       try {
-        const s = await loadChainState(address);
+        const s = await loadChainState(address, intentId);
         if (active) {
           setState(s);
           setError(null);
@@ -143,7 +146,7 @@ export function useChainState(pollMs = 12_000, address?: string) {
       clearInterval(t);
       window.removeEventListener("intentos:refresh", onRefresh);
     };
-  }, [pollMs, address]);
+  }, [pollMs, address, intentId]);
 
   return { state, error, loading };
 }

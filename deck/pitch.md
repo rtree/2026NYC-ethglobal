@@ -158,7 +158,7 @@ EN: IntentOS is a third option: autonomy without authority. We compile your inte
 
 <div class="vs">
 <div class="qbox them"><div class="lab">Others</div><div class="q">"How can we trust AI with permissions?"</div></div>
-<div class="qbox us"><div class="lab">IntentOS</div><div class="q">"Why should trust be required?"</div></div>
+<div class="qbox us"><div class="lab">intentOS</div><div class="q">"Why should trust be required?"</div></div>
 </div>
 
 <div style="margin-top:28px;font-size:17px;letter-spacing:2px;color:var(--muted);font-weight:800;">NOW — LIVE — WATCH FOR THREE THINGS</div>
@@ -192,7 +192,7 @@ EN: So IntentOS is not an AI wallet — it's an alignment and execution layer. O
 
 <p class="lead" style="max-width:30ch;margin-top:18px;">Autonomous agents don't need your trust. They need to stay aligned with what you meant.</p>
 
-<div class="footer">IntentOS · ETHGlobal NYC 2026</div>
+<div class="footer">intentOS · ETHGlobal NYC 2026</div>
 
 <!--
 EN: Intent Builder aligns at the start, EIP-7702 enforces it, the Watcher guards the meaning over time — and the agent is a transferable NFT, the start of an agent economy. Autonomous agents don't need your trust; they need to stay aligned with what you meant. We separate intelligence from authority.

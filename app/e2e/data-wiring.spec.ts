@@ -254,7 +254,7 @@ test("runtime/funding/live badges should not claim live or funded without API su
 test("direct deep links should enforce onboarding before showing protected screens", async ({ page }) => {
   await setupApi(page);
   await page.goto("/#/console");
-  await expect(page.getByRole("heading", { name: "Enter IntentOS" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Enter intentOS" })).toBeVisible();
 });
 
 test("Intent List reset should send the current intentId", async ({ page }) => {

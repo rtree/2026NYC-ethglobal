@@ -7,8 +7,8 @@ export function TopBar({ status }: { status?: string }) {
   return (
     <header className="topbar">
       <a className="brand" href="#/" style={{ textDecoration: "none", color: "inherit" }}>
-        <div className="logo">I</div>
-        IntentOS <small>Base mainnet</small>
+        <div className="logo">i</div>
+        intentOS <small>Base mainnet</small>
       </a>
       <div className="spacer" />
       {status && (

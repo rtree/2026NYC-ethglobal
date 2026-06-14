@@ -53,8 +53,28 @@ let serverAuthRequired: boolean | null = null;
 let serverOwnerMode: "demo" | "connected" = "demo";
 let authConfigPromise: Promise<boolean> | null = null;
 
+/** World ID gate config from the server (plan/110). Null until /api/config resolves or when disabled. */
+export interface WorldIdConfig {
+  appId: string;
+  rpId: string;
+  action: string;
+  environment: "production" | "staging";
+}
+let serverWorldIdRequired = false;
+let serverWorldIdConfig: WorldIdConfig | null = null;
+
 export function authRequiredCached(): boolean {
   return serverAuthRequired ?? !!FIREBASE_API_KEY;
+}
+
+/** Whether the SERVER enforces a real World ID proof (single source of truth, mirrors authRequired). */
+export function worldIdRequiredCached(): boolean {
+  return serverWorldIdRequired;
+}
+
+/** The server-provided World ID config (app_id/rp_id/action/environment), or null when disabled. */
+export function worldIdConfigCached(): WorldIdConfig | null {
+  return serverWorldIdConfig;
 }
 
 /** Server's on-chain Owner mode (plan/080): "connected" = the visitor delegates their OWN EOA. */
@@ -66,10 +86,16 @@ export async function fetchAuthRequired(): Promise<boolean> {
   if (serverAuthRequired !== null) return serverAuthRequired;
   if (!authConfigPromise) {
     authConfigPromise = fetch("/api/config")
-      .then((r) => (r.ok ? (r.json() as Promise<{ authRequired?: boolean; ownerMode?: string }>) : Promise.reject(new Error(String(r.status)))))
+      .then((r) =>
+        r.ok
+          ? (r.json() as Promise<{ authRequired?: boolean; ownerMode?: string; worldIdRequired?: boolean; worldId?: WorldIdConfig | null }>)
+          : Promise.reject(new Error(String(r.status))),
+      )
       .then((c) => {
         serverAuthRequired = !!c.authRequired;
         serverOwnerMode = c.ownerMode === "connected" ? "connected" : "demo";
+        serverWorldIdRequired = !!c.worldIdRequired;
+        serverWorldIdConfig = c.worldId ?? null;
         window.dispatchEvent(new CustomEvent("intentos:auth"));
         return serverAuthRequired;
       })

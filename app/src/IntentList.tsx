@@ -86,7 +86,7 @@ export function IntentList() {
             <ActionButton label="Reset demo session (clear agents · unfreeze)" className="btn" run={() => api.reset(intent?.intentId)} />
           </div>
         )}
-        <p className="footer-note">IntentOS · ETHGlobal NYC 2026</p>
+        <p className="footer-note">intentOS · ETHGlobal NYC 2026</p>
       </main>
     </div>
   );

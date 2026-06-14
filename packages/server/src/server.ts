@@ -15,6 +15,7 @@ import {
   fundGas,
   getState,
   ownerMode,
+  ownerGuardPlan,
   ownerResume,
   reset,
   runtimeRun,
@@ -30,6 +31,8 @@ import { issueNonce, siweMessage, verifyAndMint } from "./web3auth.js";
 import { requireUid, authEnabled, rateLimit } from "./authGate.js";
 import { intentChat, fixPackage, setStartConfig, updatePackageSemantic, listIntents, getIntentFull } from "./intent.js";
 import { proxyRpc } from "./rpcProxy.js";
+import { worldIdEnabled, worldIdConfig, signRpRequest, verifyProof, extractProofFields, signalMatchesAddress } from "./worldid.js";
+import { store } from "./store.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_DIST = process.env.APP_DIST ?? resolve(HERE, "../../../app/dist");
@@ -78,6 +81,7 @@ const API: Record<string, (uid: string, body: WriteBody) => Promise<unknown>> = 
   "POST /api/trade": (uid, b) => trade({ uid, intentId: b.intentId }),
   "POST /api/watcher/freeze": (uid, b) => watcherFreeze({ uid, intentId: b.intentId }),
   "POST /api/watcher/tighten": (uid, b) => watcherTighten({ uid, intentId: b.intentId }),
+  "POST /api/owner/guard-plan": (uid, b) => ownerGuardPlan({ uid, intentId: b.intentId }),
   "POST /api/owner/resume": (uid, b) => ownerResume({ uid, intentId: b.intentId }),
   "POST /api/reset": (uid, b) => reset({ uid, intentId: b.intentId }),
   "POST /api/intent/semantic": (uid, b) => {
@@ -127,7 +131,13 @@ async function main() {
     // derives "auth required" from this (not from its own build-time Firebase key), so the two can
     // never disagree and silently create an empty-token session that 401s every write (AUTH-002).
     if (path === "/api/config" && req.method === "GET") {
-      json(res, 200, { authRequired: authEnabled(), ownerMode: ownerMode() });
+      const wid = worldIdEnabled();
+      json(res, 200, {
+        authRequired: authEnabled(),
+        ownerMode: ownerMode(),
+        worldIdRequired: wid,
+        worldId: wid ? worldIdConfig() : null,
+      });
       return;
     }
 
@@ -151,6 +161,126 @@ async function main() {
         json(res, 200, out);
       } catch (e) {
         json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+
+    // ---- World ID human-proof gate (plan/110). RP request signed + proof verified SERVER-SIDE. ----
+    // The proof is bound to the signed-in Owner EOA (signal = address) and its nullifier is stored
+    // uniquely (one human, one action), so a wallet alone can't mass-create Cloud Run runtimes.
+    // Source of truth for "is this user human-verified" — the client must NOT decide from a local flag.
+    if (path === "/api/worldid/status" && req.method === "GET") {
+      if (!worldIdEnabled()) {
+        json(res, 200, { required: false, verified: false });
+        return;
+      }
+      let uid: string;
+      try {
+        uid = await requireUid(req);
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      try {
+        json(res, 200, { required: true, verified: await store().getHumanVerified(uid) });
+      } catch (e) {
+        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+    // Self-scoped reset so a user can re-run the World ID flow (e.g. for demo/screenshots). Authed; it
+    // only ever clears the CALLER's own verified flag + their nullifier for the action.
+    if (path === "/api/worldid/reset" && req.method === "POST") {
+      if (!worldIdEnabled()) {
+        json(res, 404, { error: "world id not configured" });
+        return;
+      }
+      let uid: string;
+      try {
+        uid = await requireUid(req);
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      try {
+        await store().clearWorldIdVerification(uid, worldIdConfig().action);
+        json(res, 200, { reset: true });
+      } catch (e) {
+        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+    if (path === "/api/worldid/sign" && req.method === "POST") {
+      if (!worldIdEnabled()) {
+        json(res, 404, { error: "world id not configured" });
+        return;
+      }
+      try {
+        await requireUid(req); // only signed-in users may request a proof challenge
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      try {
+        const body = (await readBody(req)) as { action?: string };
+        json(res, 200, await signRpRequest(body.action ?? worldIdConfig().action));
+      } catch (e) {
+        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+    if (path === "/api/worldid/verify" && req.method === "POST") {
+      if (!worldIdEnabled()) {
+        json(res, 404, { error: "world id not configured" });
+        return;
+      }
+      let uid: string;
+      try {
+        uid = await requireUid(req);
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      try {
+        const body = (await readBody(req)) as { payload?: unknown };
+        const payload = body?.payload ?? body;
+        const address = addressFromUid(uid);
+        if (!address) {
+          json(res, 400, { error: "no address for uid" });
+          return;
+        }
+        // 1) verify the proof with World (forwarded byte-for-byte; never trust the client's word)
+        const v = await verifyProof(payload);
+        if (!v.ok) {
+          json(res, 400, { error: "verification failed", detail: v.body });
+          return;
+        }
+        // 2) bind: the proof's signal must be THIS owner's address
+        const { nullifier, signalHash } = extractProofFields(payload);
+        if (!nullifier) {
+          json(res, 400, { error: "no nullifier in proof" });
+          return;
+        }
+        if (!signalMatchesAddress(signalHash, address)) {
+          json(res, 400, { error: "signal does not match account" });
+          return;
+        }
+        // 3) one-human-one-action: store the nullifier uniquely (idempotent for the same uid)
+        const action = worldIdConfig().action;
+        const existing = await store().getWorldIdNullifier(action, nullifier);
+        if (existing && existing.uid && existing.uid !== uid) {
+          json(res, 409, { error: "this World ID is already linked to another account" });
+          return;
+        }
+        const put = await store().putWorldIdNullifier(action, nullifier, uid);
+        if (put === "exists" && (!existing || existing.uid !== uid)) {
+          json(res, 409, { error: "this World ID is already used" });
+          return;
+        }
+        await store().setHumanVerified(uid, { nullifier, action, verifiedAt: Date.now() });
+        json(res, 200, { verified: true });
+      } catch (e) {
+        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
       }
       return;
     }
@@ -214,7 +344,8 @@ async function main() {
         // panel reflects the visitor's OWN delegated EOA; with no address it's the shared demo Owner.
         const a = url.searchParams.get("address") ?? "";
         const addr = /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as `0x${string}`) : undefined;
-        json(res, 200, await getState(addr));
+        const intentId = url.searchParams.get("intentId") ?? undefined;
+        json(res, 200, await getState(addr, intentId));
       } catch (e) {
         json(res, 500, { error: e instanceof Error ? e.message : String(e) });
       }

@@ -97,7 +97,7 @@ test.beforeEach(async ({ page }) => {
 
 test("010 onboarding gate blocks entry until wallet + World ID", async ({ page }) => {
   await page.goto("/#/");
-  await expect(page.getByRole("heading", { name: "Enter IntentOS" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Enter intentOS" })).toBeVisible();
   // The enter button is disabled before the gates.
   const enter = page.getByRole("button", { name: /Complete the gates/ });
   await expect(enter).toBeDisabled();

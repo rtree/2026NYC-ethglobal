@@ -4,7 +4,7 @@
 // Docs are scoped users/{uid}/intents/{intentId}; transcript at .../transcript/{turnId}.
 import { accessToken, PROJECT_ID } from "./gcp.js";
 import { isProductionRuntime } from "./authGate.js";
-import type { IntentDoc, RuntimeRecord, TranscriptTurn } from "./intentTypes.js";
+import type { IntentDoc, PackageSnapshot, RuntimeRecord, TranscriptTurn } from "./intentTypes.js";
 
 export interface Store {
   listIntents(uid: string): Promise<IntentDoc[]>;
@@ -14,6 +14,24 @@ export interface Store {
   getTranscript(uid: string, intentId: string): Promise<TranscriptTurn[]>;
   getRuntime(uid: string, intentId: string): Promise<RuntimeRecord | null>;
   putRuntime(uid: string, record: RuntimeRecord): Promise<void>;
+  getPackageSnapshot(packageHash: string): Promise<PackageSnapshot | null>;
+  putPackageSnapshot(snapshot: PackageSnapshot): Promise<void>;
+  // --- World ID (plan/110): one-human-one-action nullifier uniqueness + per-uid human-verified flag ---
+  getWorldIdNullifier(action: string, nullifier: string): Promise<{ uid: string } | null>;
+  /** Atomically record a nullifier for an action. Returns "exists" if already present (for ANY uid). */
+  putWorldIdNullifier(action: string, nullifier: string, uid: string): Promise<"created" | "exists">;
+  getHumanVerified(uid: string): Promise<boolean>;
+  setHumanVerified(uid: string, rec: { nullifier: string; action: string; verifiedAt: number }): Promise<void>;
+  /** Reset a user's OWN World ID state (verified flag + their nullifier for the action), so they can
+   *  re-verify (e.g. for a demo/screenshot). Self-scoped: only ever deletes the caller's records. */
+  clearWorldIdVerification(uid: string, action: string, nullifier?: string): Promise<void>;
+}
+
+// Canonical nullifier doc id: action + normalized (lowercased, 0x-stripped) nullifier. Same human +
+// same action always yields the same nullifier, so this id is the uniqueness key.
+function nullifierKey(action: string, nullifier: string): string {
+  const norm = nullifier.toLowerCase().replace(/^0x/, "");
+  return `${action}__${norm}`;
 }
 
 // ---------- memory ----------
@@ -21,6 +39,7 @@ class MemoryStore implements Store {
   private intents = new Map<string, IntentDoc>();
   private turns = new Map<string, TranscriptTurn[]>();
   private runtimes = new Map<string, RuntimeRecord>();
+  private packageSnapshots = new Map<string, PackageSnapshot>();
   private k(uid: string, id: string) {
     return `${uid}/${id}`;
   }
@@ -50,6 +69,35 @@ class MemoryStore implements Store {
   }
   async putRuntime(uid: string, record: RuntimeRecord) {
     this.runtimes.set(this.k(uid, record.intentId), record);
+  }
+  async getPackageSnapshot(packageHash: string) {
+    return this.packageSnapshots.get(packageHash.toLowerCase()) ?? null;
+  }
+  async putPackageSnapshot(snapshot: PackageSnapshot) {
+    this.packageSnapshots.set(snapshot.packageHash.toLowerCase(), snapshot);
+  }
+  private nullifiers = new Map<string, { uid: string }>();
+  private humans = new Map<string, { nullifier: string; action: string; verifiedAt: number }>();
+  async getWorldIdNullifier(action: string, nullifier: string) {
+    return this.nullifiers.get(nullifierKey(action, nullifier)) ?? null;
+  }
+  async putWorldIdNullifier(action: string, nullifier: string, uid: string): Promise<"created" | "exists"> {
+    const key = nullifierKey(action, nullifier);
+    if (this.nullifiers.has(key)) return "exists";
+    this.nullifiers.set(key, { uid });
+    return "created";
+  }
+  async getHumanVerified(uid: string) {
+    return this.humans.has(uid);
+  }
+  async setHumanVerified(uid: string, rec: { nullifier: string; action: string; verifiedAt: number }) {
+    this.humans.set(uid, rec);
+  }
+  async clearWorldIdVerification(uid: string, action: string, nullifier?: string) {
+    const rec = this.humans.get(uid);
+    this.humans.delete(uid);
+    const n = nullifier ?? rec?.nullifier;
+    if (n) this.nullifiers.delete(nullifierKey(action, n));
   }
 }
 
@@ -176,6 +224,58 @@ class FirestoreStore implements Store {
     const obj = record as unknown as Record<string, unknown>;
     await fsPutDocument(`/users/${this.enc(uid)}/runtimeRecords`, record.intentId, obj);
     await fsPutDocument(`/runtimeRecords`, record.runtimeId, obj);
+  }
+  async getPackageSnapshot(packageHash: string): Promise<PackageSnapshot | null> {
+    const res = await fsFetch(`/packageSnapshots/${encodeURIComponent(packageHash.toLowerCase())}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`firestore package snapshot get ${res.status}`);
+    const data = (await res.json()) as { fields: Record<string, unknown> };
+    return fieldsToDoc(data.fields) as unknown as PackageSnapshot;
+  }
+  async putPackageSnapshot(snapshot: PackageSnapshot): Promise<void> {
+    await fsPutDocument(`/packageSnapshots`, snapshot.packageHash.toLowerCase(), snapshot as unknown as Record<string, unknown>);
+  }
+  async getWorldIdNullifier(action: string, nullifier: string): Promise<{ uid: string } | null> {
+    const res = await fsFetch(`/worldidNullifiers/${encodeURIComponent(nullifierKey(action, nullifier))}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`firestore worldid nullifier get ${res.status}`);
+    const data = (await res.json()) as { fields: Record<string, unknown> };
+    return { uid: String(fieldsToDoc(data.fields).uid ?? "") };
+  }
+  async putWorldIdNullifier(action: string, nullifier: string, uid: string): Promise<"created" | "exists"> {
+    // Atomic create-if-absent: POST with documentId returns 409 if the id already exists -> uniqueness.
+    const id = nullifierKey(action, nullifier);
+    const obj = { uid, action, nullifier: nullifier.toLowerCase(), verifiedAt: Date.now() };
+    const res = await fsFetch(`/worldidNullifiers?documentId=${encodeURIComponent(id)}`, {
+      method: "POST",
+      body: JSON.stringify({ fields: docToFields(obj) }),
+    });
+    if (res.status === 409) return "exists";
+    if (!res.ok) throw new Error(`firestore worldid nullifier put ${res.status}`);
+    return "created";
+  }
+  async getHumanVerified(uid: string): Promise<boolean> {
+    const res = await fsFetch(`/worldidVerified/${this.enc(uid)}`);
+    if (res.status === 404) return false;
+    if (!res.ok) throw new Error(`firestore worldid verified get ${res.status}`);
+    return true;
+  }
+  async setHumanVerified(uid: string, rec: { nullifier: string; action: string; verifiedAt: number }): Promise<void> {
+    await fsPutDocument(`/worldidVerified`, uid, { uid, ...rec });
+  }
+  async clearWorldIdVerification(uid: string, action: string, nullifier?: string): Promise<void> {
+    // Find the stored nullifier (if not supplied) so we can also clear the uniqueness record.
+    let n = nullifier;
+    if (!n) {
+      const res = await fsFetch(`/worldidVerified/${this.enc(uid)}`);
+      if (res.ok) {
+        const data = (await res.json()) as { fields?: Record<string, unknown> };
+        const rec = data.fields ? fieldsToDoc(data.fields) : {};
+        n = typeof rec.nullifier === "string" ? rec.nullifier : undefined;
+      }
+    }
+    await fsFetch(`/worldidVerified/${this.enc(uid)}`, { method: "DELETE" });
+    if (n) await fsFetch(`/worldidNullifiers/${encodeURIComponent(nullifierKey(action, n))}`, { method: "DELETE" });
   }
 }
 

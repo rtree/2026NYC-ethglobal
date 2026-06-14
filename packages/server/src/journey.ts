@@ -50,7 +50,7 @@ import {
 import { store } from "./store.js";
 import { openClawComplete } from "./openclaw.js";
 import { isProductionRuntime } from "./authGate.js";
-import type { AgentPackageDraft, RuntimeRecord } from "./intentTypes.js";
+import type { AgentPackageDraft, PackageSnapshot, RuntimeRecord } from "./intentTypes.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const abi = ExecutionDelegate7702Abi as any;
@@ -303,6 +303,7 @@ export async function runtimeStart(opts?: CreateOpts) {
   const autoStopAt = startedAt + cfg.ttlMinutes * 60_000;
   const plannedTicks = Math.max(1, Math.min(MAX_PLANNED_TICKS, Math.floor((cfg.ttlMinutes * 60) / Math.max(1, cfg.loopPeriodSec))));
   const executor = doc.packages.executor.fixed ? doc.packages.executor : null;
+  const watcher = doc.packages.watcher.fixed ? doc.packages.watcher : null;
   const runtimeId = `rt-${doc.intentId}-${executorTokenId}-${startedAt}`;
   const record: RuntimeRecord = {
     runtimeId,
@@ -313,6 +314,9 @@ export async function runtimeStart(opts?: CreateOpts) {
     delegate: c.delegate,
     role: "EXECUTOR",
     packageHash: executor?.packageHash ?? pkgHash,
+    watcherPackageHash: watcher?.packageHash ?? null,
+    executorSemanticSnapshot: executor?.semantic ?? null,
+    watcherSemanticSnapshot: watcher?.semantic ?? null,
     runtimeOwner: c.delegate,
     bindingNonce: "1",
     cloudRunService: "manual-control-panel",
@@ -336,8 +340,10 @@ export async function runtimeStart(opts?: CreateOpts) {
     maxVertexCostUsd: MAX_VERTEX_COST_USD,
     failureReason: null,
     lastTickAction: null,
+    lastOpenClawResponse: null,
     lastTickTxHash: null,
     lastWatcherAction: null,
+    lastWatcherResponse: null,
     lastWatcherReason: null,
     lastWatcherTxHash: null,
     createdAt: startedAt,
@@ -391,6 +397,15 @@ export async function runtimeStop(opts?: CreateOpts, reason = "owner requested s
   if (doc) await store().putIntent(opts.uid, { ...doc, runtime: runtimeState(stopped), runtimeId: stopped.runtimeId });
   logAction({ at: now, action: `runtime stopped (${reason})`, ok: true });
   return { intentId: opts.intentId, runtimeRecord: stopped };
+}
+
+export async function ownerGuardPlan(opts?: CreateOpts) {
+  if (!opts?.uid || !opts.intentId) throw new Error("intentId required");
+  const c = await ownerCtx(opts);
+  const { executor } = await loadDrafts(opts);
+  if (!executor) throw new Error("FIX the Executor package first");
+  const current = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
+  return { intentId: opts.intentId, guard: guardFromDraft(executor, current.bindingNonce) };
 }
 
 export async function runtimeRun(opts?: CreateOpts) {
@@ -485,6 +500,10 @@ export async function runtimeTick(opts?: CreateOpts) {
   const tick = record.executedTicks + 1;
   const tradesUsed = record.runtimeTradesUsed ?? 0;
   const maxRuntimeTrades = record.maxRuntimeTrades ?? 1;
+  const [executorSnapshot, watcherSnapshot] = await Promise.all([
+    store().getPackageSnapshot(record.packageHash),
+    record.watcherPackageHash ? store().getPackageSnapshot(record.watcherPackageHash) : Promise.resolve(null),
+  ]);
   const prompt = [
     "You are an IntentOS bounded runtime agent.",
     "Reply with exactly one action word: BUY or HOLD.",
@@ -492,12 +511,14 @@ export async function runtimeTick(opts?: CreateOpts) {
     "HOLD means do nothing this tick.",
     `runtimeTradesUsed=${tradesUsed}`,
     `maxRuntimeTrades=${maxRuntimeTrades}`,
+    packagePromptSection("Executor package snapshot", executorSnapshot),
     tradesUsed >= maxRuntimeTrades ? "Trade budget already used. Reply HOLD." : "If this is the first eligible tick and guard/budget context is acceptable, reply BUY; otherwise HOLD.",
     `intentId=${record.intentId}`,
     `tick=${tick}`,
   ].join("\n");
   const completion = await openClawComplete(prompt);
   const decision = normalizeRuntimeAction(completion.text);
+  const openClawResponse = summarizeOpenClawResponse(completion.text);
   const nextExecuted = record.executedTicks + 1;
   let llmCallsUsed = record.llmCallsUsed + 1;
   let estimatedInputTokens = record.estimatedInputTokens + completion.estimatedInputTokens;
@@ -511,6 +532,7 @@ export async function runtimeTick(opts?: CreateOpts) {
   let watcherActionsUsed = record.watcherActionsUsed ?? 0;
   const maxWatcherActions = record.maxWatcherActions ?? 1;
   let lastWatcherAction = record.lastWatcherAction;
+  let lastWatcherResponse = record.lastWatcherResponse;
   let lastWatcherReason = record.lastWatcherReason;
   let lastWatcherTxHash = record.lastWatcherTxHash;
   const shouldBuy = decision === "BUY" || (RUNTIME_FIRST_TICK_BUY && tick === 1 && tradesUsed < maxRuntimeTrades);
@@ -537,8 +559,11 @@ export async function runtimeTick(opts?: CreateOpts) {
       `executorTokenId=${record.executorTokenId}`,
       `watcherTokenId=${record.watcherTokenId}`,
       `txHash=${txHash}`,
+      packagePromptSection("Watcher package snapshot", watcherSnapshot),
+      packagePromptSection("Watched Executor package snapshot", executorSnapshot),
     ].join("\n");
     const watcherCompletion = await openClawComplete(watcherPrompt);
+    lastWatcherResponse = summarizeOpenClawResponse(watcherCompletion.text);
     llmCallsUsed += 1;
     estimatedInputTokens += watcherCompletion.estimatedInputTokens;
     estimatedOutputTokens += watcherCompletion.estimatedOutputTokens;
@@ -582,8 +607,10 @@ export async function runtimeTick(opts?: CreateOpts) {
     estimatedVertexCostUsd,
     failureReason,
     lastTickAction: decision,
+    lastOpenClawResponse: openClawResponse,
     lastTickTxHash: txHash,
     lastWatcherAction,
+    lastWatcherResponse,
     lastWatcherReason,
     lastWatcherTxHash,
     lastHeartbeatAt: now,
@@ -614,6 +641,24 @@ function normalizeWatcherAction(text: string): "REPORT_OK" | "REPORT_SUSPICIOUS"
 
 function selfStopRuntime(record: RuntimeRecord, reason: string): RuntimeRecord {
   return { ...record, status: "self-stopped", leaseOwner: null, leaseExpiresAt: null, failureReason: reason, updatedAt: Date.now() };
+}
+
+function summarizeOpenClawResponse(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
+function packagePromptSection(title: string, snapshot: PackageSnapshot | null): string {
+  if (!snapshot) return `${title}: unavailable`;
+  return [
+    `${title}:`,
+    `role=${snapshot.role}`,
+    `packageHash=${snapshot.packageHash}`,
+    `summary=${snapshot.summary}`,
+    `semantic=${snapshot.semantic.join(" | ")}`,
+    `constraints=${JSON.stringify(snapshot.constraints)}`,
+    `agents=${snapshot.agents.slice(0, 1200)}`,
+    `soul=${snapshot.soul.slice(0, 600)}`,
+  ].join("\n");
 }
 
 function logRuntimeSelfStop(record: RuntimeRecord, reason: string) {
@@ -669,7 +714,7 @@ export async function activatePlan(delegateAddr?: Address) {
 }
 
 // ---- state ----
-export async function getState(delegateAddr?: Address) {
+export async function getState(delegateAddr?: Address, activeIntentSlug?: string) {
   const c = await ctx(delegateAddr);
   const code = await c.pub.getCode({ address: c.delegate });
   const delegated = !!code && code.toLowerCase().startsWith("0xef0100");
@@ -692,14 +737,16 @@ export async function getState(delegateAddr?: Address) {
   const fromBlock = latest > 9_000n ? latest - 9_000n : 0n;
   const logs = await c.pub.getLogs({ address: c.delegate, fromBlock, toBlock: "latest" });
   const timeline: { kind: string; title: string; reason: string; txHash: Hex; blockNumber: string }[] = [];
+  const activeIntentHash = activeIntentSlug ? intentIdHash(activeIntentSlug) : null;
   for (const log of logs) {
     try {
       const ev = decodeEventLog({ abi, data: log.data, topics: log.topics }) as { eventName: string; args: Record<string, unknown> };
-      if (ev.eventName === "EvidenceCommitted")
+      if (ev.eventName === "EvidenceCommitted") {
+        if (activeIntentHash && String(ev.args.intentId).toLowerCase() !== activeIntentHash.toLowerCase()) continue;
         timeline.push({ kind: "evidence", title: "EvidenceCommitted", reason: String(ev.args.reason ?? ""), txHash: log.transactionHash as Hex, blockNumber: String(log.blockNumber) });
-      else if (ev.eventName === "GuardTightened")
+      } else if (!activeIntentHash && ev.eventName === "GuardTightened")
         timeline.push({ kind: "tighten", title: "Watcher · VOTE_TIGHTEN", reason: "Watcher narrowed future per-tx capability after recent execution evidence", txHash: log.transactionHash as Hex, blockNumber: String(log.blockNumber) });
-      else if (ev.eventName === "GuardFrozen")
+      else if (!activeIntentHash && ev.eventName === "GuardFrozen")
         timeline.push({ kind: "freeze", title: "Watcher · VOTE_FREEZE", reason: "Execution frozen; only the Owner can resume/unfreeze", txHash: log.transactionHash as Hex, blockNumber: String(log.blockNumber) });
     } catch {
       /* not ours */

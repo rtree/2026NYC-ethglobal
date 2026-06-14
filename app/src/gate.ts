@@ -3,7 +3,8 @@
 // ID is mocked in dev (clearly labeled) and uses real IDKit when VITE_WORLDID_APP_ID is set.
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import { authState, authRequiredCached, fetchAuthRequired } from "./auth";
+import { authState, authRequiredCached, fetchAuthRequired, worldIdRequiredCached } from "./auth";
+import { api } from "./api";
 
 const WORLDID_KEY = "intentos:worldid";
 
@@ -43,6 +44,29 @@ export function useGate() {
       window.removeEventListener("intentos:auth", onAuth);
     };
   }, []);
+
+  // When the SERVER enforces World ID, IT — not a local sessionStorage flag — is the source of truth for
+  // "human verified" (plan/110). Sync from /api/worldid/status once we know the mode + sign-in state, so a
+  // stale local flag can't pre-pass the gate, and a real prior verification carries across tabs/reloads.
+  useEffect(() => {
+    let cancelled = false;
+    fetchAuthRequired().finally(async () => {
+      if (cancelled || !worldIdRequiredCached()) return; // dev-mock mode keeps the local-flag behavior
+      if (!authState()) {
+        if (worldIdVerified()) setWorldIdVerified(false); // a local flag can't be trusted before sign-in
+        return;
+      }
+      try {
+        const s = await api.worldIdStatus();
+        if (!cancelled) setWorldIdVerified(!!s.verified); // dispatches intentos:gate -> setVerified
+      } catch {
+        /* leave current state; the write-path is still server-gated */
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
 
   const authOk = !authRequired || signedIn;
   return { isConnected, address, verified, signedIn, authRequired, passed: isConnected && authOk && verified };
