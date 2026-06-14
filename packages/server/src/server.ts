@@ -8,10 +8,13 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize, resolve } from "node:path";
 import {
+  activatePlan,
+  addressFromUid,
   createExecutor,
   createWatcher,
   fundGas,
   getState,
+  ownerMode,
   ownerResume,
   reset,
   runtimeStart,
@@ -65,8 +68,8 @@ const API: Record<string, (uid: string, body: WriteBody) => Promise<unknown>> = 
   "POST /api/gas/fund": (uid, b) => fundGas(b.lane === "watcher" ? "watcher" : "executor", { uid, intentId: b.intentId }),
   "POST /api/runtime/start": (uid, b) => runtimeStart({ uid, intentId: b.intentId }),
   "POST /api/trade": (uid, b) => trade({ uid, intentId: b.intentId }),
-  "POST /api/watcher/freeze": () => watcherFreeze(),
-  "POST /api/watcher/tighten": () => watcherTighten(),
+  "POST /api/watcher/freeze": (uid, b) => watcherFreeze({ uid, intentId: b.intentId }),
+  "POST /api/watcher/tighten": (uid, b) => watcherTighten({ uid, intentId: b.intentId }),
   "POST /api/owner/resume": (uid, b) => ownerResume({ uid, intentId: b.intentId }),
   "POST /api/reset": (uid, b) => reset({ uid, intentId: b.intentId }),
 };
@@ -118,7 +121,11 @@ async function main() {
 
     if (path === "/api/state" && req.method === "GET") {
       try {
-        json(res, 200, await getState());
+        // Public read of on-chain account state. In connected mode the client passes ?address= so the
+        // panel reflects the visitor's OWN delegated EOA; with no address it's the shared demo Owner.
+        const a = url.searchParams.get("address") ?? "";
+        const addr = /^0x[0-9a-fA-F]{40}$/.test(a) ? (a as `0x${string}`) : undefined;
+        json(res, 200, await getState(addr));
       } catch (e) {
         json(res, 500, { error: e instanceof Error ? e.message : String(e) });
       }
@@ -145,6 +152,24 @@ async function main() {
         json(res, 200, out);
       } catch (e) {
         json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+      }
+      return;
+    }
+
+    // ---- PRODUCT mode: per-user EIP-7702 "Activate" plan (unsigned initialize params; plan/080) ----
+    if (path === "/api/activate/plan" && req.method === "GET") {
+      let uid: string;
+      try {
+        uid = await requireUid(req);
+      } catch (e) {
+        json(res, 401, { error: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      try {
+        const addr = addressFromUid(uid) ?? undefined;
+        json(res, 200, { ownerMode: ownerMode(), ...(await activatePlan(addr)) });
+      } catch (e) {
+        json(res, 500, { error: e instanceof Error ? e.message : String(e) });
       }
       return;
     }
