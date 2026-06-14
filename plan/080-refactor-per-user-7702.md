@@ -77,7 +77,7 @@ running **our** code ([contracts/src/ExecutionDelegate7702.sol](../contracts/src
 graph TD
   EOA["Your EOA 0x7B79…2A2e<br/>(one 7702 code slot)"]
   MM["MetaMask DeleGator impl<br/>(smart-account features)"]
-  IOS["IntentOS ExecutionDelegate7702<br/>0x37d9933c…f9c1 (guardrails)"]
+  IOS["IntentOS ExecutionDelegate7702<br/>0xDe45a782…33f9 (guardrails)"]
   EOA -- "delegated NOW" --> MM
   EOA -. "delegating here OVERWRITES MetaMask" .-> IOS
 ```
@@ -95,7 +95,7 @@ graph TD
 `Account type "json-rpc" is not supported. The signAuthorization Action does not support JSON-RPC
 Accounts.` MetaMask (and injected wallets generally) will **only** 7702-delegate to their **own**
 smart-account implementation — there is no RPC for a dApp to request delegation to an arbitrary
-implementation (here `0x37d9…f9c1`). `signAuthorization` is a **local-account-only** viem action. So the
+implementation (here `0xDe45a782…33f9`). `signAuthorization` is a **local-account-only** viem action. So the
 browser path is a dead end for self-delegation; the authorization must be signed by a local key or a
 hardware wallet. This is why **Option D** is the chosen real path.
 
@@ -160,7 +160,7 @@ signatures**.
 
 - **Contract — no change.** `initialize`, `submitExecutionRequest`, gas-lane reimbursement,
   `watcherTighten/Freeze`, `ownerUpdateGuard` all key off `address(this)` = the delegating EOA. The
-  impl is deployed **once** (`0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1`); every EOA wears that same
+  impl is deployed **once** (`0xDe45a782AE5544D1D682E1cfccf9D6DDa3c833f9`); every EOA wears that same
   code with **its own storage and funds**.
 - **`delegateAndInitialize(owner, …)` already takes an arbitrary `owner` Account** and merges vault
   funding into the same self-tx (Base allows only 1 in-flight tx for a freshly-delegated account) —

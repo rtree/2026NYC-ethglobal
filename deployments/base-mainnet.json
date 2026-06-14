@@ -35,7 +35,9 @@
     "usdcWethPoolFee": 500
   },
   "contracts": {
-    "executionDelegate7702Impl": "0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1",
+    "executionDelegate7702Impl": "0xDe45a782AE5544D1D682E1cfccf9D6DDa3c833f9",
+    "executionDelegate7702Impl_old": "0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1",
+    "executionDelegate7702Impl_note": "Redeployed 2026-06-14. Current source merges initialExecVault+initialWatcherVault into initialize() (9-arg, selector 0xd0bb7c4f) so per-user EIP-7702 activation is a single owner self-tx. The _old impl predates that merge (7-arg initialize, selector 0x328d5d6e) and is kept only because the original demo Owner 0xeEa9 was initialized against it.",
     "agentNFT": "0x3da4947a9b5e255219fa39c52a68219da8f9a7ec"
   },
   "demo": {

@@ -68,6 +68,8 @@ export interface RuntimeRecord {
   executedTicks: number;
   runtimeTradesUsed: number;
   maxRuntimeTrades: number;
+  watcherActionsUsed: number;
+  maxWatcherActions: number;
   llmCallsUsed: number;
   estimatedInputTokens: number;
   estimatedOutputTokens: number;
@@ -76,6 +78,8 @@ export interface RuntimeRecord {
   failureReason: string | null;
   lastTickAction: string | null;
   lastTickTxHash: Hex | null;
+  lastWatcherAction: string | null;
+  lastWatcherTxHash: Hex | null;
   createdAt: number;
   updatedAt: number;
 }

@@ -55,6 +55,7 @@ async function main() {
   await test.setBalance({ address: D, value: parseEther("2") });
 
   const sessionKey = await getKmsEthAddress(keyVersion(KMS.executorSessionKey));
+  const watcherKey = await getKmsEthAddress(keyVersion(KMS.watcherSessionKey));
   await test.impersonateAccount({ address: D });
   const guard = {
     router: "0x2626664c2603336E57B271c5C0b26F421741e481" as Address,
@@ -69,8 +70,7 @@ async function main() {
     frozen: false,
     bindingNonce: 1n,
   };
-  await wallet.sendTransaction({ account: D, to: D, data: encodeFunctionData({ abi, functionName: "initialize", args: [guard, sessionKey, "0x0000000000000000000000000000000000000000", relayer.address, parseEther("0.02"), keccak256(toHex("pkg")), keccak256(toHex("sem"))] }) });
-  await wallet.sendTransaction({ account: D, to: D, data: encodeFunctionData({ abi, functionName: "fundGasVault", args: [false, parseEther("1")] }) });
+  await wallet.sendTransaction({ account: D, to: D, data: encodeFunctionData({ abi, functionName: "initialize", args: [guard, sessionKey, watcherKey, relayer.address, parseEther("0.02"), parseEther("1"), 0n, keccak256(toHex("pkg")), keccak256(toHex("sem"))] }) });
   await test.stopImpersonatingAccount({ address: D });
 
   const records = await runExecutor(

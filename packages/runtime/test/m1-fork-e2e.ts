@@ -93,6 +93,7 @@ async function main() {
 
   // 3. initialize the guard as an Owner self-call (msg.sender == address(this) == D)
   const sessionKey = await getKmsEthAddress(keyVersion(KMS.executorSessionKey));
+  const watcherKey = await getKmsEthAddress(keyVersion(KMS.watcherSessionKey));
   console.log("executor SessionKey:", sessionKey);
   await test.impersonateAccount({ address: D });
   const guard = {
@@ -114,13 +115,8 @@ async function main() {
     data: encodeFunctionData({
       abi: delegateAbi,
       functionName: "initialize",
-      args: [guard, sessionKey, "0x0000000000000000000000000000000000000000", relayer.address, parseEther("0.02"), keccak256(toHex("pkg")), keccak256(toHex("sem"))],
+      args: [guard, sessionKey, watcherKey, relayer.address, parseEther("0.02"), parseEther("1"), 0n, keccak256(toHex("pkg")), keccak256(toHex("sem"))],
     }),
-  });
-  await wallet.sendTransaction({
-    account: D,
-    to: D,
-    data: encodeFunctionData({ abi: delegateAbi, functionName: "fundGasVault", args: [false, parseEther("1")] }),
   });
   await test.stopImpersonatingAccount({ address: D });
 

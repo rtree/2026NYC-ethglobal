@@ -318,6 +318,8 @@ export async function runtimeStart(opts?: CreateOpts) {
     executedTicks: 0,
     runtimeTradesUsed: 0,
     maxRuntimeTrades: 1,
+    watcherActionsUsed: 0,
+    maxWatcherActions: 1,
     llmCallsUsed: 0,
     estimatedInputTokens: 0,
     estimatedOutputTokens: 0,
@@ -326,6 +328,8 @@ export async function runtimeStart(opts?: CreateOpts) {
     failureReason: null,
     lastTickAction: null,
     lastTickTxHash: null,
+    lastWatcherAction: null,
+    lastWatcherTxHash: null,
     createdAt: startedAt,
     updatedAt: startedAt,
   };
@@ -466,12 +470,19 @@ export async function runtimeTick(opts?: CreateOpts) {
   const completion = await openClawComplete(prompt);
   const decision = normalizeRuntimeAction(completion.text);
   const nextExecuted = record.executedTicks + 1;
-  const estimatedVertexCostUsd = Number((record.estimatedVertexCostUsd + completion.estimatedCostUsd).toFixed(8));
-  const overBudget = estimatedVertexCostUsd >= record.maxVertexCostUsd;
+  let llmCallsUsed = record.llmCallsUsed + 1;
+  let estimatedInputTokens = record.estimatedInputTokens + completion.estimatedInputTokens;
+  let estimatedOutputTokens = record.estimatedOutputTokens + completion.estimatedOutputTokens;
+  let estimatedVertexCostUsd = Number((record.estimatedVertexCostUsd + completion.estimatedCostUsd).toFixed(8));
+  let overBudget = estimatedVertexCostUsd >= record.maxVertexCostUsd;
   let txHash: Hex | null = null;
   let failureReason = overBudget ? "vertex budget exhausted" : record.failureReason;
   let runtimeTradesUsed = tradesUsed;
   let tickStatus = "held";
+  let watcherActionsUsed = record.watcherActionsUsed ?? 0;
+  const maxWatcherActions = record.maxWatcherActions ?? 1;
+  let lastWatcherAction = record.lastWatcherAction;
+  let lastWatcherTxHash = record.lastWatcherTxHash;
   const shouldBuy = decision === "BUY" || (RUNTIME_FIRST_TICK_BUY && tick === 1 && tradesUsed < maxRuntimeTrades);
   if (!overBudget && shouldBuy && tradesUsed < maxRuntimeTrades) {
     const tradeResult = await trade(opts);
@@ -485,6 +496,38 @@ export async function runtimeTick(opts?: CreateOpts) {
       tickStatus = "submitted";
     }
   }
+  if (!overBudget && txHash && record.watcherTokenId && watcherActionsUsed < maxWatcherActions) {
+    const watcherPrompt = [
+      "You are an IntentOS Watcher Agent.",
+      "A bounded Executor just submitted one guarded USDC->WETH trade.",
+      "Judge semantic safety. Reply with exactly one action: REPORT_OK, REPORT_SUSPICIOUS, or VOTE_TIGHTEN.",
+      "Never loosen. Do not reply VOTE_FREEZE in this MVP autonomous path.",
+      "For the first successful execution, prefer VOTE_TIGHTEN to narrow future capability conservatively.",
+      `intentId=${record.intentId}`,
+      `executorTokenId=${record.executorTokenId}`,
+      `watcherTokenId=${record.watcherTokenId}`,
+      `txHash=${txHash}`,
+    ].join("\n");
+    const watcherCompletion = await openClawComplete(watcherPrompt);
+    llmCallsUsed += 1;
+    estimatedInputTokens += watcherCompletion.estimatedInputTokens;
+    estimatedOutputTokens += watcherCompletion.estimatedOutputTokens;
+    estimatedVertexCostUsd = Number((estimatedVertexCostUsd + watcherCompletion.estimatedCostUsd).toFixed(8));
+    overBudget = estimatedVertexCostUsd >= record.maxVertexCostUsd;
+    const watcherDecision = normalizeWatcherAction(watcherCompletion.text);
+    lastWatcherAction = watcherDecision;
+    if (!overBudget && (watcherDecision === "VOTE_TIGHTEN" || watcherDecision === "REPORT_SUSPICIOUS")) {
+      try {
+        const vote = await watcherTighten(opts);
+        lastWatcherAction = "VOTE_TIGHTEN";
+        lastWatcherTxHash = vote.txHash as Hex;
+        watcherActionsUsed += 1;
+      } catch (e) {
+        lastWatcherAction = "VOTE_TIGHTEN_FAILED";
+        failureReason = e instanceof Error ? e.message : String(e);
+      }
+    }
+  }
   const status = overBudget ? "self-stopped" : nextExecuted >= record.plannedTicks ? "expired" : "running";
   const updated: RuntimeRecord = {
     ...record,
@@ -494,13 +537,17 @@ export async function runtimeTick(opts?: CreateOpts) {
     executedTicks: nextExecuted,
     runtimeTradesUsed,
     maxRuntimeTrades,
-    llmCallsUsed: record.llmCallsUsed + 1,
-    estimatedInputTokens: record.estimatedInputTokens + completion.estimatedInputTokens,
-    estimatedOutputTokens: record.estimatedOutputTokens + completion.estimatedOutputTokens,
+    watcherActionsUsed,
+    maxWatcherActions,
+    llmCallsUsed,
+    estimatedInputTokens,
+    estimatedOutputTokens,
     estimatedVertexCostUsd,
     failureReason,
     lastTickAction: decision,
     lastTickTxHash: txHash,
+    lastWatcherAction,
+    lastWatcherTxHash,
     lastHeartbeatAt: now,
     updatedAt: now,
   };
@@ -518,6 +565,13 @@ function normalizeRuntimeAction(text: string): "BUY" | "HOLD" {
   const t = text.trim().toUpperCase();
   if (/\bBUY\b/.test(t)) return "BUY";
   return "HOLD";
+}
+
+function normalizeWatcherAction(text: string): "REPORT_OK" | "REPORT_SUSPICIOUS" | "VOTE_TIGHTEN" {
+  const t = text.trim().toUpperCase();
+  if (/\bVOTE_TIGHTEN\b/.test(t)) return "VOTE_TIGHTEN";
+  if (/\bREPORT_SUSPICIOUS\b/.test(t)) return "REPORT_SUSPICIOUS";
+  return "REPORT_OK";
 }
 
 function selfStopRuntime(record: RuntimeRecord, reason: string): RuntimeRecord {

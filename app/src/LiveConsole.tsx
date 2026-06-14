@@ -101,6 +101,7 @@ export function LiveConsole() {
                   <tr><td className="k">runtimeId</td><td className="v">{runtimeRecord.runtimeId}</td></tr>
                   <tr><td className="k">ticks</td><td className="v">{runtimeRecord.executedTicks} / {runtimeRecord.plannedTicks}</td></tr>
                   <tr><td className="k">last action</td><td className="v">{runtimeRecord.lastTickAction ?? "—"}{runtimeRecord.lastTickTxHash ? ` · ${shortHash(runtimeRecord.lastTickTxHash)}` : ""}</td></tr>
+                  <tr><td className="k">watcher action</td><td className="v">{runtimeRecord.lastWatcherAction ?? "—"}{runtimeRecord.lastWatcherTxHash ? ` · ${shortHash(runtimeRecord.lastWatcherTxHash)}` : ""}</td></tr>
                   <tr><td className="k">LLM budget</td><td className="v">${runtimeRecord.estimatedVertexCostUsd.toFixed(4)} / ${runtimeRecord.maxVertexCostUsd.toFixed(2)} · {runtimeRecord.llmCallsUsed} calls</td></tr>
                   {runtimeRecord.failureReason && <tr><td className="k">stop reason</td><td className="v">{runtimeRecord.failureReason}</td></tr>}
                 </tbody></table>

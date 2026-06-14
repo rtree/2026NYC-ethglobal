@@ -34,7 +34,7 @@ import { stdin, stdout, argv, env, exit } from "node:process";
 // ---- baked deployment config (Base mainnet; from deployments/base-mainnet.json + server guard) -------
 const CFG = {
   chainId: 8453,
-  delegateImpl: "0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1",
+  delegateImpl: "0xDe45a782AE5544D1D682E1cfccf9D6DDa3c833f9",
   sessionKey: "0x86bA13f74C5f2AC469eeb6e0010A6AFfd49298eE", // executor SessionKey (KMS, sign-only)
   watcherKey: "0xEe1Dc2f082612D6d510D7E3b3EEd26cE385E9D38", // watcher SessionKey (KMS, sign-only)
   relayer: "0x078383c4c20b4e9732Ac0c30A68b8123D53ea6C9", // platform relayer / gas sponsor

@@ -12,7 +12,7 @@ account or a hardware wallet**. This kit does that, and nothing else:
 1. Loads your signer (**Ledger — recommended**, or an imported mnemonic / private key).
 2. Waits until that EOA holds a little Base ETH.
 3. Signs + broadcasts **one** EIP-7702 transaction that delegates your EOA to
-   `ExecutionDelegate7702` (`0x37d9933c5ac95399c840d3a2c07fdfdbc8b7f9c1`) and initializes your Hard
+   `ExecutionDelegate7702` (`0xDe45a782AE5544D1D682E1cfccf9D6DDa3c833f9`) and initializes your Hard
    Guardrails (caps, the platform SessionKey + relayer, a tiny gas-vault reserve).
 
 Your funds never leave your account. Your key never leaves this machine. We only ever learn your
