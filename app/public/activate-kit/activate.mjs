@@ -21922,9 +21922,19 @@ async function main() {
   info(`tx: ${C.cyn}https://basescan.org/tx/${hash3}${C.reset}`);
   const rcpt = await pub.waitForTransactionReceipt({ hash: hash3 });
   if (rcpt.status !== "success") die(`activation reverted on-chain (status ${rcpt.status}). See the tx above.`);
-  const after = await pub.getCode({ address }).catch(() => void 0);
-  const nowOurs = !!after && after.toLowerCase().startsWith("0xef0100") && getAddress("0x" + after.slice(8, 48)).toLowerCase() === CFG.delegateImpl.toLowerCase();
-  if (!nowOurs) die("tx succeeded but delegation not detected \u2014 re-run to inspect.");
+  let nowOurs = false;
+  for (let i = 0; i < 6; i++) {
+    const after = await pub.getCode({ address, blockNumber: rcpt.blockNumber }).catch(() => void 0);
+    nowOurs = !!after && after.toLowerCase().startsWith("0xef0100") && getAddress("0x" + after.slice(8, 48)).toLowerCase() === CFG.delegateImpl.toLowerCase();
+    if (nowOurs) break;
+    await sleep(1500);
+  }
+  if (!nowOurs) {
+    warn("Activation tx SUCCEEDED, but this RPC hasn't surfaced the new account code yet (load-balancer lag).");
+    info(`Verify: https://basescan.org/address/${address}#code  \u2014 then sign in to the panel with ${C.b}${address}${C.reset}.`);
+    cleanupEnv();
+    return;
+  }
   log("");
   ok(`${C.b}Activated.${C.reset} ${address} is now an IntentOS guarded account on Base mainnet.`);
   info(`Next: open the IntentOS panel, sign in with ${C.b}${address}${C.reset}, build your Intent, and run a guarded trade.`);

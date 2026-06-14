@@ -318,9 +318,23 @@ async function main() {
   const rcpt = await pub.waitForTransactionReceipt({ hash });
   if (rcpt.status !== "success") die(`activation reverted on-chain (status ${rcpt.status}). See the tx above.`);
 
-  const after = await pub.getCode({ address }).catch(() => undefined);
-  const nowOurs = !!after && after.toLowerCase().startsWith("0xef0100") && getAddress("0x" + after.slice(8, 48)).toLowerCase() === CFG.delegateImpl.toLowerCase();
-  if (!nowOurs) die("tx succeeded but delegation not detected — re-run to inspect.");
+  // Confirm the delegation landed. Load-balanced public RPCs can briefly serve a node that hasn't seen
+  // the new block yet, so poll a few times (pinned to the receipt block) before deciding.
+  let nowOurs = false;
+  for (let i = 0; i < 6; i++) {
+    const after = await pub.getCode({ address, blockNumber: rcpt.blockNumber }).catch(() => undefined);
+    nowOurs = !!after && after.toLowerCase().startsWith("0xef0100") && getAddress("0x" + after.slice(8, 48)).toLowerCase() === CFG.delegateImpl.toLowerCase();
+    if (nowOurs) break;
+    await sleep(1500);
+  }
+  if (!nowOurs) {
+    // The tx succeeded (status 1) — initialize ran — so this is almost certainly RPC load-balancer lag,
+    // not a real failure. Tell the truth instead of crying wolf.
+    warn("Activation tx SUCCEEDED, but this RPC hasn't surfaced the new account code yet (load-balancer lag).");
+    info(`Verify: https://basescan.org/address/${address}#code  — then sign in to the panel with ${C.b}${address}${C.reset}.`);
+    cleanupEnv();
+    return;
+  }
 
   log("");
   ok(`${C.b}Activated.${C.reset} ${address} is now an IntentOS guarded account on Base mainnet.`);

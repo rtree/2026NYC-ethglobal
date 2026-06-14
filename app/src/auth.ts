@@ -122,6 +122,34 @@ export function signInWithWallet(address: Address, signMessageAsync: SignMessage
   return promise;
 }
 
+// Right after a wallet connects, wagmi's store can briefly not have the connector registered yet, so
+// the very first signMessage throws "Connector not connected" (or "...getChainId is not a function").
+// That's a transient race on the first click — wait a moment and retry instead of surfacing a scary
+// error. A real user rejection or other error is re-thrown immediately (not matched below).
+async function signWithRetry(
+  signMessageAsync: SignMessage,
+  args: { account: Address; message: string },
+  attempts = 5,
+  baseDelayMs = 200,
+): Promise<`0x${string}`> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await signMessageAsync(args);
+    } catch (e) {
+      const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+      const transient =
+        msg.includes("connector not connected") ||
+        msg.includes("getchainid is not a function") ||
+        msg.includes("connector.getchainid");
+      if (!transient || i === attempts - 1) throw e;
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, baseDelayMs * (i + 1)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 async function doSignIn(address: Address, signMessageAsync: SignMessage): Promise<void> {
   // 1) nonce + the exact message to sign
   const nonceRes = await fetch(`/api/auth/nonce?address=${address}`);
@@ -129,7 +157,7 @@ async function doSignIn(address: Address, signMessageAsync: SignMessage): Promis
   const { message } = (await nonceRes.json()) as { nonce: string; message: string };
 
   // 2) wallet signs
-  const signature = await signMessageAsync({ account: address, message });
+  const signature = await signWithRetry(signMessageAsync, { account: address, message });
 
   // 3) server verifies -> Firebase custom token
   const web3Res = await fetch("/api/auth/web3", {
