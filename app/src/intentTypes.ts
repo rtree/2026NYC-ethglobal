@@ -89,6 +89,8 @@ export interface IntentDoc {
   createdAt: number;
   executorTokenId: string | null;
   watcherTokenId: string | null;
+  executorTxHash?: Hex | null;
+  watcherTxHash?: Hex | null;
   packages: { executor: AgentPackageDraft; watcher: AgentPackageDraft };
   startConfig: StartConfig;
   runtime?: RuntimeState | null;

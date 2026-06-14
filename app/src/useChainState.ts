@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import type { Address, Hex } from "viem";
 
 export interface GuardView {
+  router: Address;
+  selector: Hex;
   tokenA: Address;
   tokenB: Address;
+  poolFee: number;
   amountCapPerTx: bigint;
   cumulativeCap: bigint;
   slippageCapBps: number;
@@ -59,8 +62,11 @@ function mapState(d: any): ChainState {
     delegated: d.delegated,
     guard: d.guard
       ? {
+          router: d.guard.router,
+          selector: d.guard.selector,
           tokenA: d.guard.tokenA,
           tokenB: d.guard.tokenB,
+          poolFee: Number(d.guard.poolFee),
           amountCapPerTx: BigInt(d.guard.amountCapPerTx),
           cumulativeCap: BigInt(d.guard.cumulativeCap),
           slippageCapBps: Number(d.guard.slippageCapBps),

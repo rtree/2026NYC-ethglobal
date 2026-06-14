@@ -7,7 +7,7 @@ import { ActionButton } from "./ActionButton";
 import { api, type ChatResponse, type ActivatePlan } from "./api";
 import { authState, ownerModeCached, fetchAuthRequired } from "./auth";
 import { tokenPair, delegateAbi } from "./config";
-import { shortAddr, addrUrl, usdc, eth } from "./format";
+import { shortAddr, shortHash, addrUrl, txUrl, usdc, eth } from "./format";
 import type { AgentPackageDraft, IntentDoc, RuntimeRecord } from "./intentTypes";
 
 // 030/040/050/060/070/080 collapsed into ONE master/detail screen (plan/010 §15.1). Left = step nav,
@@ -205,8 +205,8 @@ export function LaunchFlow() {
   const [step, setStep] = useState<StepId>("intent");
   const [intent, setIntent] = useState<IntentDoc | null>(null);
 
-  const hasExecutor = !!state?.session.executorTokenId;
-  const hasWatcher = !!state?.session.watcherTokenId;
+  const hasExecutor = !!intent?.executorTokenId;
+  const hasWatcher = !!intent?.watcherTokenId;
   const execFixed = !!intent?.packages.executor.fixed;
   const watchFixed = !!intent?.packages.watcher.fixed;
 
@@ -217,7 +217,7 @@ export function LaunchFlow() {
       .listIntents()
       .then((r) => {
         if (!active) return;
-        const draft = r.intents.find((i) => i.status === "draft") ?? r.intents[0] ?? null;
+        const draft = r.intents.find((i) => i.status === "draft") ?? null;
         if (draft) return api.getIntent(draft.intentId).then((full) => { if (active) setIntent(full); });
       })
       .catch(() => {/* not signed in / store empty */});
@@ -230,7 +230,7 @@ export function LaunchFlow() {
     intent: execFixed && watchFixed,
     executor: hasExecutor,
     watcher: hasWatcher,
-    funding: (state?.execVault ?? 0n) > 0n,
+    funding: (state?.execVault ?? 0n) > 0n && (state?.watcherVault ?? 0n) > 0n,
     start: false,
   };
   const requiredMet = done.intent && done.executor && done.funding;
@@ -271,7 +271,7 @@ export function LaunchFlow() {
             {STEPS.map((s) => (
               <button
                 key={s.id}
-                className={`step-nav ${step === s.id ? "active" : ""}`}
+                className={`step-nav ${step === s.id ? "active" : ""} ${done[s.id] ? "done" : ""}`}
                 onClick={() => setStep(s.id)}
               >
                 <span className="step-num">{done[s.id] ? "✓" : s.n}</span>
@@ -293,8 +293,8 @@ export function LaunchFlow() {
           {/* right: detail pane */}
           <div>
             {step === "intent" && <IntentStep intent={intent} setIntent={setIntent} />}
-            {step === "executor" && <ExecutorStep state={state} fixed={execFixed} pkg={intent?.packages.executor} intentId={intent?.intentId} />}
-            {step === "watcher" && <WatcherStep state={state} fixed={watchFixed} hasExecutor={hasExecutor} pkg={intent?.packages.watcher} intentId={intent?.intentId} />}
+            {step === "executor" && <ExecutorStep state={state} intent={intent} fixed={execFixed} pkg={intent?.packages.executor} />}
+            {step === "watcher" && <WatcherStep state={state} intent={intent} fixed={watchFixed} hasExecutor={hasExecutor} pkg={intent?.packages.watcher} />}
             {step === "funding" && <FundingStep state={state} intentId={intent?.intentId} />}
             {step === "start" && <StartStep state={state} intent={intent} setIntent={setIntent} />}
           </div>
@@ -306,7 +306,7 @@ export function LaunchFlow() {
 }
 
 // ---------- ① Intent & Agent Packages ----------
-function IntentStep({ intent, setIntent }: { intent: IntentDoc | null; setIntent: (d: IntentDoc) => void }) {
+function IntentStep({ intent, setIntent }: { intent: IntentDoc | null; setIntent: (d: IntentDoc | null) => void }) {
   const [turns, setTurns] = useState<{ role: "owner" | "agent"; text: string }[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -317,7 +317,10 @@ function IntentStep({ intent, setIntent }: { intent: IntentDoc | null; setIntent
 
   // hydrate transcript when an intent is loaded
   useEffect(() => {
-    if (!intent) return;
+    if (!intent) {
+      setTurns([]);
+      return;
+    }
     api.getIntent(intent.intentId).then((full) => {
       setTurns(full.transcript.map((t) => ({ role: t.role as "owner" | "agent", text: t.text })));
     }).catch(() => {});
@@ -365,6 +368,11 @@ function IntentStep({ intent, setIntent }: { intent: IntentDoc | null; setIntent
           <h3>IntentBuilder</h3>
           <span className="pill">{llm === "vertex" ? "Vertex AI" : llm === "mock" ? "scripted" : "chat"}</span>
         </div>
+        {intent?.status === "live" && (
+          <button className="btn block" style={{ marginBottom: 12 }} onClick={() => setIntent(null)}>
+            Start a fresh Intent draft
+          </button>
+        )}
         <div className="chat" ref={scroller} style={{ maxHeight: 320, overflowY: "auto" }}>
           {turns.length === 0 && <div className="bubble agent">Tell me what you want your funds to do. e.g. “DCA USDC into ETH, small and careful.”</div>}
           {turns.map((m, i) => (
@@ -430,8 +438,8 @@ function PackageCard({ title, role, pkg, onFix }: { title: string; role: "EXECUT
 }
 
 // ---------- ② Executor Agent ----------
-function ExecutorStep({ state, fixed, pkg, intentId }: { state: ChainState | null; fixed: boolean; pkg?: AgentPackageDraft; intentId?: string }) {
-  const execId = state?.session.executorTokenId;
+function ExecutorStep({ state, intent, fixed, pkg }: { state: ChainState | null; intent: IntentDoc | null; fixed: boolean; pkg?: AgentPackageDraft }) {
+  const execId = intent?.executorTokenId ?? null;
   const ensName = execId ? `agent-${execId}.intentos.base.eth` : "agent-<tokenId>.intentos.base.eth";
   return (
     <div className="grid cols-2">
@@ -441,10 +449,16 @@ function ExecutorStep({ state, fixed, pkg, intentId }: { state: ChainState | nul
         {!fixed && <div className="note">FIX the Executor package in step ① first.</div>}
         <ActionButton
           label={execId ? `Executor minted #${execId}` : "Create Executor (mint + EIP-7702 + initialize)"}
+          workingLabel="Minting Executor..."
           className="btn primary block"
-          run={() => api.createExecutor(intentId)}
+          run={() => api.createExecutor(intent?.intentId)}
           disabled={!fixed || !!execId}
         />
+        {intent?.executorTxHash && (
+          <p className="spec-ref">
+            mint tx <a href={txUrl(intent.executorTxHash)} target="_blank" rel="noreferrer">{shortHash(intent.executorTxHash)}</a>
+          </p>
+        )}
         <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
       </div>
       <div className="card pad-lg">
@@ -463,8 +477,8 @@ function ExecutorStep({ state, fixed, pkg, intentId }: { state: ChainState | nul
 }
 
 // ---------- ③ Watcher Agent ----------
-function WatcherStep({ state, fixed, hasExecutor, pkg, intentId }: { state: ChainState | null; fixed: boolean; hasExecutor: boolean; pkg?: AgentPackageDraft; intentId?: string }) {
-  const watchId = state?.session.watcherTokenId;
+function WatcherStep({ state, intent, fixed, hasExecutor, pkg }: { state: ChainState | null; intent: IntentDoc | null; fixed: boolean; hasExecutor: boolean; pkg?: AgentPackageDraft }) {
+  const watchId = intent?.watcherTokenId ?? null;
   return (
     <div className="grid cols-2">
       <div className="card pad-lg">
@@ -474,10 +488,16 @@ function WatcherStep({ state, fixed, hasExecutor, pkg, intentId }: { state: Chai
         {hasExecutor && !fixed && <div className="note">FIX the Watcher package in step ① first.</div>}
         <ActionButton
           label={watchId ? `Watcher minted #${watchId}` : "Create Watcher (mint + bind, quorum 1)"}
+          workingLabel="Minting Watcher..."
           className="btn block"
-          run={() => api.createWatcher(intentId)}
+          run={() => api.createWatcher(intent?.intentId)}
           disabled={!hasExecutor || !fixed || !!watchId}
         />
+        {intent?.watcherTxHash && (
+          <p className="spec-ref">
+            mint tx <a href={txUrl(intent.watcherTxHash)} target="_blank" rel="noreferrer">{shortHash(intent.watcherTxHash)}</a>
+          </p>
+        )}
         <p className="spec-ref">packageHash {pkg?.packageHash ? `${pkg.packageHash.slice(0, 14)}…` : "— (fix first)"}</p>
       </div>
       <div className="card pad-lg">
@@ -485,8 +505,10 @@ function WatcherStep({ state, fixed, hasExecutor, pkg, intentId }: { state: Chai
         <table className="kv"><tbody>
           <tr><td className="k">tokenId</td><td className="v">{watchId ?? "—"}</td></tr>
           <tr><td className="k">ENS / Basename</td><td className="v">{watchId ? `watcher-${watchId}.intentos.base.eth` : "watcher-<tokenId>.intentos.base.eth"} {watchId ? <span className="muted">(planned)</span> : null}</td></tr>
+          <tr><td className="k">AgentNFT</td><td className="v">{state ? <a href={addrUrl(state.agentNft)} target="_blank" rel="noreferrer">{shortAddr(state.agentNft)}</a> : "—"}</td></tr>
+          <tr><td className="k">ExecutionContract</td><td className="v">{state ? <a href={addrUrl(state.delegate)} target="_blank" rel="noreferrer">{shortAddr(state.delegate)}</a> : "—"}</td></tr>
           <tr><td className="k">WatcherKey (KMS)</td><td className="v">{state ? shortAddr(state.watcherKey) : "—"}</td></tr>
-          <tr><td className="k">watchedExecutor</td><td className="v">{state?.session.executorTokenId ?? "—"}</td></tr>
+          <tr><td className="k">watchedExecutor</td><td className="v">{intent?.executorTokenId ?? "—"}</td></tr>
         </tbody></table>
         <p className="spec-ref" style={{ marginTop: 10 }}>The Watcher is optional but recommended — it is the semantic circuit breaker.</p>
       </div>
@@ -496,6 +518,24 @@ function WatcherStep({ state, fixed, hasExecutor, pkg, intentId }: { state: Chai
 
 // ---------- ④ Gas Funding ----------
 function FundingStep({ state, intentId }: { state: ChainState | null; intentId?: string }) {
+  const { data: walletClient } = useWalletClient();
+  const connected = ownerModeCached() === "connected";
+  async function fundLane(lane: "executor" | "watcher") {
+    if (connected) {
+      if (!walletClient || !state?.delegate) throw new Error("connect your wallet first");
+      const amount = lane === "watcher" ? 800_000_000_000_000n : 1_000_000_000_000_000n;
+      const data = encodeFunctionData({
+        abi: delegateAbi as Abi,
+        functionName: "fundGasVault",
+        args: [lane === "watcher", amount],
+      });
+      const txHash = await walletClient.sendTransaction({ to: state.delegate, data });
+      invalidateChainState();
+      return { txHash };
+    }
+    return api.fundGas(lane, intentId);
+  }
+
   return (
     <div className="grid cols-2">
       <div className="card pad-lg">
@@ -514,8 +554,8 @@ function FundingStep({ state, intentId }: { state: ChainState | null; intentId?:
         <p className="desc" style={{ marginTop: 12 }}>Cumulative spent {state ? usdc(state.cumulativeSpent) : "—"} of {state?.guard ? usdc(state.guard.cumulativeCap) : "—"} cap.</p>
         <p className="spec-ref">The executor lane is seeded in initialize(); the Watcher lane is topped up on Watcher creation. Top up a lane here if it runs low.</p>
         <div style={{ marginTop: 12 }}>
-          <ActionButton label="Top up Executor lane (+0.001 ETH)" className="btn block" run={() => api.fundGas("executor", intentId)} />
-          <ActionButton label="Top up Watcher lane (+0.0008 ETH)" className="btn block" run={() => api.fundGas("watcher", intentId)} />
+          <ActionButton label="Top up Executor lane (+0.001 ETH)" className="btn block" run={() => fundLane("executor")} />
+          <ActionButton label="Top up Watcher lane (+0.0008 ETH)" className="btn block" run={() => fundLane("watcher")} />
         </div>
       </div>
     </div>
@@ -539,7 +579,12 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
     setRuntimeRecord(null);
     if (intent?.intentId) {
       api.runtimeStatus(intent.intentId)
-        .then((r) => setRuntimeRecord(r.runtimeRecord))
+        .then((r) => {
+          setRuntimeRecord(r.runtimeRecord);
+          if (r.runtimeRecord && !["scheduled", "running", "stopping"].includes(r.runtimeRecord.status)) {
+            setStarted(null);
+          }
+        })
         .catch(() => {});
     }
   }, [intent?.intentId]);
@@ -557,7 +602,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
     }
   }
 
-  const hasExecutor = !!state?.session.executorTokenId;
+  const hasExecutor = !!intent?.executorTokenId;
   const pkg = intent?.packages.executor;
   const runtimeActive = runtimeRecord?.status === "scheduled" || runtimeRecord?.status === "running";
   return (
@@ -589,7 +634,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
           <tr><td className="k">Loop / TTL</td><td className="v">{loop}s · {ttl} min</td></tr>
           <tr><td className="k">Executor pkg</td><td className="v">{pkg?.packageHash ? `${pkg.packageHash.slice(0, 12)}…` : "— (fix)"}</td></tr>
         </tbody></table>
-        {started ? (
+        {started && runtimeActive ? (
           <div className="pill ok" style={{ marginTop: 12 }}>
             <span className="dot" />runtime schedule saved · ≤{started.plannedTicks} planned ticks · autostop {new Date(started.autoStopAt).toLocaleTimeString()}
           </div>

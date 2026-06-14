@@ -8,7 +8,7 @@ import { authState, signInWithWallet, signOut } from "./auth";
 // After connecting, it runs the SIWE -> Firebase sign-in handshake (plan/010 §17) so per-wallet data
 // (drafts, history) is scoped to the signed-in address.
 export function WalletButton({ block }: { block?: boolean }) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, status } = useAccount();
   const { connectors, connect, error, isPending, variables } = useConnect();
   const { disconnect } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
@@ -18,6 +18,9 @@ export function WalletButton({ block }: { block?: boolean }) {
   const [, forceRender] = useState(0);
   // Track which address we've already auto-attempted, so a failed sign-in doesn't loop signature popups.
   const attemptedFor = useRef<string | null>(null);
+  // Count silent auto-retries while the wallet store settles after connect, so a never-ready connector
+  // eventually falls back to the manual "Sign in" button instead of looping forever.
+  const autoTries = useRef(0);
 
   // Re-render when the Firebase sign-in state changes (so the "Sign in" button updates).
   useEffect(() => {
@@ -26,22 +29,49 @@ export function WalletButton({ block }: { block?: boolean }) {
     return () => window.removeEventListener("intentos:auth", onAuth);
   }, []);
 
-  function runSignIn(addr: `0x${string}`) {
+  // A connect-time race: right after the wallet connects, @wagmi/core can briefly report the connector
+  // as not yet registered ("Connector not connected" / "getChainId is not a function"). That's NOT a real
+  // sign-in failure, so we never show it — we just retry once the store settles.
+  function isTransientWalletError(e: unknown): boolean {
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+    return (
+      msg.includes("connector not connected") ||
+      msg.includes("getchainid is not a function") ||
+      msg.includes("connector.getchainid") ||
+      msg.includes("connector.getprovider") ||
+      msg.includes("provider is required")
+    );
+  }
+
+  function runSignIn(addr: `0x${string}`, auto = false) {
     attemptedFor.current = addr;
     setSigning(true);
     setAuthErr(null);
     signInWithWallet(addr, signMessageAsync)
-      .catch((e) => setAuthErr(e instanceof Error ? e.message : String(e)))
+      .then(() => {
+        autoTries.current = 0;
+      })
+      .catch((e) => {
+        if (isTransientWalletError(e)) {
+          // Stay quiet. While auto-signing, clear the marker so the effect retries once the store is
+          // ready; after a few tries give up silently and let the manual "Sign in" button show.
+          if (auto && autoTries.current < 6) attemptedFor.current = null;
+          return;
+        }
+        setAuthErr(e instanceof Error ? e.message : String(e));
+      })
       .finally(() => setSigning(false));
   }
 
-  // Auto-run the SIWE handshake ONCE per connected address. Manual "Sign in" (below) retries on failure.
+  // Auto-run the SIWE handshake once the wallet is connected. If the wallet store isn't ready yet the
+  // first attempt fails silently and this re-runs (status/signing change) until it succeeds.
   useEffect(() => {
     if (!isConnected || !address || authState() || signing) return;
-    if (attemptedFor.current === address) return; // already tried this address; wait for manual retry
-    runSignIn(address);
+    if (attemptedFor.current === address) return; // already attempting/attempted this address
+    autoTries.current += 1;
+    runSignIn(address, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, address]);
+  }, [isConnected, address, status, signing]);
 
   if (isConnected && address) {
     const signedIn = !!authState();

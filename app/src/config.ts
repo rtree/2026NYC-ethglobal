@@ -70,6 +70,41 @@ export const delegateAbi = [
     ],
   },
   {
+    type: "function",
+    name: "fundGasVault",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "watcherLane", type: "bool" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "ownerUpdateGuard",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "g",
+        type: "tuple",
+        components: [
+          { name: "router", type: "address" },
+          { name: "selector", type: "bytes4" },
+          { name: "tokenA", type: "address" },
+          { name: "tokenB", type: "address" },
+          { name: "poolFee", type: "uint24" },
+          { name: "amountCapPerTx", type: "uint256" },
+          { name: "cumulativeCap", type: "uint256" },
+          { name: "slippageCapBps", type: "uint16" },
+          { name: "expiry", type: "uint64" },
+          { name: "frozen", type: "bool" },
+          { name: "bindingNonce", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
     // PRODUCT mode (plan/080): the browser encodes initialize() to delegate the visitor's OWN EOA in
     // one EIP-7702 self-tx. Kept here (not imported from @intentos/shared) so the Node/KMS graph never
     // enters the browser bundle.

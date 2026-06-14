@@ -262,15 +262,20 @@ pre.code {
 }
 .step-nav:hover { background: var(--surface-2); }
 .step-nav.active { background: var(--brand-dim); border-color: #34507e; }
+.step-nav.done {
+  background: linear-gradient(135deg, rgba(0, 212, 170, .14), rgba(91, 140, 255, .08));
+  border-color: #1d4a3f;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 .step-nav .step-num {
   flex: 0 0 auto; width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center;
   background: var(--surface-2); border: 1px solid var(--border-2); font-size: 15px; font-weight: 600;
 }
 .step-nav.active .step-num { background: var(--brand); border-color: var(--brand); color: #fff; }
+.step-nav.done .step-num { background: var(--accent); border-color: var(--accent); color: #04201a; }
 .step-nav .step-text { display: flex; flex-direction: column; gap: 2px; }
 .input {
   width: 100%; background: var(--surface-2); border: 1px solid var(--border-2);
   border-radius: var(--radius-sm); color: var(--text); padding: 11px 14px; font-family: var(--sans); font-size: 17px;
 }
 .field > span { display: block; font-size: 15px; color: var(--muted); margin-bottom: 6px; }
-

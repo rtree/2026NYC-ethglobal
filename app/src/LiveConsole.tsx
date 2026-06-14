@@ -1,18 +1,23 @@
 import { useEffect, useState } from "react";
+import { useAccount, useWalletClient } from "wagmi";
+import { encodeFunctionData, type Abi } from "viem";
 import { useChainState, activeStatus, hasActiveIntent } from "./useChainState";
 import { TopBar, Nav } from "./Chrome";
-import { tokenPair } from "./config";
+import { delegateAbi, tokenPair } from "./config";
 import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl } from "./format";
 import { ActionButton } from "./ActionButton";
 import { api } from "./api";
-import { authState } from "./auth";
+import { authState, ownerModeCached } from "./auth";
 import type { IntentDoc, RuntimeRecord } from "./intentTypes";
 
 // 090 + 100 + 110 merged (plan/010 §15.1): one screen for the running Intent — guard, vaults,
 // balances, shared timeline, Owner controls (trade/resume) AND Watcher controls (freeze/tighten).
 // After stop it reads as the Result. A history list (this wallet) makes past Intents reachable.
 export function LiveConsole() {
-  const { state, error, loading } = useChainState();
+  const { address } = useAccount();
+  const connectedMode = ownerModeCached() === "connected";
+  const { state, error, loading } = useChainState(12_000, connectedMode && address ? address : undefined);
+  const { data: walletClient } = useWalletClient();
   const g = state?.guard;
   const status = activeStatus(state);
   const active = hasActiveIntent(state);
@@ -28,6 +33,26 @@ export function LiveConsole() {
   const activeIntent = history.find((i) => i.status === "live") ?? history.find((i) => i.executorTokenId);
   const activeIntentId = activeIntent?.intentId;
   const consoleTitle = activeIntent ? `${activeIntent.intentId} · ${activeIntent.title}` : "Running Intent";
+  const runtimeActive = runtimeRecord?.status === "scheduled" || runtimeRecord?.status === "running" || runtimeRecord?.status === "stopping";
+
+  async function stopRuntime(reason: string) {
+    const r = await api.runtimeStop(activeIntentId, reason);
+    setRuntimeRecord(r.runtimeRecord);
+    return { ok: true } as const;
+  }
+
+  async function ownerResume() {
+    if (walletClient && state?.delegate && g) {
+      const data = encodeFunctionData({
+        abi: delegateAbi as Abi,
+        functionName: "ownerUpdateGuard",
+        args: [{ ...g, frozen: false }],
+      });
+      const txHash = await walletClient.sendTransaction({ to: state.delegate, data });
+      return { txHash };
+    }
+    return api.ownerResume(activeIntentId);
+  }
 
   useEffect(() => {
     if (!activeIntentId) return;
@@ -44,8 +69,8 @@ export function LiveConsole() {
           <h1>{consoleTitle}</h1>
           <p>
             One place for the running Intent: live guard, vaults, balances, the shared EvidenceCommitted
-            timeline, and both Owner and Watcher controls. OpenClaw/Cloud Run AgentLoop execution is not
-            provisioned in this MVP; trades/votes are triggered by these controls.
+            timeline, and both Owner and Watcher controls. OpenClaw runtime sessions are bounded Cloud Run
+            requests with explicit stop controls.
           </p>
         </div>
 
@@ -105,6 +130,12 @@ export function LiveConsole() {
                   <tr><td className="k">LLM budget</td><td className="v">${runtimeRecord.estimatedVertexCostUsd.toFixed(4)} / ${runtimeRecord.maxVertexCostUsd.toFixed(2)} · {runtimeRecord.llmCallsUsed} calls</td></tr>
                   {runtimeRecord.failureReason && <tr><td className="k">stop reason</td><td className="v">{runtimeRecord.failureReason}</td></tr>}
                 </tbody></table>
+                {runtimeActive && (
+                  <div className="grid cols-2" style={{ marginTop: 12 }}>
+                    <ActionButton label="Force stop Executor runtime" className="btn danger block" run={() => stopRuntime("operator stopped executor runtime")} />
+                    <ActionButton label="Force stop Watcher process" className="btn danger block" run={() => stopRuntime("operator stopped watcher process")} />
+                  </div>
+                )}
               </div>
             )}
 
@@ -134,13 +165,13 @@ export function LiveConsole() {
                 <div className="card" style={{ marginBottom: 20 }}>
                   <div className="card-head"><h3>Owner controls</h3><span className="pill role-exec">EXECUTOR</span></div>
                   <ActionButton label="Execute guarded trade (0.001 USDC → WETH)" className="btn primary block" run={() => api.trade(activeIntentId)} />
-                  <ActionButton label="Resume / unfreeze (Owner only)" className="btn block" run={() => api.ownerResume(activeIntentId)} />
+                  <ActionButton label="Resume / unfreeze (Owner only)" className="btn block" run={ownerResume} />
                   <p className="spec-ref">Signed by the Executor SessionKey (KMS) and relayed. Only the Owner can loosen / unfreeze.</p>
                 </div>
                 <div className="card" style={{ marginBottom: 20 }}>
                   <div className="card-head"><h3>Watcher controls</h3><span className="pill role-watch">WATCHER · quorum 1</span></div>
-                  <ActionButton label="VOTE_TIGHTEN (halve per-tx cap)" className="btn block" run={api.watcherTighten} />
-                  <ActionButton label="VOTE_FREEZE (stop all execution)" className="btn danger block" run={api.watcherFreeze} />
+                  <ActionButton label="VOTE_TIGHTEN (halve per-tx cap)" className="btn block" run={() => api.watcherTighten(activeIntentId)} />
+                  <ActionButton label="VOTE_FREEZE (stop all execution)" className="btn danger block" run={() => api.watcherFreeze(activeIntentId)} />
                   <p className="spec-ref">Monotonic: the Watcher can only narrow capability. The contract reverts any loosening patch.</p>
                 </div>
                 <div className="card">

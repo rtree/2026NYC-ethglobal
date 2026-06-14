@@ -19,18 +19,80 @@ async function submitAndConfirm(
   what: string,
   args: { address: Address; functionName: string; args: unknown[]; account: Account | Address },
 ): Promise<Hex> {
-  const hash = await wallet.writeContract({
-    address: args.address,
-    abi,
-    functionName: args.functionName,
-    args: args.args,
-    account: args.account,
-    chain: wallet.chain,
-  });
+  const hash = await writeContractWithFreshNonce(wallet, pub, args);
   const receipt = await pub.waitForTransactionReceipt({ hash });
   // CRITICAL: a mined tx can still have reverted. Surface it instead of reporting false success.
   if (receipt.status !== "success") throw new TxRevertedError(hash, what);
   return hash;
+}
+
+const nonceLocks = new Map<string, Promise<unknown>>();
+
+function accountAddress(account: Account | Address): Address {
+  return (typeof account === "string" ? account : account.address) as Address;
+}
+
+function isNonceTooLow(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /nonce (provided .*lower|too low)|tx nonce/i.test(msg);
+}
+
+async function withAccountNonceLock<T>(account: Account | Address, fn: () => Promise<T>): Promise<T> {
+  const key = accountAddress(account).toLowerCase();
+  const prev = nonceLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const chained = prev.then(() => next, () => next);
+  nonceLocks.set(key, chained);
+  await prev.catch(() => {});
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (nonceLocks.get(key) === chained) nonceLocks.delete(key);
+  }
+}
+
+async function writeContractWithFreshNonce(
+  wallet: WalletClient,
+  pub: PublicClient,
+  args: { address: Address; functionName: string; args: unknown[]; account: Account | Address },
+): Promise<Hex> {
+  return withAccountNonceLock(args.account, async () => {
+    const account = accountAddress(args.account);
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const nonce = await pub.getTransactionCount({ address: account, blockTag: "pending" });
+        const estimatedGas = await pub.estimateContractGas({
+          address: args.address,
+          abi,
+          functionName: args.functionName,
+          args: args.args,
+          account: args.account,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+        return await wallet.writeContract({
+          address: args.address,
+          abi,
+          functionName: args.functionName,
+          args: args.args,
+          account: args.account,
+          chain: wallet.chain,
+          nonce,
+          gas: (estimatedGas * 3n) / 2n + 50_000n,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+      } catch (e) {
+        lastErr = e;
+        if (!isNonceTooLow(e)) throw e;
+        await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  });
 }
 
 export async function relaySubmitExecution(

@@ -16,13 +16,6 @@ async function authHeaders(extra: Record<string, string> = {}): Promise<Record<s
   return t ? { ...extra, authorization: `Bearer ${t}` } : extra;
 }
 
-async function post(path: string): Promise<ApiResult> {
-  const res = await fetch(path, { method: "POST", headers: await authHeaders() });
-  const body = (await res.json()) as ApiResult;
-  if (!res.ok && body.error) throw new Error(body.error);
-  return body;
-}
-
 async function postJson<T>(path: string, payload: unknown): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
@@ -76,11 +69,11 @@ export const api = {
   runtimeStart: (intentId?: string) => postJson<{ intentId: string; runtime: { startedAt: number; autoStopAt: number; loopPeriodSec: number; plannedTicks: number }; runtimeRecord?: RuntimeRecord }>("/api/runtime/start", { intentId }),
   runtimeStatus: (intentId: string) => getJson<{ intentId: string; runtimeRecord: RuntimeRecord | null }>(`/api/runtime/status?intentId=${encodeURIComponent(intentId)}`),
   runtimeRun: (intentId?: string) => postJson<{ intentId: string; runtimeRecord: RuntimeRecord; ticks: unknown[] }>("/api/runtime/run", { intentId }),
-  runtimeStop: (intentId?: string) => postJson<{ intentId: string; runtimeRecord: RuntimeRecord | null }>("/api/runtime/stop", { intentId }),
+  runtimeStop: (intentId?: string, reason?: string) => postJson<{ intentId: string; runtimeRecord: RuntimeRecord | null }>("/api/runtime/stop", { intentId, reason }),
   runtimeTick: (intentId?: string) => postJson<{ intentId: string; runtimeRecord: RuntimeRecord; tick: { tick: number; status: string; action: string } | null }>("/api/runtime/tick", { intentId }),
   trade: (intentId?: string) => postJson<ApiResult>("/api/trade", { intentId }),
-  watcherFreeze: () => post("/api/watcher/freeze"),
-  watcherTighten: () => post("/api/watcher/tighten"),
+  watcherFreeze: (intentId?: string) => postJson<ApiResult>("/api/watcher/freeze", { intentId }),
+  watcherTighten: (intentId?: string) => postJson<ApiResult>("/api/watcher/tighten", { intentId }),
   ownerResume: (intentId?: string) => postJson<ApiResult>("/api/owner/resume", { intentId }),
   reset: (intentId?: string) => postJson<ApiResult>("/api/reset", { intentId }),
 

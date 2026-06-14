@@ -257,7 +257,16 @@ async function loadDrafts(opts?: CreateOpts): Promise<{
 }
 
 /** Persist mint results back onto the intent doc so the off-chain history links to the chain. */
-async function linkIntent(opts: CreateOpts | undefined, patch: { executorTokenId?: string; watcherTokenId?: string; status?: "draft" | "live" | "stopped" }) {
+async function linkIntent(
+  opts: CreateOpts | undefined,
+  patch: {
+    executorTokenId?: string;
+    watcherTokenId?: string;
+    executorTxHash?: Hex;
+    watcherTxHash?: Hex;
+    status?: "draft" | "live" | "stopped";
+  },
+) {
   if (!opts?.uid || !opts?.intentId) return;
   const doc = await store().getIntent(opts.uid, opts.intentId);
   if (!doc) return;
@@ -281,8 +290,8 @@ export async function runtimeStart(opts?: CreateOpts) {
   const c = await ownerCtx(opts);
   const doc = await store().getIntent(opts.uid, opts.intentId);
   if (!doc) throw new Error("intent not found");
-  const executorTokenId = session.executorTokenId ?? doc.executorTokenId;
-  const watcherTokenId = session.watcherTokenId ?? doc.watcherTokenId;
+  const executorTokenId = doc.executorTokenId ?? session.executorTokenId;
+  const watcherTokenId = doc.watcherTokenId ?? session.watcherTokenId;
   if (!executorTokenId) throw new Error("create the Executor Agent first");
   const existing = await store().getRuntime(opts.uid, opts.intentId);
   if (existing && ["scheduled", "running"].includes(existing.status)) {
@@ -416,9 +425,26 @@ export async function runtimeRun(opts?: CreateOpts) {
       record = latest;
       break;
     }
-    const out = await runtimeTick(opts);
-    ticks.push(out.tick);
-    record = out.runtimeRecord;
+    try {
+      const out = await runtimeTick(opts);
+      ticks.push(out.tick);
+      record = out.runtimeRecord;
+    } catch (e) {
+      const failed: RuntimeRecord = {
+        ...latest,
+        status: "stopped",
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        failureReason: e instanceof Error ? e.message : String(e),
+        updatedAt: Date.now(),
+        lastHeartbeatAt: Date.now(),
+      };
+      await store().putRuntime(opts.uid, failed);
+      const doc = await store().getIntent(opts.uid, opts.intentId);
+      if (doc) await store().putIntent(opts.uid, { ...doc, runtime: runtimeState(failed), runtimeId: failed.runtimeId });
+      logAction({ at: Date.now(), action: "runtime stopped (tick error)", ok: false, detail: failed.failureReason ?? undefined });
+      return { intentId: opts.intentId, runtimeRecord: failed, ticks };
+    }
     if (!["scheduled", "running"].includes(record.status)) break;
     const remaining = record.autoStopAt - Date.now();
     if (remaining <= 0) break;
@@ -429,6 +455,8 @@ export async function runtimeRun(opts?: CreateOpts) {
   if (["scheduled", "running"].includes(finalRecord.status)) {
     const expired: RuntimeRecord = { ...finalRecord, status: "expired", leaseOwner: null, leaseExpiresAt: null, updatedAt: Date.now() };
     await store().putRuntime(opts.uid, expired);
+    const doc = await store().getIntent(opts.uid, opts.intentId);
+    if (doc) await store().putIntent(opts.uid, { ...doc, runtime: runtimeState(expired), runtimeId: expired.runtimeId });
     return { intentId: opts.intentId, runtimeRecord: expired, ticks };
   }
   return { intentId: opts.intentId, runtimeRecord: finalRecord, ticks };
@@ -749,7 +777,7 @@ export async function createExecutor(opts?: CreateOpts) {
     hardGuardrailsHash: keccak256(toHex(`${slug}/hardguard`)),
   });
   session.executorTokenId = r.tokenId.toString();
-  await linkIntent(opts, { executorTokenId: r.tokenId.toString(), status: "live" });
+  await linkIntent(opts, { executorTokenId: r.tokenId.toString(), executorTxHash: r.txHash, status: "live" });
   logAction({ at: Date.now(), action: `mint Executor Agent NFT #${r.tokenId}`, txHash: r.txHash, ok: true });
   return { tokenId: r.tokenId.toString(), txHash: r.txHash };
 }
@@ -768,14 +796,16 @@ async function ensureWatcherVault(c: Ctx) {
 
 export async function createWatcher(opts?: CreateOpts) {
   const c = await ownerCtx(opts);
-  if (!session.executorTokenId) throw new Error("create the Executor Agent first");
+  const doc = opts?.uid && opts.intentId ? await store().getIntent(opts.uid, opts.intentId) : null;
+  const watchedExecutorTokenId = doc?.executorTokenId ?? session.executorTokenId;
+  if (!watchedExecutorTokenId) throw new Error("create the Executor Agent first");
   const { slug, executor, watcher } = await loadDrafts(opts);
   const execPkgHash = executor?.packageHash ?? pkgHash;
   const watcherPkgHash = watcher?.packageHash ?? keccak256(toHex(`${slug}/watcher/pkg`));
   const r = await mintWatcherNft(c.wallet, c.pub, c.platform, c.agentNft, c.delegate, {
     agentManifestHash: watcherPkgHash,
     runtimeManifestHash: keccak256(toHex(`${slug}/watcher/runtime`)),
-    watchedExecutorTokenId: BigInt(session.executorTokenId),
+    watchedExecutorTokenId: BigInt(watchedExecutorTokenId),
     watchedIntentId: intentIdHash(slug),
     executorPackageHash: execPkgHash,
     hardGuardrailsHash: keccak256(toHex(`${slug}/hardguard`)),
@@ -783,7 +813,7 @@ export async function createWatcher(opts?: CreateOpts) {
     watcherPackageHash: watcherPkgHash,
   });
   session.watcherTokenId = r.tokenId.toString();
-  await linkIntent(opts, { watcherTokenId: r.tokenId.toString() });
+  await linkIntent(opts, { watcherTokenId: r.tokenId.toString(), watcherTxHash: r.txHash });
   logAction({ at: Date.now(), action: `mint Watcher Agent NFT #${r.tokenId} (quorum 1)`, txHash: r.txHash, ok: true });
   await ensureWatcherVault(c);
   return { tokenId: r.tokenId.toString(), txHash: r.txHash };

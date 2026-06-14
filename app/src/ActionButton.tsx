@@ -10,11 +10,13 @@ export function ActionButton({
   run,
   className = "btn",
   disabled,
+  workingLabel,
 }: {
   label: string;
   run: () => Promise<ApiResult>;
   className?: string;
   disabled?: boolean;
+  workingLabel?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ApiResult | null>(null);
@@ -38,7 +40,7 @@ export function ActionButton({
   return (
     <div style={{ marginBottom: 10 }}>
       <button className={className} onClick={onClick} disabled={busy || disabled}>
-        {busy ? "…working" : label}
+        {busy ? (workingLabel ?? "…working") : label}
       </button>
       {result?.txHash && (
         <span className="spec-ref" style={{ marginLeft: 10 }}>
