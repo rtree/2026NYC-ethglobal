@@ -17,6 +17,7 @@ import { base } from "viem/chains";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import {
   Action,
   ExecutionDelegate7702Abi,
@@ -307,6 +308,8 @@ export async function runtimeStart(opts?: CreateOpts) {
     bindingNonce: "1",
     cloudRunService: "manual-control-panel",
     status: "scheduled",
+    leaseOwner: null,
+    leaseExpiresAt: null,
     startedAt,
     lastHeartbeatAt: null,
     autoStopAt,
@@ -364,6 +367,8 @@ export async function runtimeStop(opts?: CreateOpts, reason = "owner requested s
   const stopped: RuntimeRecord = {
     ...record,
     status: "stopped",
+    leaseOwner: null,
+    leaseExpiresAt: null,
     failureReason: reason,
     updatedAt: now,
   };
@@ -382,7 +387,18 @@ export async function runtimeRun(opts?: CreateOpts) {
   if (!["scheduled", "running"].includes(record.status)) {
     return { intentId: opts.intentId, runtimeRecord: record, ticks: [] };
   }
-  record = { ...record, status: "running", updatedAt: now, lastHeartbeatAt: now };
+  if (record.status === "running" && record.leaseExpiresAt && record.leaseExpiresAt > now) {
+    return { intentId: opts.intentId, runtimeRecord: record, ticks: [], alreadyRunning: true };
+  }
+  const leaseOwner = `run-${randomUUID()}`;
+  record = {
+    ...record,
+    status: "running",
+    leaseOwner,
+    leaseExpiresAt: Math.min(record.autoStopAt + 30_000, now + 11 * 60_000),
+    updatedAt: now,
+    lastHeartbeatAt: now,
+  };
   await store().putRuntime(opts.uid, record);
 
   const ticks: unknown[] = [];
@@ -390,6 +406,10 @@ export async function runtimeRun(opts?: CreateOpts) {
     const latest = await store().getRuntime(opts.uid, opts.intentId);
     if (!latest || latest.status === "stopped" || latest.status === "stopping" || latest.status === "unbound") {
       record = latest ?? record;
+      break;
+    }
+    if (latest.leaseOwner !== leaseOwner) {
+      record = latest;
       break;
     }
     const out = await runtimeTick(opts);
@@ -403,7 +423,7 @@ export async function runtimeRun(opts?: CreateOpts) {
 
   const finalRecord = await store().getRuntime(opts.uid, opts.intentId) ?? record;
   if (["scheduled", "running"].includes(finalRecord.status)) {
-    const expired: RuntimeRecord = { ...finalRecord, status: "expired", updatedAt: Date.now() };
+    const expired: RuntimeRecord = { ...finalRecord, status: "expired", leaseOwner: null, leaseExpiresAt: null, updatedAt: Date.now() };
     await store().putRuntime(opts.uid, expired);
     return { intentId: opts.intentId, runtimeRecord: expired, ticks };
   }
@@ -425,7 +445,7 @@ export async function runtimeTick(opts?: CreateOpts) {
     return { intentId: opts.intentId, runtimeRecord: stopped, tick: null };
   }
   if (record.autoStopAt <= now || record.executedTicks >= record.plannedTicks) {
-    const expired: RuntimeRecord = { ...record, status: "expired", updatedAt: now };
+    const expired: RuntimeRecord = { ...record, status: "expired", leaseOwner: null, leaseExpiresAt: null, updatedAt: now };
     await store().putRuntime(opts.uid, expired);
     return { intentId: opts.intentId, runtimeRecord: expired, tick: null };
   }
@@ -469,6 +489,8 @@ export async function runtimeTick(opts?: CreateOpts) {
   const updated: RuntimeRecord = {
     ...record,
     status,
+    leaseOwner: status === "running" ? record.leaseOwner : null,
+    leaseExpiresAt: status === "running" ? record.leaseExpiresAt : null,
     executedTicks: nextExecuted,
     runtimeTradesUsed,
     maxRuntimeTrades,
@@ -499,7 +521,7 @@ function normalizeRuntimeAction(text: string): "BUY" | "HOLD" {
 }
 
 function selfStopRuntime(record: RuntimeRecord, reason: string): RuntimeRecord {
-  return { ...record, status: "self-stopped", failureReason: reason, updatedAt: Date.now() };
+  return { ...record, status: "self-stopped", leaseOwner: null, leaseExpiresAt: null, failureReason: reason, updatedAt: Date.now() };
 }
 
 function logRuntimeSelfStop(record: RuntimeRecord, reason: string) {

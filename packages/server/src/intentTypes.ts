@@ -58,6 +58,8 @@ export interface RuntimeRecord {
   bindingNonce: string;
   cloudRunService: string;
   status: RuntimeStatus;
+  leaseOwner: string | null;
+  leaseExpiresAt: number | null;
   startedAt: number;
   lastHeartbeatAt: number | null;
   autoStopAt: number;

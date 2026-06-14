@@ -144,6 +144,10 @@
     "/^cd /home/araki/2026NYC-ethglobal && pnpm --filter @intentos/runtime build 2>&1 \\| tail -2; echo \"rt=\\$\\{PIPESTATUS\\[0\\]\\}\"; pnpm --filter @intentos/server typecheck 2>&1 \\| grep -E \"error TS\" \\| head; echo \"srv=\\$\\{PIPESTATUS\\[0\\]\\}\"$/": {
       "approve": true,
       "matchCommandLine": true
+    },
+    "/^FBKEY=\\$\\(grep '\\^VITE_FIREBASE_API_KEY=' app/\\.env\\.production \\| cut -d= -f2-\\); gcloud builds submit --config cloudbuild\\.yaml --substitutions=_VITE_FIREBASE_API_KEY=\"\\$FBKEY\",_VITE_FIREBASE_PROJECT_ID=ethglobal-nyc2026-rtree --project ethglobal-nyc2026-rtree 2>&1 \\| tail -4$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
   }
 }

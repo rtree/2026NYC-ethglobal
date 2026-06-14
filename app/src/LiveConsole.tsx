@@ -6,7 +6,7 @@ import { shortAddr, shortHash, usdc, eth, weth, txUrl, addrUrl } from "./format"
 import { ActionButton } from "./ActionButton";
 import { api } from "./api";
 import { authState } from "./auth";
-import type { IntentDoc } from "./intentTypes";
+import type { IntentDoc, RuntimeRecord } from "./intentTypes";
 
 // 090 + 100 + 110 merged (plan/010 §15.1): one screen for the running Intent — guard, vaults,
 // balances, shared timeline, Owner controls (trade/resume) AND Watcher controls (freeze/tighten).
@@ -18,6 +18,7 @@ export function LiveConsole() {
   const active = hasActiveIntent(state);
   const terminal = status ?? "owner-stopped";
   const [history, setHistory] = useState<IntentDoc[]>([]);
+  const [runtimeRecord, setRuntimeRecord] = useState<RuntimeRecord | null>(null);
 
   useEffect(() => {
     api.listIntents().then((r) => setHistory(r.intents)).catch(() => {});
@@ -27,6 +28,11 @@ export function LiveConsole() {
   const activeIntent = history.find((i) => i.status === "live") ?? history.find((i) => i.executorTokenId);
   const activeIntentId = activeIntent?.intentId;
   const consoleTitle = activeIntent ? `${activeIntent.intentId} · ${activeIntent.title}` : "Running Intent";
+
+  useEffect(() => {
+    if (!activeIntentId) return;
+    api.runtimeStatus(activeIntentId).then((r) => setRuntimeRecord(r.runtimeRecord)).catch(() => {});
+  }, [activeIntentId]);
 
   return (
     <div className="app">
@@ -87,6 +93,19 @@ export function LiveConsole() {
                 <p className="muted mono">watcher {eth(state.watcherVault)}</p>
               </div>
             </div>
+
+            {runtimeRecord && (
+              <div className="card pad-lg" style={{ marginBottom: 20 }}>
+                <div className="card-head"><h3>OpenClaw runtime</h3><span className={`pill ${runtimeRecord.status === "running" ? "running" : ""}`}>{runtimeRecord.status}</span></div>
+                <table className="kv"><tbody>
+                  <tr><td className="k">runtimeId</td><td className="v">{runtimeRecord.runtimeId}</td></tr>
+                  <tr><td className="k">ticks</td><td className="v">{runtimeRecord.executedTicks} / {runtimeRecord.plannedTicks}</td></tr>
+                  <tr><td className="k">last action</td><td className="v">{runtimeRecord.lastTickAction ?? "—"}{runtimeRecord.lastTickTxHash ? ` · ${shortHash(runtimeRecord.lastTickTxHash)}` : ""}</td></tr>
+                  <tr><td className="k">LLM budget</td><td className="v">${runtimeRecord.estimatedVertexCostUsd.toFixed(4)} / ${runtimeRecord.maxVertexCostUsd.toFixed(2)} · {runtimeRecord.llmCallsUsed} calls</td></tr>
+                  {runtimeRecord.failureReason && <tr><td className="k">stop reason</td><td className="v">{runtimeRecord.failureReason}</td></tr>}
+                </tbody></table>
+              </div>
+            )}
 
             <div className="grid cols-2">
               {/* left: shared timeline */}

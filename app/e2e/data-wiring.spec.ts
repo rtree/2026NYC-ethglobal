@@ -114,6 +114,8 @@ const RUNTIME_RECORD = {
   bindingNonce: "42",
   cloudRunService: "manual-control-panel",
   status: "scheduled",
+  leaseOwner: null,
+  leaseExpiresAt: null,
   startedAt: Date.now(),
   lastHeartbeatAt: null,
   autoStopAt: Date.now() + 600_000,
