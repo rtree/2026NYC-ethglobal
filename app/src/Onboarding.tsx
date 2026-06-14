@@ -2,7 +2,6 @@ import { Suspense, lazy } from "react";
 import { TopBar } from "./Chrome";
 import { WalletButton } from "./WalletButton";
 import { useGate, setWorldIdVerified } from "./gate";
-import { worldIdRequiredCached } from "./auth";
 import { api } from "./api";
 
 // Lazy so the ~340KB gzip IDKit wasm only downloads when World ID is actually enabled + reached.
@@ -12,8 +11,13 @@ const WorldIdButton = lazy(() => import("./WorldIdButton"));
 // (3) World ID human-proof. World ID prevents bot/sybil mass-creation of Cloud Run runtimes (North Star
 // §2). When the SERVER reports World ID is not configured, a clearly-labeled dev simulation stands in.
 export function Onboarding() {
-  const { isConnected, verified, signedIn, authRequired, passed } = useGate();
-  const worldIdRequired = worldIdRequiredCached();
+  const { isConnected, verified, signedIn, authRequired, worldIdRequired, configLoaded, passed } = useGate();
+  // Gate the World ID step on completing sign-in first, so it's a clean linear flow and the proof binds
+  // to the signed-in account.
+  const signInDone = isConnected && (!authRequired || signedIn);
+  // Only ever show the dev "Simulate" fallback once /api/config is known AND it's genuinely not required
+  // — never on a production deploy, and never as a pre-load default (bad look for sponsors).
+  const showDevSim = configLoaded && !worldIdRequired;
 
   function enter() {
     window.location.hash = "#/intents";
@@ -62,9 +66,11 @@ export function Onboarding() {
               <span className={`pill ${verified ? "ok" : ""}`}>{verified ? "verified" : "required"}</span>
             </div>
             <p className="desc">
-              Proof of personhood gates runtime creation (abuse / cost protection). {worldIdRequired ? "Verify with the World App." : "Dev mode: simulated proof (no real World ID app configured)."}
+              Proof of personhood gates runtime creation (abuse / cost protection). {worldIdRequired ? "Verify with the World App." : "Verify you're a unique human to continue."}
             </p>
-            {verified ? (
+            {!signInDone ? (
+              <p className="spec-ref">Connect &amp; sign in first, then verify with World ID.</p>
+            ) : verified ? (
               <>
                 <div className="pill ok"><span className="dot" />human verified</div>
                 {worldIdRequired && (
@@ -88,10 +94,12 @@ export function Onboarding() {
               <Suspense fallback={<button className="btn block" disabled>…loading World ID</button>}>
                 <WorldIdButton />
               </Suspense>
-            ) : (
+            ) : showDevSim ? (
               <button className="btn block" onClick={() => setWorldIdVerified(true)}>
                 Simulate World ID proof (dev)
               </button>
+            ) : (
+              <button className="btn block" disabled>…loading World ID</button>
             )}
           </div>
         </div>

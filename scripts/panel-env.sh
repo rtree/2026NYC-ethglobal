@@ -33,6 +33,9 @@ PANEL_ENV=(
   "WORLDID_RP_ID=rp_c5057c1fc547760d"
   "WORLDID_ACTION=intentos-onboarding"
   "WORLDID_ENVIRONMENT=production"
+  # Demo test EOAs allowed to SHARE one World ID nullifier (both are the dev's own test wallets), so the
+  # same human can verify on both. Only listed addresses can share; real users keep 1-human-1-account.
+  "WORLDID_SHARED_NULLIFIER_ADDRESSES=0x5e9041e731e10727d923d79b1e83290f6e83a221,0x7b79c37bb80cc76fe6b758c7140228fecc7e2a2e"
 )
 
 # --- secrets: ENV_NAME=secret-name:version (values live in Secret Manager) -------------------

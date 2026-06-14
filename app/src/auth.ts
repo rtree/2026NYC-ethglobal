@@ -67,6 +67,11 @@ export function authRequiredCached(): boolean {
   return serverAuthRequired ?? !!FIREBASE_API_KEY;
 }
 
+/** Whether /api/config has resolved yet (so the UI can avoid showing a wrong default before we know). */
+export function configLoaded(): boolean {
+  return serverAuthRequired !== null;
+}
+
 /** Whether the SERVER enforces a real World ID proof (single source of truth, mirrors authRequired). */
 export function worldIdRequiredCached(): boolean {
   return serverWorldIdRequired;

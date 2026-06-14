@@ -26,6 +26,24 @@ const SIGNING_KEY_SECRET =
 
 const VERIFY_BASE = "https://developer.world.org/api/v4/verify";
 
+// Demo/test EOAs allowed to SHARE ONE World ID nullifier, so the same human's own test wallets can both
+// pass the gate (normally one human ⇒ one account). Comma-separated addresses in
+// WORLDID_SHARED_NULLIFIER_ADDRESSES; empty for a real deployment. The bypass only applies when BOTH the
+// existing owner AND the verifying account are on this list, so it never weakens Sybil protection for
+// real users (a non-listed account still can't reuse a nullifier, and can't piggyback on a listed one).
+const SHARED_NULLIFIER_ADDRS = new Set(
+  (process.env.WORLDID_SHARED_NULLIFIER_ADDRESSES ?? "")
+    .split(",")
+    .map((a) => a.trim().toLowerCase())
+    .filter(Boolean),
+);
+
+/** Is this uid (eip155:8453:<addr>) a known test EOA allowed to share a World ID nullifier? */
+export function isSharedNullifierUid(uid: string): boolean {
+  const addr = (uid.split(":").pop() ?? "").toLowerCase();
+  return SHARED_NULLIFIER_ADDRS.has(addr);
+}
+
 let _signingKey: string | null = null;
 async function loadSigningKey(): Promise<string> {
   if (_signingKey) return _signingKey;

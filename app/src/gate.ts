@@ -3,7 +3,7 @@
 // ID is mocked in dev (clearly labeled) and uses real IDKit when VITE_WORLDID_APP_ID is set.
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import { authState, authRequiredCached, fetchAuthRequired, worldIdRequiredCached } from "./auth";
+import { authState, authRequiredCached, fetchAuthRequired, worldIdRequiredCached, configLoaded } from "./auth";
 import { api } from "./api";
 
 const WORLDID_KEY = "intentos:worldid";
@@ -29,13 +29,25 @@ export function useGate() {
   const [verified, setVerified] = useState(worldIdVerified());
   const [signedIn, setSignedIn] = useState(!!authState());
   const [authRequired, setAuthRequired] = useState(authRequiredCached());
+  const [worldIdRequired, setWorldIdRequired] = useState(worldIdRequiredCached());
+  const [loaded, setLoaded] = useState(configLoaded());
 
   useEffect(() => {
-    fetchAuthRequired().then(setAuthRequired).catch(() => {});
+    fetchAuthRequired()
+      .then(setAuthRequired)
+      .catch(() => {})
+      .finally(() => {
+        // /api/config has resolved: sync the World-ID mode + "config known" so the UI stops showing
+        // the dev fallback before we know the real mode.
+        setWorldIdRequired(worldIdRequiredCached());
+        setLoaded(configLoaded());
+      });
     const onGate = () => setVerified(worldIdVerified());
     const onAuth = () => {
       setSignedIn(!!authState());
       setAuthRequired(authRequiredCached());
+      setWorldIdRequired(worldIdRequiredCached());
+      setLoaded(configLoaded());
     };
     window.addEventListener("intentos:gate", onGate);
     window.addEventListener("intentos:auth", onAuth);
@@ -69,5 +81,5 @@ export function useGate() {
   }, [signedIn]);
 
   const authOk = !authRequired || signedIn;
-  return { isConnected, address, verified, signedIn, authRequired, passed: isConnected && authOk && verified };
+  return { isConnected, address, verified, signedIn, authRequired, worldIdRequired, configLoaded: loaded, passed: isConnected && authOk && verified };
 }

@@ -31,7 +31,7 @@ import { issueNonce, siweMessage, verifyAndMint } from "./web3auth.js";
 import { requireUid, authEnabled, rateLimit } from "./authGate.js";
 import { intentChat, fixPackage, setStartConfig, updatePackageSemantic, listIntents, getIntentFull } from "./intent.js";
 import { proxyRpc } from "./rpcProxy.js";
-import { worldIdEnabled, worldIdConfig, signRpRequest, verifyProof, extractProofFields, signalMatchesAddress } from "./worldid.js";
+import { worldIdEnabled, worldIdConfig, signRpRequest, verifyProof, extractProofFields, signalMatchesAddress, isSharedNullifierUid } from "./worldid.js";
 import { store } from "./store.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -265,17 +265,33 @@ async function main() {
           json(res, 400, { error: "signal does not match account" });
           return;
         }
-        // 3) one-human-one-action: store the nullifier uniquely (idempotent for the same uid)
+        // 3) one-human-one-action. The nullifier is deterministic (same human + action ⇒ same value).
+        //    - belongs to a DIFFERENT uid  ⇒ 409 (Sybil protection: one human can't claim many accounts)
+        //    - belongs to THIS uid / not seen ⇒ idempotent success (re-verifying yourself is fine, e.g. demos)
+        //    - EXCEPTION: a small allowlist of test EOAs may share one nullifier (both sides must be listed).
         const action = worldIdConfig().action;
+        const mayShare = isSharedNullifierUid(uid);
         const existing = await store().getWorldIdNullifier(action, nullifier);
-        if (existing && existing.uid && existing.uid !== uid) {
+        if (
+          existing && existing.uid && existing.uid !== uid &&
+          !(mayShare && isSharedNullifierUid(existing.uid))
+        ) {
           json(res, 409, { error: "this World ID is already linked to another account" });
           return;
         }
-        const put = await store().putWorldIdNullifier(action, nullifier, uid);
-        if (put === "exists" && (!existing || existing.uid !== uid)) {
-          json(res, 409, { error: "this World ID is already used" });
-          return;
+        if (!existing) {
+          const put = await store().putWorldIdNullifier(action, nullifier, uid);
+          if (put === "exists") {
+            // Stale read / race: the doc actually exists. Re-check the real owner before deciding.
+            const owner = await store().getWorldIdNullifier(action, nullifier);
+            if (
+              owner && owner.uid && owner.uid !== uid &&
+              !(mayShare && isSharedNullifierUid(owner.uid))
+            ) {
+              json(res, 409, { error: "this World ID is already linked to another account" });
+              return;
+            }
+          }
         }
         await store().setHumanVerified(uid, { nullifier, action, verifiedAt: Date.now() });
         json(res, 200, { verified: true });
