@@ -8,6 +8,41 @@ Resolution update: restored at 2026-06-14 06:58 EDT by local Owner-signed unfree
 
 Follow-up UX update: auto-refresh was too passive during runtime execution. `GET` API calls and `/api/state` now use `cache:no-store`, server JSON responses send `cache-control:no-store`, and runtime status polling forces chain-state refresh while a runtime is scheduled/running/stopping.
 
+## Incident: Sign-in / Firestore 500 after deploy
+
+Reported 2026-06-14 08:21 EDT.
+
+Symptoms:
+
+- Sign-in failed with `signJwt failed (401): Request had invalid authentication credentials`.
+- IntentBuilder failed with `firestore put /users/eip155...`.
+- `/api/intents` and `/api/worldid/status` also returned 500s in Cloud Run request logs.
+
+Root cause:
+
+- Cloud Run was running as `intentos-panel@ethglobal-nyc2026-rtree.iam.gserviceaccount.com`, but that service account lacked a self-binding for `roles/iam.serviceAccountTokenCreator`.
+- `packages/server/src/firebaseAuth.ts` signs Firebase custom tokens through IAM Credentials `signJwt`; without the self-binding, Web3 sign-in fails and the authenticated Firestore/WorldID flows appear broken.
+
+Fix applied:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding intentos-panel@ethglobal-nyc2026-rtree.iam.gserviceaccount.com \
+  --member='serviceAccount:intentos-panel@ethglobal-nyc2026-rtree.iam.gserviceaccount.com' \
+  --role='roles/iam.serviceAccountTokenCreator' \
+  --project ethglobal-nyc2026-rtree
+```
+
+Verification:
+
+- `INTENTOS_STORE=firestore INTENTOS_LLM=vertex pnpm --filter @intentos/server exec tsx src/scripts/m5-live-check.ts` passed:
+  - signJwt custom token
+  - Firestore round-trip
+  - Vertex generateContent with AGENTS.md repair
+
+Prevention:
+
+- `scripts/deploy-panel.sh` now preflights this self-binding and fails before deploy if it is missing.
+
 ## Open issue: IntentBuilder sometimes emits nearly empty AGENTS.md
 
 Reported 2026-06-14 07:13 EDT. Not fixed here; handing off to another team.
@@ -16,6 +51,15 @@ User-visible symptom:
 
 - In the Launch IntentBuilder, the generated Agent Package `AGENTS.md` is sometimes almost empty, e.g. only a name like `DCAExecutor` instead of the expected objective/tools/never/default content.
 - This appears intermittent: other generations produce normal `AGENTS.md`.
+
+Status update 2026-06-14 07:50 EDT:
+
+- Live revision with repair is `intentos-panel-00048-68c`.
+- Confirmed deployed traffic is 100% on `00048-68c`; `/api/config` still verifies `authRequired:true`, `ownerMode:"connected"`, `worldIdRequired:true`.
+- Direct Vertex reproduction after the 10x token deploy proved the main issue was not token exhaustion: Vertex returned `finishReason:"STOP"`, parseable JSON, candidate token use far below the limit, but `executor.agents:"Uniswap"`.
+- Server now strengthens the prompt and repairs terse/structureless AGENTS.md in `normalize()` by falling back to the default structured AGENTS.md when length is `<180` or required sections are missing. The live Vertex smoke now checks AGENTS.md length and passed.
+- Manager/Tech Lead review agreed: the prior max-token-only fix was insufficient because live `00047-kfk` accepted any non-empty `agents`; the repair was not live until `00048-68c`.
+- Research sub-agent is still running; add its external Vertex structured-output findings when available.
 
 Known implementation facts:
 
@@ -30,17 +74,18 @@ Known implementation facts:
 
 Current hypothesis:
 
-1. `maxOutputTokens: 2048` may be too small for two full packages (reply + executor summary/agents/soul/constraints/semantic + watcher summary/agents/soul/constraints/semantic) in strict JSON, so Gemini may compress the long `agents` fields.
-2. More importantly, the server lacks a quality/minimum-content validator: any non-empty `agents` string passes. Even if token size is raised, the model can still emit a terse label unless the prompt and validator require structure.
+1. Confirmed after the 10x max-token deploy: this is not primarily token exhaustion. A direct Vertex call returned `finishReason:"STOP"`, parseable JSON, and low candidate token use, but still emitted `executor.agents:"Uniswap"`.
+2. Root cause is prompt/schema ambiguity plus missing quality validation: any non-empty `agents` string passed normalization.
 
 Recommended fix direction for next team:
 
 1. Increase Vertex `maxOutputTokens` for IntentBuilder, likely to 4096 or 8192, preferably via env such as `INTENTOS_VERTEX_MAX_OUTPUT_TOKENS`. First mitigation applied: default is now `20480` (10x previous `2048`) and AGENTS.md normalization cap is now `12000` chars.
-2. Strengthen the system prompt: require `agents` to be full AGENTS.md with explicit sections (`# Executor Agent`, `Objective`, `Tools`, `Never`, `Default`, `Evidence`, etc.) and minimum detail.
+2. Strengthen the system prompt: require `agents` to be full AGENTS.md with explicit sections (`# Executor Agent`, `Objective`, `Tools`, `Never`, `Default`, `Evidence`, etc.) and minimum detail. Applied.
 3. Add server-side validation/repair in `normalize()`:
-   - Treat `agents` as invalid if trimmed length is below a threshold (e.g. `< 180` or missing `Objective:`/`Tools:`/`Never:`).
-   - Fall back to default package `agents` or merge the model-specific text into the default template rather than accepting a one-word value.
-   - Consider logging a warning with lengths (not raw user prompt/secrets) when repair happens.
+   - Treat `agents` as invalid if trimmed length is below 180 or missing most required sections (`Objective`, `Tools`, `Never`, `Default`).
+   - Fall back to default package `agents` rather than accepting a one-word value.
+   - Log a warning with role + length only when repair happens.
+   - Applied.
 4. Consider exposing AGENTS.md editing before FIX, similar to existing semantic guardrail editing, so the user can correct a bad AgentMD without regenerating.
 5. Add a regression test for `normalize()` with `{ agents: "DCAExecutor" }` and assert it falls back/repairs instead of preserving the terse string.
 
@@ -393,3 +438,80 @@ pattern in the script's help is correct.
   self-call buttons (Resume/unfreeze, fund, activate) as plain browser actions on MetaMask — it should
   route them through the local kit/script (or detect MetaMask and surface the kit), the same way
   activation already does. Otherwise users can freeze themselves into a corner they can't exit in-app.
+
+---
+
+## SECOND INCIDENT — "running, but nothing happens if I leave it" — the loop does NOT keep running (2026-06-14, GCP-log verified)
+
+User's mental model: *"one Start → an internal loop keeps trading periodically."* **The runtime does not
+do that.** Investigated against live Cloud Run + logs. The auto-refresh patch a parallel agent shipped
+(`cache-control: no-store` + 3s chain-state refresh, revision `intentos-panel-00046-wht`) only makes the
+**UI poll faster** — it does **NOT** make the execution loop persist. Orthogonal to the real cause.
+
+### How the "loop" is actually built
+
+`runtimeRun()` (journey.ts) is an **in-request** loop: one `POST /api/runtime/run` holds the HTTP request
+open and `while (Date.now() < autoStopAt && executedTicks < plannedTicks) { runtimeTick(); sleep(loopPeriodSec) }`.
+Defaults (intent.ts `DEFAULT_START`): `loopPeriodSec=10`, `ttlMinutes=1`, so `autoStopAt = start + 60s`,
+`plannedTicks = min(MAX_PLANNED_TICKS=12, 60/10) = 6`, and **`maxRuntimeTrades=1`** (one trade per run,
+then HOLD). So even by design a run = **60 seconds, ≤6 ticks, exactly 1 trade**, then it returns. It was
+never an "until funds run out" loop.
+
+### What the GCP logs actually show (decisive)
+
+Panel HTTP log for the last live Start:
+```
+10:01:55  POST /api/runtime/start  200   0.31s
+10:01:56  POST /api/runtime/run    200  60.06s   ← the whole "loop": ONE 60s request, then done
+10:02:29  POST /api/trade          200   0.25s
+10:23:55  POST /api/trade          200   0.23s   ← +22 min  (manual click)
+10:59:14  POST /api/trade          200   1.23s   ← +35 min  (manual click)
+```
+`/api/runtime/run` invocations in **6h: exactly 3** — `06:33`, `07:39`, `10:01` (≈1h apart = **manual
+Start clicks**, not auto-restart). **Nothing re-invokes the loop.**
+
+OpenClaw gateway in the **entire 3h window: ONE** `chat/completions`, latency **49.17s**. The gateway log
+explains it — it was a **cold start**: `10:01:56 "Starting new instance. Reason: AUTOSCALING"` →
+`10:02:29 starting…` → `10:02:36 http server listening (6.9s)` → then the Vertex call. So the gateway has
+**minScale=0** and the FIRST tick's LLM call paid a ~40–49s container-boot penalty, **eating almost the
+entire 60s ttl window** → the "6-tick loop" effectively completed **~1 tick** before `autoStopAt`.
+
+### Root causes (4, compounding) — why "放置で回らない"
+
+1. **No driver re-invokes the loop.** Cloud Scheduler API is **disabled**, Cloud Run **Jobs = none**,
+   no Cloud Tasks. The only trigger is the browser Start button (fire-and-forget, single shot). This is
+   exactly QA **RUNTIME-001 / API-006** ("periodic execution is documented *future* work").
+2. **A server-side `setInterval` cannot survive anyway.** Panel runs `minScale=0` (scales to zero) with
+   default CPU-throttling → after the request returns the container is frozen/killed; background timers
+   don't fire. Continuous operation **requires an external re-invoker**, not an in-process timer.
+3. **The single run is tiny + cold.** `ttlMinutes=1` (60s) and the gateway cold-start (~49s) means one
+   run barely lands 1 tick / 1 trade. Gateway `minScale=0` guarantees a cold start whenever it's been
+   idle.
+4. **`maxRuntimeTrades=1`.** Even a perfectly warm, full 6-tick run does **one** trade then HOLDs.
+
+### Hard ceiling to know: panel request timeout = 120s
+
+`intentos-panel` Cloud Run `timeoutSeconds=120`. The Start UI allows `ttlMinutes` up to 5 (=300s), but a
+single `runtime/run` request **cannot exceed 120s** — Cloud Run kills it mid-loop. So you **cannot** get
+"continuous" by just raising ttl; in-request looping is structurally capped at <120s. **Real periodic
+operation MUST be external re-invocation of short bounded runs.**
+
+### Options to actually make it run unattended (bounded per repo safety policy: tiny amounts only)
+
+- **A (correct fix): Cloud Scheduler → `POST /api/runtime/run` every N min** with OIDC auth. Each hit
+  re-arms a fresh bounded ≤60s run. Raise `maxRuntimeTrades` / `cumulativeCap` deliberately if you want
+  more than one trade per tick-window. Needs: enable `cloudscheduler.googleapis.com` (ASK USER FIRST),
+  a service account with run.invoke, and a guard so it stops at `cumulativeCap` / TTL.
+- **B: warm the gateway** (`minScale=1`) so ticks aren't eaten by 49s cold starts (costs idle $; fine for
+  a demo window, revert after).
+- **C: demo-only** — keep clicking Start (each = one 60s/1-trade run), or a browser-tab poller that
+  re-POSTs `runtime/run` while the tab is open (does NOT satisfy "leave it unattended").
+
+### Verdict
+
+"Running but idle" is **not a bug in the Executor** — it traded fine. It's that **the periodic *driver*
+was never built** (known RUNTIME-001), the single in-request run is short (60s) and cold-start-starved
+(~49s gateway boot), and it's capped to 1 trade. The parallel `no-store` UI refresh does not address any
+of this. To meet the user's expectation, implement **Option A (Cloud Scheduler)** with bounded re-runs,
+and optionally **B** to remove cold-start latency. I did **not** enable any API or create a scheduler —
+that needs the user's go-ahead (real network, real money, repo policy = bounded + tiny amounts).

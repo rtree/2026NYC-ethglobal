@@ -79,7 +79,7 @@ export function normalize(p: { executor: AgentPackageDraft; watcher: AgentPackag
   const fix = (draft: AgentPackageDraft, fallback: AgentPackageDraft): AgentPackageDraft => ({
     role: fallback.role,
     summary: ascii(draft.summary, fallback.summary, 280),
-    agents: ascii(draft.agents, fallback.agents, 12_000),
+    agents: repairAgentMd(fallback.role, draft.agents, fallback.agents),
     soul: ascii(draft.soul, fallback.soul, 600),
     constraints: {
       tokenA: USDC,
@@ -101,6 +101,24 @@ function ascii(v: unknown, fallback: string, max: number): string {
   // keep it readable; strip control chars, cap length
   return v.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
 }
+
+function validAgentMd(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 180) return false;
+  const requiredHits = [/objective\s*:/i, /tools\s*:/i, /never\s*:/i, /default\s*:/i]
+    .filter((re) => re.test(t)).length;
+  return requiredHits >= 3;
+}
+
+function repairAgentMd(role: "EXECUTOR" | "WATCHER", value: unknown, fallback: string): string {
+  const text = ascii(value, "", 12_000).trim();
+  if (validAgentMd(text)) return text;
+  if (text) {
+    console.warn(`[vertex] repaired terse AGENTS.md role=${role} len=${text.length}`);
+  }
+  return fallback;
+}
+
 function clampNum(v: unknown, min: bigint, max: bigint, def: bigint): string {
   try {
     const n = BigInt(String(v ?? def).replace(/[^0-9]/g, "") || def.toString());
@@ -120,6 +138,7 @@ Rules:
 - Trading pair is ALWAYS USDC/WETH. Tiny caps only (per-tx <= 2000 = 0.002 USDC, cumulative <= 100000 = 0.1 USDC).
 - The Executor only BUYs WETH with USDC in small guarded steps. The Watcher can only tighten/freeze (never loosen).
 - Reply briefly (<= 2 sentences) to the latest Owner message, then output the updated packages.
+- Each agents field MUST be a complete multi-line AGENTS.md, not a name or tool label. Include these sections: heading, Objective, Tools, Never, Default, Evidence. Minimum 180 characters per agents field.
 Respond with STRICT JSON only, no markdown, shaped:
 {"reply":"...","executor":{"summary","agents","soul","constraints":{"amountCapPerTx","cumulativeCap","slippageCapBps"},"semantic":[...]},"watcher":{...same...}}`;
 

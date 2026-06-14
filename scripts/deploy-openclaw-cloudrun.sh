@@ -20,6 +20,8 @@ Service:        ${SERVICE}
 Service account:${SA}
 Source:         ${SOURCE_DIR}
 Secret:         ${SECRET}
+Min instances:  ${OPENCLAW_MIN_INSTANCES:-1} (warm; no cold start)
+CPU throttling: off (always-on CPU)
 EOF
   exit 0
 fi
@@ -64,7 +66,9 @@ gcloud run deploy "${SERVICE}" \
   --region "${REGION}" \
   --service-account "${SA}" \
   --no-allow-unauthenticated \
+  --min-instances "${OPENCLAW_MIN_INSTANCES:-1}" \
   --max-instances 1 \
+  --no-cpu-throttling \
   --concurrency 1 \
   --cpu 1 \
   --memory 1Gi \

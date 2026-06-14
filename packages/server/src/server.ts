@@ -160,6 +160,7 @@ async function main() {
         const out = await verifyAndMint(body.message, body.signature as `0x${string}`);
         json(res, 200, out);
       } catch (e) {
+        console.error("[auth] web3 sign-in failed:", e instanceof Error ? e.message : e);
         json(res, 401, { error: e instanceof Error ? e.message : String(e) });
       }
       return;

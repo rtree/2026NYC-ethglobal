@@ -61,6 +61,7 @@ async function main() {
       const res = await chat([{ role: "owner", text: "DCA USDC into ETH, small and careful." }]);
       if (res.llm !== "vertex") throw new Error(`fell back to ${res.llm} (Vertex unreachable)`);
       if (!res.packages.executor.summary) throw new Error("empty package");
+      if (res.packages.executor.agents.length < 180 || res.packages.watcher.agents.length < 180) throw new Error("thin AGENTS.md");
       console.log(`PASS Vertex generateContent (reply: "${res.reply.slice(0, 50)}…")`);
     } catch (e) {
       ok = false;

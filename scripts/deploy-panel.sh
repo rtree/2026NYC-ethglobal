@@ -32,6 +32,23 @@ echo "  image:   ${IMAGE}"
 echo "  env:     ${#PANEL_ENV[@]} vars (incl. INTENTOS_WORLDID, WORLDID_APP_ID/RP_ID/ACTION/ENVIRONMENT)"
 echo "  secrets: ${SECRETS_ARG}"
 
+# Auth preflight: Firebase custom-token minting uses IAM Credentials signJwt with the Cloud Run service
+# account as both caller and target. If this self-binding is missing, sign-in, Firestore-backed
+# IntentBuilder, and World ID status all fail with 401/500 even though the revision deploys fine.
+TOKEN_CREATOR="$(gcloud iam service-accounts get-iam-policy "${PANEL_SA}" --project "${PROJECT}" \
+  --flatten='bindings[].members' \
+  --filter="bindings.role=roles/iam.serviceAccountTokenCreator AND bindings.members=serviceAccount:${PANEL_SA}" \
+  --format='value(bindings.role)' 2>/dev/null || true)"
+if [[ "${TOKEN_CREATOR}" != "roles/iam.serviceAccountTokenCreator" ]]; then
+  echo "✖ ${PANEL_SA} lacks self roles/iam.serviceAccountTokenCreator; sign-in would fail." >&2
+  echo "  Fix:" >&2
+  echo "  gcloud iam service-accounts add-iam-policy-binding ${PANEL_SA} \\" >&2
+  echo "    --member='serviceAccount:${PANEL_SA}' \\" >&2
+  echo "    --role='roles/iam.serviceAccountTokenCreator' \\" >&2
+  echo "    --project ${PROJECT}" >&2
+  exit 1
+fi
+
 gcloud run deploy "${SERVICE}" \
   --image "${IMAGE}" \
   --region "${REGION}" \
