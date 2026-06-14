@@ -1,11 +1,12 @@
 
 # 080 — Refactoring Plan: Per-User EIP-7702 ("PRODUCT mode")
 
-Status: **DECIDED — self-delegate maintained; building per-user now.** Owner confirmed the direction
-(2026-06-13): keep our **own** `ExecutionDelegate7702` (Option A; not ERC-7579 modules, not per-user
-contract deploys); add an **Activate** step **after sign-in and before the IntentBuilder** that
-delegates the user's **own** EOA. Demo (shared-Owner) mode stays behind a toggle as a fund-less-judge
-fallback. ERC-7579 module path is explicitly **future-only** (see §1.3 / §9).
+Status: **DECIDED — self-delegate via a Local Activation Kit (Ledger-first); browser wallets can't sign
+the 7702 delegation.** Owner confirmed self-delegate (2026-06-13). Live test (2026-06-14) showed MetaMask
+refuses `signAuthorization` for a dApp-chosen impl, so activation moves to a local install-free CLI
+(`scripts/activate-kit/`, served at `/activate-kit/activate.mjs`) that signs the EIP-7702 authorization
+with a **Ledger (recommended)** or a dedicated imported key. Demo (shared-Owner) mode stays as the
+fund-less-judge fallback. ERC-7579 module path is future-only (§1.3 Option C / §9).
 Closes / advances QA rows: `ARCH-001` (primary), `GAS-001`, `AUTH-004`, `RPC-001`, `STORE-001`,
 `WORLDID-001`. See [plan/070-qa-register.md](070-qa-register.md).
 
@@ -85,17 +86,44 @@ graph TD
 
 | Option | What it means | Co-exists with MM Smart Account? | Effort | Verdict |
 |---|---|---|---|---|
-| **A. Winner-takes-the-slot** | User re-delegates their EOA to IntentOS (overwrites MM; reversible). Plain EOAs delegate directly. | No (mutually exclusive) | Low | **MVP path** |
-| **B. Dedicated EOA** | User uses a fresh EOA only for IntentOS. No conflict. | N/A (separate account) | Low | **Demo default** |
+| **A. Winner-takes-the-slot** | User re-delegates their EOA to IntentOS (overwrites MM; reversible). Plain EOAs delegate directly. | No (mutually exclusive) | Low | superseded by D for the signature |
+| **B. Dedicated EOA** | User uses a fresh EOA only for IntentOS. No conflict. | N/A (separate account) | Low | **Demo fallback** |
 | **C. Compose on top of a smart account** | IntentOS becomes a **scoped permission/module** on the user's existing smart account instead of replacing its code: (C1) a MetaMask **Delegation Framework** delegation with caveats = our guardrails (only USDC↔WETH via SwapRouter, spend caps, expiry; SessionKey is the delegate), or (C2) an **ERC-7579** executor/validator module. | **Yes** | High (re-architecture, stack lock-in) | **Future / product** |
+| **D. Local Activation Kit (CLI)** | The 7702 authorization + `initialize` self-tx are signed **locally** by the user's own signer — **Ledger (recommended)** or a dedicated imported key — because browser wallets refuse to sign a dApp-chosen 7702 delegation (see live finding below). Install-free single file (`viem` inlined). | Replaces the EOA's delegation (same as A), but the **signature works** | Low–Med | **CHOSEN live path** |
 
-**Decision for this refactor:** ship **A + B** now (own `ExecutionDelegate7702`, the user delegates
-their **own** EOA; recommend a dedicated EOA so we never fight MetaMask's UI during the demo). Record
-**C** as the post-hackathon path that lets people keep their MetaMask Smart Account and still join, by
-expressing IntentOS guardrails as a *delegation/module* rather than a *replacement* of account code.
+**LIVE FINDING (2026-06-14):** Activating via the browser wallet fails with viem
+`Account type "json-rpc" is not supported. The signAuthorization Action does not support JSON-RPC
+Accounts.` MetaMask (and injected wallets generally) will **only** 7702-delegate to their **own**
+smart-account implementation — there is no RPC for a dApp to request delegation to an arbitrary
+implementation (here `0x37d9…f9c1`). `signAuthorization` is a **local-account-only** viem action. So the
+browser path is a dead end for self-delegation; the authorization must be signed by a local key or a
+hardware wallet. This is why **Option D** is the chosen real path.
 
-> Practical demo rule: **do not** delegate `0x7B79…2A2e` (it would overwrite MetaMask Smart Account).
-> Create a **new plain EOA** for the live per-user demo.
+**Decision for this refactor:** ship **D** as the real per-user path (local kit, Ledger-first), keep
+**B** (dedicated EOA) as guidance and the shared-Owner **demo mode** as the fund-less-judge fallback.
+The browser ActivateGate now detects the json-rpc limitation and hands off to the kit. Record **C** as
+the post-hackathon path that lets people keep their MetaMask Smart Account and join via a scoped
+delegation/module instead of replacing account code.
+
+> Practical rule: use a **dedicated, low-value EOA** for activation. The kit warns + requires `--force`
+> before overwriting an existing delegation (e.g. a MetaMask Smart Account).
+
+### 1.4 Option D — Local Activation Kit (the chosen real path)
+
+`scripts/activate-kit/` (source) → bundled install-free to `app/public/activate-kit/activate.mjs`
+(served by the panel; `viem` inlined, Ledger external). It is **self-contained**: the impl address,
+SessionKey, watcherKey, relayer, guard caps and tiny vault are baked from `deployments/base-mainnet.json`
++ the server `DEMO_GUARD`, so it needs no auth and no server round-trip. Flow:
+1. Load signer — `--ledger` (recommended; experimental, needs a 7702-capable Ledger Ethereum app) or a
+   dedicated imported key via `--key-file` / `MNEMONIC` / `PRIVATE_KEY` (never echoed/stored).
+2. Print the derived address; detect an existing delegation (warn + `--force` to overwrite).
+3. Poll Base until the EOA holds the required ETH (vault reserve + gas).
+4. `signAuthorization({contractAddress: impl, executor:"self"})` + `sendTransaction` — one type-4 tx.
+5. Verify the receipt + that the code is now `0xef0100‖impl`.
+After activation the user signs in to the panel **with the same EOA**; the server (connected mode)
+operates on it; recurring trades stay server-side (SessionKey + relayer, reimbursed from the user's
+vault) — zero further user signatures. The panel `ActivateGate` catches the json-rpc error and offers a
+**Download activation kit** button + an upfront "Use the Local Activation Kit (Ledger)" link.
 
 ---
 

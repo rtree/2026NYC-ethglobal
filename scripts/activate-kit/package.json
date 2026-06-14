@@ -1,0 +1,20 @@
+{
+  "name": "@intentos/activate-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "IntentOS local EIP-7702 activation kit — delegate your own EOA to the IntentOS guard.",
+  "bin": { "intentos-activate": "./activate.mjs" },
+  "scripts": {
+    "start": "node activate.mjs",
+    "ledger": "node activate.mjs --ledger",
+    "bundle": "esbuild activate.mjs --bundle --platform=node --format=esm --external:@ledgerhq/* --outfile=dist/activate.mjs"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "optionalDependencies": {
+    "@ledgerhq/hw-transport-node-hid": "^6.30.0",
+    "@ledgerhq/hw-app-eth": "^6.45.0"
+  }
+}

@@ -811,8 +811,8 @@ POST /api/runtime/heartbeat
 `/api/runtime/start` must no longer only store metadata. It must create a RuntimeRecord and schedule or
 trigger ticks.
 
-`/api/runtime/status` should drive UI labels such as `scheduled`, `running`, `stopped`, `expired`,
-`failed`, and `manual-only`.
+`/api/runtime/status` should drive UI labels such as `scheduled`, `running`, `stopping`, `stopped`,
+`expired`, `failed`, and `manual-only`.
 
 Canonical MVP API contract:
 

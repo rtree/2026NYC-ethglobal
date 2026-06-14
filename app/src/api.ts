@@ -75,6 +75,8 @@ export const api = {
   fundGas: (lane: "executor" | "watcher", intentId?: string) => postJson<ApiResult & { lane?: string }>("/api/gas/fund", { lane, intentId }),
   runtimeStart: (intentId?: string) => postJson<{ intentId: string; runtime: { startedAt: number; autoStopAt: number; loopPeriodSec: number; plannedTicks: number }; runtimeRecord?: RuntimeRecord }>("/api/runtime/start", { intentId }),
   runtimeStatus: (intentId: string) => getJson<{ intentId: string; runtimeRecord: RuntimeRecord | null }>(`/api/runtime/status?intentId=${encodeURIComponent(intentId)}`),
+  runtimeRun: (intentId?: string) => postJson<{ intentId: string; runtimeRecord: RuntimeRecord; ticks: unknown[] }>("/api/runtime/run", { intentId }),
+  runtimeStop: (intentId?: string) => postJson<{ intentId: string; runtimeRecord: RuntimeRecord | null }>("/api/runtime/stop", { intentId }),
   runtimeTick: (intentId?: string) => postJson<{ intentId: string; runtimeRecord: RuntimeRecord; tick: { tick: number; status: string; action: string } | null }>("/api/runtime/tick", { intentId }),
   trade: (intentId?: string) => postJson<ApiResult>("/api/trade", { intentId }),
   watcherFreeze: () => post("/api/watcher/freeze"),

@@ -258,6 +258,7 @@ async function linkIntent(opts: CreateOpts | undefined, patch: { executorTokenId
 
 // Hard ceiling on planned AgentLoop ticks regardless of TTL/period (tiny-amounts + bounded policy).
 const MAX_PLANNED_TICKS = 12;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Start the (bounded) runtime: consume the intent's StartConfig, mark it live, and record the schedule
@@ -351,6 +352,42 @@ export async function runtimeStop(opts?: CreateOpts, reason = "owner requested s
   if (doc) await store().putIntent(opts.uid, { ...doc, runtime: runtimeState(stopped), runtimeId: stopped.runtimeId });
   logAction({ at: now, action: `runtime stopped (${reason})`, ok: true });
   return { intentId: opts.intentId, runtimeRecord: stopped };
+}
+
+export async function runtimeRun(opts?: CreateOpts) {
+  if (!opts?.uid || !opts.intentId) throw new Error("intentId required");
+  let record = await store().getRuntime(opts.uid, opts.intentId);
+  if (!record) throw new Error("runtime not started");
+  const now = Date.now();
+  if (!["scheduled", "running"].includes(record.status)) {
+    return { intentId: opts.intentId, runtimeRecord: record, ticks: [] };
+  }
+  record = { ...record, status: "running", updatedAt: now, lastHeartbeatAt: now };
+  await store().putRuntime(opts.uid, record);
+
+  const ticks: unknown[] = [];
+  while (Date.now() < record.autoStopAt && record.executedTicks < record.plannedTicks) {
+    const latest = await store().getRuntime(opts.uid, opts.intentId);
+    if (!latest || latest.status === "stopped" || latest.status === "stopping" || latest.status === "unbound") {
+      record = latest ?? record;
+      break;
+    }
+    const out = await runtimeTick(opts);
+    ticks.push(out.tick);
+    record = out.runtimeRecord;
+    if (!["scheduled", "running"].includes(record.status)) break;
+    const remaining = record.autoStopAt - Date.now();
+    if (remaining <= 0) break;
+    await sleep(Math.min(record.loopPeriodSec * 1000, remaining));
+  }
+
+  const finalRecord = await store().getRuntime(opts.uid, opts.intentId) ?? record;
+  if (["scheduled", "running"].includes(finalRecord.status)) {
+    const expired: RuntimeRecord = { ...finalRecord, status: "expired", updatedAt: Date.now() };
+    await store().putRuntime(opts.uid, expired);
+    return { intentId: opts.intentId, runtimeRecord: expired, ticks };
+  }
+  return { intentId: opts.intentId, runtimeRecord: finalRecord, ticks };
 }
 
 export async function runtimeTick(opts?: CreateOpts) {

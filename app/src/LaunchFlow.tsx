@@ -36,6 +36,10 @@ function ActivateGate({ address, onActivated }: { address: `0x${string}`; onActi
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+  // Browser wallets (MetaMask) refuse to sign an EIP-7702 authorization for a dApp-chosen contract
+  // (viem throws `Account type "json-rpc" is not supported`). When that happens we offer the local
+  // Activation Kit (signs the 7702 authorization with a Ledger / imported key on the user's machine).
+  const [needsKit, setNeedsKit] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -108,10 +112,48 @@ function ActivateGate({ address, onActivated }: { address: `0x${string}`; onActi
       }
       setErr(`activation sent but not yet confirmed — refresh in a moment (tx ${hash.slice(0, 10)}…)`);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      // The expected wallet limitation: surface the Activation Kit instead of a raw viem error.
+      if (/json-rpc|signAuthorization|does not support/i.test(msg)) {
+        setNeedsKit(true);
+        setErr(null);
+      } else {
+        setErr(msg);
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  if (needsKit) {
+    return (
+      <div className="card pad-lg" style={{ maxWidth: 720 }}>
+        <div className="card-head">
+          <h3>Activate with the Local Kit</h3>
+          <span className="pill">EIP-7702</span>
+        </div>
+        <p className="desc">
+          Your browser wallet won't sign an EIP-7702 delegation to a third-party contract (a deliberate
+          MetaMask restriction). Activate from your own machine instead — the key never leaves it, and we
+          only ever learn your address. <strong>Ledger is recommended</strong>; a dedicated imported key
+          works as a fallback.
+        </p>
+        <ol className="desc" style={{ lineHeight: 1.7, paddingLeft: 18 }}>
+          <li>Download the kit: <a href="/activate-kit/activate.mjs" download><code>activate.mjs</code></a>{" "}
+            (and the <a href="/activate-kit/README.md" target="_blank" rel="noreferrer">README</a>).</li>
+          <li>Run it: <code>node activate.mjs --ledger</code> &nbsp;(or <code>node activate.mjs --key-file key.txt</code>).</li>
+          <li>Fund the address it shows with a little Base ETH, then it delegates + initializes in one tx.</li>
+          <li>Come back and sign in with that <strong>same EOA</strong> to build your Intent.</li>
+        </ol>
+        <p className="spec-ref">No install needed — <code>viem</code> is bundled. Ledger support needs two extra npm packages (see README).</p>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <a className="btn primary" href="/activate-kit/activate.mjs" download>Download activation kit</a>
+          <button className="btn" onClick={() => { setNeedsKit(false); invalidateChainState(); api.activatePlan().then((p) => { if (p.alreadyDelegated) onActivated(); }).catch(() => {}); }}>
+            I've activated — continue
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const elsewhere = !!plan?.delegatedElsewhere && !confirmOverwrite;
@@ -139,6 +181,9 @@ function ActivateGate({ address, onActivated }: { address: `0x${string}`; onActi
       )}
       <button className="btn primary block" disabled={!plan || !walletClient || busy || elsewhere} onClick={activate}>
         {busy ? "Activating… confirm in your wallet" : `Activate ${shortAddr(address)} (1 transaction)`}
+      </button>
+      <button className="pill-link" style={{ marginTop: 8 }} onClick={() => setNeedsKit(true)}>
+        Use the Local Activation Kit instead (Ledger / hardware) →
       </button>
       {err && <p className="pill fund-exhausted" style={{ marginTop: 10 }}>{err.slice(0, 160)}</p>}
     </div>
@@ -514,6 +559,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
 
   const hasExecutor = !!state?.session.executorTokenId;
   const pkg = intent?.packages.executor;
+  const runtimeActive = runtimeRecord?.status === "scheduled" || runtimeRecord?.status === "running";
   return (
     <div className="grid cols-2">
       <div className="card pad-lg">
@@ -566,6 +612,17 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
             <tr><td className="k">Runtime id</td><td className="v">{runtimeRecord.runtimeId}</td></tr>
             <tr><td className="k">Executed ticks</td><td className="v">{runtimeRecord.executedTicks} / {runtimeRecord.plannedTicks}</td></tr>
           </tbody></table>
+        )}
+        {runtimeActive && (
+          <ActionButton
+            label="Stop runtime schedule"
+            className="btn danger block"
+            run={async () => {
+              const r = await api.runtimeStop(intent?.intentId);
+              setRuntimeRecord(r.runtimeRecord);
+              return { ok: true } as const;
+            }}
+          />
         )}
         {!hasExecutor && <p className="spec-ref" style={{ marginTop: 8 }}>Create the Executor Agent first (step ②).</p>}
         <a className="btn block" style={{ marginTop: 10 }} href="#/console">Go to Live Console →</a>
