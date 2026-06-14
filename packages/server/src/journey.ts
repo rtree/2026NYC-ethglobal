@@ -47,7 +47,7 @@ import {
   voteTighten,
 } from "@intentos/runtime";
 import { store } from "./store.js";
-import type { AgentPackageDraft } from "./intentTypes.js";
+import type { AgentPackageDraft, RuntimeRecord } from "./intentTypes.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const abi = ExecutionDelegate7702Abi as any;
@@ -267,16 +267,71 @@ const MAX_PLANNED_TICKS = 12;
 export async function runtimeStart(opts?: CreateOpts) {
   if (!session.executorTokenId) throw new Error("create the Executor Agent first");
   if (!opts?.uid || !opts?.intentId) throw new Error("intentId required");
+  const c = await ownerCtx(opts);
   const doc = await store().getIntent(opts.uid, opts.intentId);
   if (!doc) throw new Error("intent not found");
+  const existing = await store().getRuntime(opts.uid, opts.intentId);
+  if (existing && ["scheduled", "running"].includes(existing.status)) {
+    await store().putIntent(opts.uid, { ...doc, status: "live", runtime: runtimeState(existing), runtimeId: existing.runtimeId });
+    return { intentId: doc.intentId, runtime: runtimeState(existing), runtimeRecord: existing };
+  }
   const cfg = doc.startConfig;
   const startedAt = Date.now();
   const autoStopAt = startedAt + cfg.ttlMinutes * 60_000;
   const plannedTicks = Math.max(1, Math.min(MAX_PLANNED_TICKS, Math.floor((cfg.ttlMinutes * 60) / Math.max(1, cfg.loopPeriodSec))));
-  const runtime = { startedAt, autoStopAt, loopPeriodSec: cfg.loopPeriodSec, plannedTicks };
-  await store().putIntent(opts.uid, { ...doc, status: "live", runtime });
-  logAction({ at: Date.now(), action: `runtime started (loop ${cfg.loopPeriodSec}s, autostop ${cfg.ttlMinutes}m, <=${plannedTicks} ticks)`, ok: true });
-  return { intentId: doc.intentId, runtime };
+  const executor = doc.packages.executor.fixed ? doc.packages.executor : null;
+  const runtimeId = `rt-${doc.intentId}-${session.executorTokenId}-${startedAt}`;
+  const record: RuntimeRecord = {
+    runtimeId,
+    ownerUid: opts.uid,
+    intentId: doc.intentId,
+    executorTokenId: session.executorTokenId,
+    watcherTokenId: session.watcherTokenId,
+    delegate: c.delegate,
+    role: "EXECUTOR",
+    packageHash: executor?.packageHash ?? pkgHash,
+    runtimeOwner: c.delegate,
+    bindingNonce: "1",
+    cloudRunService: "manual-control-panel",
+    status: "scheduled",
+    startedAt,
+    lastHeartbeatAt: null,
+    autoStopAt,
+    loopPeriodSec: cfg.loopPeriodSec,
+    plannedTicks,
+    executedTicks: 0,
+    failureReason: null,
+    createdAt: startedAt,
+    updatedAt: startedAt,
+  };
+  await store().putRuntime(opts.uid, record);
+  await store().putIntent(opts.uid, { ...doc, status: "live", runtime: runtimeState(record), runtimeId });
+  logAction({ at: Date.now(), action: `runtime scheduled (loop ${cfg.loopPeriodSec}s, autostop ${cfg.ttlMinutes}m, <=${plannedTicks} ticks)`, ok: true });
+  return { intentId: doc.intentId, runtime: runtimeState(record), runtimeRecord: record };
+}
+
+function runtimeState(r: RuntimeRecord) {
+  return {
+    startedAt: r.startedAt,
+    autoStopAt: r.autoStopAt,
+    loopPeriodSec: r.loopPeriodSec,
+    plannedTicks: r.plannedTicks,
+  };
+}
+
+export async function runtimeStatus(opts?: CreateOpts) {
+  if (!opts?.uid || !opts.intentId) throw new Error("intentId required");
+  const record = await store().getRuntime(opts.uid, opts.intentId);
+  if (!record) return { intentId: opts.intentId, runtimeRecord: null };
+  const now = Date.now();
+  if (record.status === "scheduled" || record.status === "running") {
+    if (record.autoStopAt <= now) {
+      const expired: RuntimeRecord = { ...record, status: "expired", updatedAt: now };
+      await store().putRuntime(opts.uid, expired);
+      return { intentId: opts.intentId, runtimeRecord: expired };
+    }
+  }
+  return { intentId: opts.intentId, runtimeRecord: record };
 }
 
 /**
@@ -304,8 +359,11 @@ export async function activatePlan(delegateAddr?: Address) {
       watcherKey: c.watcherKey,
       relayer: c.platform.address,
       gasPerTxCap: parseEther("0.0002"),
-      initialExecVault: parseEther("0.002"),
-      initialWatcherVault: parseEther("0.001"),
+      // Connected mode: keep the initial vault SMALL so a fresh per-user EOA only needs a tiny ETH
+      // balance to activate (initialize requires exec+watcher <= address(this).balance). Each lane
+      // still covers several Base-gas reimbursements; the user can top up later from their wallet.
+      initialExecVault: parseEther("0.0004"),
+      initialWatcherVault: parseEther("0.0002"),
       packageHash: pkgHash,
       semanticGuardHash: semHash,
     },
