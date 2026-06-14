@@ -61,6 +61,13 @@ const erc20 = [
 const AMOUNT_IN = 1_000n; // 0.001 USDC per trade
 const DEMO_CUM_CAP = 100_000n; // 0.1 USDC cumulative — enough for a long demo session
 
+// Watcher VOTE_TIGHTEN softness: narrow amountCapPerTx by this many bps each vote (default 2000 = -20%)
+// instead of halving (-50%), and never below one trade size so continuous DCA isn't starved — the
+// Watcher still monotonically narrows capability (visible, on-chain) but execution survives to the
+// cumulative cap. Override with INTENTOS_WATCHER_TIGHTEN_BPS (e.g. 1000 = gentler, 5000 = harsher).
+const WATCHER_TIGHTEN_BPS = BigInt(process.env.INTENTOS_WATCHER_TIGHTEN_BPS ?? "2000");
+const WATCHER_CAP_FLOOR = AMOUNT_IN; // never tighten per-tx cap below one trade
+
 interface Deployments {
   contracts: { executionDelegate7702Impl: Address; agentNFT: Address };
 }
@@ -554,7 +561,8 @@ export async function runtimeTick(opts?: CreateOpts) {
       "A bounded Executor just submitted one guarded USDC->WETH trade.",
       "Judge semantic safety. Reply with exactly one action: REPORT_OK, REPORT_SUSPICIOUS, or VOTE_TIGHTEN.",
       "Never loosen. Do not reply VOTE_FREEZE in this MVP autonomous path.",
-      "For the first successful execution, prefer VOTE_TIGHTEN to narrow future capability conservatively.",
+      "Default to REPORT_OK when the trade looks on-intent (small, within caps, on the DCA pair).",
+      "Choose VOTE_TIGHTEN only to gently narrow future capability when you see drift or want a more conservative posture; tightening is applied softly and never starves the strategy.",
       `intentId=${record.intentId}`,
       `executorTokenId=${record.executorTokenId}`,
       `watcherTokenId=${record.watcherTokenId}`,
@@ -580,10 +588,17 @@ export async function runtimeTick(opts?: CreateOpts) {
     if (!overBudget && (watcherDecision === "VOTE_TIGHTEN" || watcherDecision === "REPORT_SUSPICIOUS")) {
       try {
         const vote = await watcherTighten(opts);
-        lastWatcherAction = "VOTE_TIGHTEN";
-        lastWatcherReason = "Watcher tightened after observing the Executor's BUY evidence; future trades are capped lower.";
-        lastWatcherTxHash = vote.txHash as Hex;
-        watcherActionsUsed += 1;
+        if ("txHash" in vote && vote.txHash) {
+          lastWatcherAction = "VOTE_TIGHTEN";
+          lastWatcherReason = "Watcher gently narrowed future per-tx capability after observing the Executor's BUY evidence.";
+          lastWatcherTxHash = vote.txHash as Hex;
+          watcherActionsUsed += 1;
+        } else {
+          // Soft tighten reached its floor (one trade size): nothing left to narrow, so the Watcher
+          // holds and keeps monitoring instead of spamming a redundant on-chain vote.
+          lastWatcherAction = "REPORT_OK";
+          lastWatcherReason = "Watcher reviewed the BUY and held — per-tx capability already at its conservative floor.";
+        }
       } catch (e) {
         lastWatcherAction = "VOTE_TIGHTEN_FAILED";
         failureReason = e instanceof Error ? e.message : String(e);
@@ -957,14 +972,24 @@ export async function watcherTighten(opts?: CreateOpts) {
   const c = await ownerCtx(opts);
   await ensureWatcherVault(c);
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
+  // Soft tighten: narrow the per-tx cap GENTLY (default -20%, was -50%) with a floor at one trade size,
+  // so the Watcher keeps acting (monotonic narrowing, real on-chain evidence) without starving a
+  // continuous DCA. The cumulativeCap stays the real stop. Once at the floor there's nothing left to
+  // narrow, so report that instead of spamming a redundant on-chain vote.
+  const reduced = (guard.amountCapPerTx * (10_000n - WATCHER_TIGHTEN_BPS)) / 10_000n;
+  const target = reduced < WATCHER_CAP_FLOOR ? WATCHER_CAP_FLOOR : reduced;
+  if (target >= guard.amountCapPerTx) {
+    logAction({ at: Date.now(), action: `Watcher held cap (already at floor ${guard.amountCapPerTx})`, ok: true });
+    return { ok: false as const, reason: "amountCapPerTx already at the minimum (one trade size)", newAmountCap: guard.amountCapPerTx.toString() };
+  }
   const patch: GuardPatch = {
-    amountCapPerTx: guard.amountCapPerTx > 1n ? guard.amountCapPerTx / 2n : 1n,
+    amountCapPerTx: target,
     cumulativeCap: guard.cumulativeCap,
     slippageCapBps: guard.slippageCapBps,
     expiry: guard.expiry,
   };
   const txHash = await voteTighten(c.wallet, c.pub, c.delegate, patch, c.platform);
-  logAction({ at: Date.now(), action: `Watcher VOTE_TIGHTEN (cap -> ${patch.amountCapPerTx})`, txHash, ok: true });
+  logAction({ at: Date.now(), action: `Watcher VOTE_TIGHTEN (cap ${guard.amountCapPerTx} -> ${patch.amountCapPerTx})`, txHash, ok: true });
   return { txHash, newAmountCap: patch.amountCapPerTx.toString() };
 }
 
