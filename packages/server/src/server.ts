@@ -115,7 +115,7 @@ async function main() {
     // derives "auth required" from this (not from its own build-time Firebase key), so the two can
     // never disagree and silently create an empty-token session that 401s every write (AUTH-002).
     if (path === "/api/config" && req.method === "GET") {
-      json(res, 200, { authRequired: authEnabled() });
+      json(res, 200, { authRequired: authEnabled(), ownerMode: ownerMode() });
       return;
     }
 

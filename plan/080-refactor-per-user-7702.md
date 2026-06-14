@@ -1,3 +1,4 @@
+
 # 080 — Refactoring Plan: Per-User EIP-7702 ("PRODUCT mode")
 
 Status: **DECIDED — self-delegate maintained; building per-user now.** Owner confirmed the direction
