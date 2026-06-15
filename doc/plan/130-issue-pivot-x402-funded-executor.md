@@ -4,6 +4,8 @@ Status: Proposed
 Priority: P0
 Created: 2026-06-15
 
+Research note: [140-research-x402-receipt-agentfund.md](140-research-x402-receipt-agentfund.md)
+
 ## Problem
 
 The hackathon MVP proved the guarded execution stack, but the product now needs a clearer paid
@@ -82,6 +84,7 @@ This Issue creates the product pivot and the first implementation track. It cove
 
 - x402 payment acceptance and proof verification;
 - an Agent Fund model credited by x402 payment;
+- Receipt NFT / Agent NFT semantics for stop-and-refund;
 - Intent screen start after successful payment/funding;
 - Executor-only Agent Package flow;
 - Executor Agent NFT spawn after Intent FIX;
@@ -231,7 +234,8 @@ Update these after the Issue is accepted:
 
 ## Work slices
 
-1. Research x402 integration and choose receipt/payment verification flow.
+1. Research x402 integration and choose receipt/payment verification flow. See
+  [140-research-x402-receipt-agentfund.md](140-research-x402-receipt-agentfund.md).
 2. Define `AgentFund` data model and decide escrow vs ledger vs hybrid custody.
 3. Update [010-interfaces.md](010-interfaces.md) with x402 receipt, Fund, transfer, and Executor-only
    lifecycle types.
