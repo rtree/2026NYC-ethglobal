@@ -1,7 +1,24 @@
 # 120 — Maintenance Plan Index
 
-This file reorganizes the post-hackathon planning surface without moving the existing documents. The
-old numbering and links remain stable; new work should be filed as SDD updates or Issue documents.
+This file organizes the post-hackathon planning surface under `doc/`. The old numbering remains
+stable; new work should be filed as SDD updates or Issue documents.
+
+## 0. Current repository shape
+
+```text
+app/
+  web/                 React + Vite control panel
+  agent/
+    openclaw/          Cloud Run OpenClaw gateway wrapper
+packages/
+  shared/              Shared TS types, config, ABIs, KMS signer
+  runtime/             Quote, request build/sign, relayer, executor helpers
+  server/              Control-plane API + static web serving
+contracts/             Foundry contracts and tests
+deployment/            Public deployment addresses (no secrets)
+doc/                   North Star, SDD, issues, mocks, deck
+scripts/               Build/deploy/operator scripts
+```
 
 ## 1. Source of truth layers
 
@@ -30,14 +47,14 @@ old numbering and links remain stable; new work should be filed as SDD updates o
 
 These are implementation facts observed from the codebase at the start of maintenance:
 
-- React/Vite control panel with Web3 login, Firebase custom token auth, IntentBuilder, Launch wizard,
+- `app/web`: React/Vite control panel with Web3 login, Firebase custom token auth, IntentBuilder, Launch wizard,
   Live Console, and World ID gate hooks.
 - Control-plane server with `/api/config`, Web3 auth, World ID verification, Firestore-backed intent
   store, Intent package FIXing, runtime records, OpenClaw calls, and guarded trade APIs.
 - Runtime package with Base clients, Uniswap quote path, ExecutionRequest builder, KMS signing,
   relayer submission, receipt-status checks, and bounded executor helpers.
 - Solidity contracts for `ExecutionDelegate7702`, `AgentNFT`, and shared IntentOS types.
-- Cloud Run deployment scripts and OpenClaw gateway wrapper.
+- Cloud Run deployment scripts and `app/agent/openclaw` OpenClaw gateway wrapper.
 
 ## 4. Current product pivot
 

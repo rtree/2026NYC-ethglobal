@@ -110,9 +110,9 @@ delegation/module instead of replacing account code.
 
 ### 1.4 Option D — Local Activation Kit (the chosen real path)
 
-`scripts/activate-kit/` (source) → bundled install-free to `app/public/activate-kit/activate.mjs`
+`scripts/activate-kit/` (source) → bundled install-free to `app/web/public/activate-kit/activate.mjs`
 (served by the panel; `viem` inlined, Ledger external). It is **self-contained**: the impl address,
-SessionKey, watcherKey, relayer, guard caps and tiny vault are baked from `deployments/base-mainnet.json`
+SessionKey, watcherKey, relayer, guard caps and tiny vault are baked from `deployment/base-mainnet.json`
 + the server `DEMO_GUARD`, so it needs no auth and no server round-trip. Flow:
 1. Load signer — `--ledger` (recommended; experimental, needs a 7702-capable Ledger Ethereum app) or a
    dedicated imported key via `--key-file` / `MNEMONIC` / `PRIVATE_KEY` (never echoed/stored).
@@ -257,7 +257,7 @@ Build the `connected` path **alongside** `demo` (INTENTOS_OWNER toggle) so the l
 1.2 **Add `POST /api/activate/plan`** → returns the unsigned `initialize(...)` params with a **default**
    conservative guard (`guardFromDraft(null)`), SessionKeys, relayer, caps, a small vault, and a generic
    packageHash. (No FIXed package needed — runs before the IntentBuilder.)
-1.3 **New "Activate" step in [app/src/LaunchFlow.tsx](../../app/src/LaunchFlow.tsx)** placed **before** the
+1.3 **New "Activate" step in [app/web/src/LaunchFlow.tsx](../../app/web/src/LaunchFlow.tsx)** placed **before** the
    Intent step: `signAuthorization` + `initialize` self-tx via wagmi/viem (one type-4 tx); confirm →
    notify server. Gate the rest of the wizard on `state.delegated` for the connected EOA.
 1.4 **Executor step = mint + optional guard update.** Remove delegate+initialize from here; mint the

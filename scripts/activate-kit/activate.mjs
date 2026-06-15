@@ -31,7 +31,7 @@ import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
 import { stdin, stdout, argv, env, exit } from "node:process";
 
-// ---- baked deployment config (Base mainnet; from deployments/base-mainnet.json + server guard) -------
+// ---- baked deployment config (Base mainnet; from deployment/base-mainnet.json + server guard) -------
 const CFG = {
   chainId: 8453,
   delegateImpl: "0xDe45a782AE5544D1D682E1cfccf9D6DDa3c833f9",

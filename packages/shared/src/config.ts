@@ -1,4 +1,4 @@
-// Non-secret config. Addresses + KMS refs from deployments/base-mainnet.json. NEVER store keys here.
+// Non-secret config. Addresses + KMS refs from deployment/base-mainnet.json. NEVER store keys here.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -35,11 +35,11 @@ export interface Deployments {
   contracts: { executionDelegate7702Impl: Address | null; agentNFT: Address | null };
 }
 
-/** Read deployments/base-mainnet.json. Override path with INTENTOS_DEPLOYMENTS. */
+/** Read deployment/base-mainnet.json. Override path with INTENTOS_DEPLOYMENTS. */
 export function readDeployments(): Deployments {
   const here = dirname(fileURLToPath(import.meta.url));
   const path =
-    process.env.INTENTOS_DEPLOYMENTS ?? resolve(here, "../../../deployments/base-mainnet.json");
+    process.env.INTENTOS_DEPLOYMENTS ?? resolve(here, "../../../deployment/base-mainnet.json");
   return JSON.parse(readFileSync(path, "utf8")) as Deployments;
 }
 

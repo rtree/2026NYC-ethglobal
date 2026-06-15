@@ -117,5 +117,5 @@ gas vault** — no further signatures from you.
 ```bash
 cd scripts/activate-kit
 pnpm i
-pnpm bundle      # -> dist/activate.mjs (install-free, viem inlined); also published to app/public/activate-kit/
+pnpm bundle      # -> dist/activate.mjs (install-free, viem inlined); also published to app/web/public/activate-kit/
 ```

@@ -15,11 +15,11 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
-  app:
+  app/web:
     dependencies:
       '@intentos/shared':
         specifier: workspace:*
-        version: link:../packages/shared
+        version: link:../../packages/shared
       '@tanstack/react-query':
         specifier: ^5.59.0
         version: 5.101.0(react@19.2.7)

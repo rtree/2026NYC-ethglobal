@@ -1,5 +1,5 @@
 // Browser-safe Base mainnet config + ABIs. Read-only by default; writes go through the user's wallet
-// or the relayer (never a privileged backend). Addresses from deployments/base-mainnet.json.
+// or the relayer (never a privileged backend). Addresses from deployment/base-mainnet.json.
 import type { Address } from "viem";
 import { base } from "wagmi/chains";
 

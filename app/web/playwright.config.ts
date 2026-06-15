@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 // E2E against the running dev server (Vite on 5174 proxying /api to the control panel on 8080).
-// Start both before running: see app/e2e/README note. CI-friendly: set E2E_BASE_URL.
+// Start both before running. CI-friendly: set E2E_BASE_URL.
 export default defineConfig({
   testDir: "./e2e",
   timeout: 20_000,

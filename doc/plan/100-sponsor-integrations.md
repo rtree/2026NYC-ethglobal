@@ -39,7 +39,7 @@ Natural ENS fits, smallest → largest effort:
 1. **Reverse-resolve the connected Owner** (read-only, ~1 hour). In the app, after connect, look up the
    primary name of `address` and render it instead of `shortAddr(address)`. Pure UX, no issuance.
    - viem: `publicClient.getEnsName({ address })` (mainnet resolver) + `getEnsAvatar`.
-  - Touch points: [app/src/WalletButton.tsx](../../app/src/WalletButton.tsx), [app/src/format.ts](../../app/src/format.ts), [app/src/Chrome.tsx](../../app/src/Chrome.tsx).
+  - Touch points: [app/web/src/WalletButton.tsx](../../app/web/src/WalletButton.tsx), [app/web/src/format.ts](../../app/web/src/format.ts), [app/web/src/Chrome.tsx](../../app/web/src/Chrome.tsx).
 
 2. **Give every Agent a name** = the headline integration. Mint `executor-<id>.intentos.eth` /
    `watcher-<id>.intentos.eth` when the Agent NFT is minted, and store agent metadata in **text records**:

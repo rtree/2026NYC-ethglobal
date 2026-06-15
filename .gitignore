@@ -8,8 +8,8 @@ coverage/
 .cache/
 
 # --- Playwright ---
-app/test-results/
-app/playwright-report/
+app/web/test-results/
+app/web/playwright-report/
 
 # --- Foundry ---
 contracts/out/
@@ -44,5 +44,5 @@ Thumbs.db
 .vscode/
 
 # app local env (RPC URL with key) — never commit
-app/.env.local
-app/.env
+app/web/.env.local
+app/web/.env

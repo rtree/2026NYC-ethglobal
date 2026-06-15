@@ -35,7 +35,7 @@ import { worldIdEnabled, worldIdConfig, signRpRequest, verifyProof, extractProof
 import { store } from "./store.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const APP_DIST = process.env.APP_DIST ?? resolve(HERE, "../../../app/dist");
+const APP_DIST = process.env.APP_DIST ?? resolve(HERE, "../../../app/web/dist");
 const PORT = Number(process.env.PORT ?? 8080);
 
 const MIME: Record<string, string> = {

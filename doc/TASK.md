@@ -120,7 +120,7 @@ facts). GCP project switched to `ethglobal-nyc2026-rtree`.
     (derives addresses + signs; validated vs HSM keys), config, contract ABIs. Typechecks clean.
   - GCP infra: project `ethglobal-nyc2026-rtree`; APIs enabled; KMS keyring `intentos` with HSM
     secp256k1 keys (executor/watcher SessionKeys); platform wallet key in Secret Manager. Addresses in
-    `deployments/base-mainnet.json` (no keys).
+    `deployment/base-mainnet.json` (no keys).
   - `packages/runtime` — clients, quote (Uniswap QuoterV2), buildRequest+KMS sign, relayer submit,
     Secret Manager platform-account loader. Typechecks clean.
   - **M1 fork e2e PASSING** (`packages/runtime/test/m1-fork-e2e.ts`): on an anvil Base fork, a
@@ -183,7 +183,7 @@ Star (Runtime/Relayer are server-side; the browser only views + triggers).
    - `POST /api/owner/resume`     -> owner unfreeze/loosen (only-owner path)
    - `POST /api/reset`            -> rotateBinding / re-init so the demo can be re-run
    - Reuses `@intentos/runtime` (deploy, setup7702, executor, watcher, KMS, secrets).
-2. Server also serves the built `app/dist` (single origin -> no CORS).
+2. Server also serves the built `app/web/dist` (single origin -> no CORS).
 3. **Auth** (superseded by M5): originally HTTP Basic auth; **removed in M5** because it doesn't attach
    to fetch()/XHR (caused repeated popups + 401s). Now `/api/*` writes are gated by a **Firebase ID
    token** (Web3 -> Firebase sign-in, plan/010 §17); `/api/state` is public read-only.

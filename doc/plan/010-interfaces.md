@@ -695,7 +695,7 @@ interface AgentPackageDraft {
 
 ## 18. Control-panel API surface + StartConfig (M5)
 
-The server (`@intentos/server`) serves `app/dist` + the write-path API behind Basic auth, and (M5)
+The server (`@intentos/server`) serves `app/web/dist` + the write-path API behind Basic auth, and (M5)
 Firebase-Auth-gated per-wallet endpoints. Money writes use the platform key + KMS SessionKeys
 server-side (never in the browser).
 

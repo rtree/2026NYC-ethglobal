@@ -5,6 +5,25 @@
 
 https://github.com/rtree/2026NYC-ethglobal/tree/main/doc/plan
 
+Build and layout notes: [doc/BUILD.md](doc/BUILD.md)
+
+## Current Repository Layout
+
+```text
+app/
+  web/                 React + Vite control panel
+  agent/
+    openclaw/          Cloud Run OpenClaw gateway wrapper
+packages/
+  shared/              Shared TS types, config, ABIs, KMS signer
+  runtime/             Quote, request build/sign, relayer, executor helpers
+  server/              Control-plane API + static web serving
+contracts/             Foundry contracts and tests
+deployment/            Public deployment addresses (no secrets)
+doc/                   North Star, SDD, issues, mocks, deck
+scripts/               Build/deploy/operator scripts
+```
+
 ---
 
 # IntentOS - Guarded Execution Layer for AI Agents
@@ -391,7 +410,7 @@ Server  3. POST /api/worldid/verify  → forwards proof to developer.world.org/a
 ### Where it lives in the code
 
 - Server: [packages/server/src/worldid.ts](packages/server/src/worldid.ts) (RP signing + server-side verify + signal binding), routes `POST /api/worldid/sign` · `POST /api/worldid/verify` · `GET /api/worldid/status` · `POST /api/worldid/reset` in [packages/server/src/server.ts](packages/server/src/server.ts), nullifier-uniqueness + `humanVerified` persistence in [packages/server/src/store.ts](packages/server/src/store.ts).
-- Client: [app/src/WorldIdButton.tsx](app/src/WorldIdButton.tsx) (IDKit `proofOfHuman`, `signal = address`), gate is **server-driven** (`/api/worldid/status`) in [app/src/gate.ts](app/src/gate.ts) so a stale local flag can't bypass it.
+- Client: [app/web/src/WorldIdButton.tsx](app/web/src/WorldIdButton.tsx) (IDKit `proofOfHuman`, `signal = address`), gate is **server-driven** (`/api/worldid/status`) in [app/web/src/gate.ts](app/web/src/gate.ts) so a stale local flag can't bypass it.
 
 > SDKs: `@worldcoin/idkit@4` (React widget) + `@worldcoin/idkit-core@4` (`signRequest`, `hashSignal`). The IDKit wasm is lazy-loaded so it only downloads when the gate is reached. Design notes: [doc/plan/110-worldid-integration.md](doc/plan/110-worldid-integration.md).
 

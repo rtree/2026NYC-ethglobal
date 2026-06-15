@@ -74,8 +74,8 @@ interface Deployments {
 
 function deployments(): Deployments {
   const here = dirname(fileURLToPath(import.meta.url));
-  // dist/journey.js -> ../../../deployments ; src in dev -> ../../../deployments
-  const path = resolve(here, "../../../deployments/base-mainnet.json");
+  // dist/journey.js -> ../../../deployment ; src in dev -> ../../../deployment
+  const path = resolve(here, "../../../deployment/base-mainnet.json");
   return JSON.parse(readFileSync(path, "utf8")) as Deployments;
 }
 

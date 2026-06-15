@@ -23,9 +23,9 @@ key are a **manual one-time step only the repo owner can do** (see §6). Links c
 
 | File | What it does now | Gap |
 | --- | --- | --- |
-| [app/src/gate.ts](../../app/src/gate.ts) | `WORLDID_APP_ID`/`WORLDID_ACTION` from Vite env; `worldIdVerified()`/`setWorldIdVerified()` persist a `"1"` flag in **sessionStorage**; `useGate()` combines wallet+SIWE+worldId | The proof is **faked client-side** — sessionStorage flag, no real proof, **no server check** |
-| [app/src/Onboarding.tsx](../../app/src/Onboarding.tsx) | Renders the gate; when `WORLDID_APP_ID` set shows an empty `<div id="worldid-slot" />`, else a **"Simulate World ID proof (dev)"** button | The IDKit widget is **never mounted** into `#worldid-slot`; dev button just flips the flag |
-| [cloudbuild.yaml](../cloudbuild.yaml) / [Dockerfile](../Dockerfile) | Already pass `VITE_WORLDID_APP_ID` + `VITE_WORLDID_ACTION` build args | Need to also pass `rp_id` to the client and the **RP signing key as a server secret** |
+| [app/web/src/gate.ts](../../app/web/src/gate.ts) | `WORLDID_APP_ID`/`WORLDID_ACTION` from Vite env; `worldIdVerified()`/`setWorldIdVerified()` persist a `"1"` flag in **sessionStorage**; `useGate()` combines wallet+SIWE+worldId | The proof is **faked client-side** — sessionStorage flag, no real proof, **no server check** |
+| [app/web/src/Onboarding.tsx](../../app/web/src/Onboarding.tsx) | Renders the gate; when `WORLDID_APP_ID` set shows an empty `<div id="worldid-slot" />`, else a **"Simulate World ID proof (dev)"** button | The IDKit widget is **never mounted** into `#worldid-slot`; dev button just flips the flag |
+| [cloudbuild.yaml](../../cloudbuild.yaml) / [Dockerfile](../../Dockerfile) | Already pass `VITE_WORLDID_APP_ID` + `VITE_WORLDID_ACTION` build args | Need to also pass `rp_id` to the client and the **RP signing key as a server secret** |
 | [packages/server/src/server.ts](../../packages/server/src/server.ts) | Path-routed HTTP server; has `/api/config`, `/api/auth/nonce`, `/api/auth/web3`; write-path gated by Firebase ID token | **No `/api/worldid/*` endpoints**; the gate is not enforced server-side at all |
 | [packages/server/src/store.ts](../../packages/server/src/store.ts) | `Store` interface (Memory + Firestore REST), per-uid intents/turns/runtimes | **No nullifier persistence** (needed for one-human-one-action) |
 | [packages/runtime/src/secrets.ts](../../packages/runtime/src/secrets.ts) | Secret Manager loader pattern (`accessSecretVersion`) | Need a loader for the **RP signing key** secret |
@@ -125,7 +125,7 @@ write-path before spawning a Capsule (and/or before mint). Touch points:
   - Firestore layout: `worldid/{action}__{nullifierDecimal}` = `{ uid, verifiedAt }`; mirror flag under
     `users/{uid}` = `{ humanVerified: true, worldIdAction, worldIdAt }`.
 
-### Frontend (`app/src`)
+### Frontend (`app/web/src`)
 - **EDIT `gate.ts`** — replace the sessionStorage truth with a server-derived one:
   - add `WORLDID_RP_ID` env; `worldIdRequiredCached()` from `/api/config` (like `authRequiredCached`).
   - keep a *local* "verified this session" cache but treat the **server** as source of truth.

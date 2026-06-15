@@ -17,7 +17,7 @@ source "${HERE}/panel-env.sh"
 
 cd "${ROOT}"
 
-ENV_FILE="${FIREBASE_ENV_FILE:-app/.env.production}"
+ENV_FILE="${FIREBASE_ENV_FILE:-app/web/.env.production}"
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "ERROR: ${ENV_FILE} not found (needs VITE_FIREBASE_API_KEY). Set FIREBASE_ENV_FILE=..." >&2
   exit 1

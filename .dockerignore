@@ -14,11 +14,11 @@
 
 # not needed in the image
 contracts
-deck
-plan
-mock/*.html
-mock/README.md
-mock/index.html
+doc/deck
+doc/plan
+doc/mock/*.html
+doc/mock/README.md
+doc/mock/index.html
 .vscode
 README.md
-TASK.md
+doc/TASK.md

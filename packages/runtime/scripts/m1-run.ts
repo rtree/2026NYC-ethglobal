@@ -66,7 +66,7 @@ async function dealUsdc(test: ReturnType<typeof createTestClient>, pub: ReturnTy
 function saveDeployment(delegateImpl: Address, agentNft: Address) {
   if (FORK) return;
   const here = dirname(fileURLToPath(import.meta.url));
-  const path = resolve(here, "../../../deployments/base-mainnet.json");
+  const path = resolve(here, "../../../deployment/base-mainnet.json");
   const j = JSON.parse(readFileSync(path, "utf8"));
   j.contracts.executionDelegate7702Impl = delegateImpl;
   j.contracts.agentNFT = agentNft;
@@ -75,7 +75,7 @@ function saveDeployment(delegateImpl: Address, agentNft: Address) {
 
 function readExistingImpl(): Address | null {
   const here = dirname(fileURLToPath(import.meta.url));
-  const path = resolve(here, "../../../deployments/base-mainnet.json");
+  const path = resolve(here, "../../../deployment/base-mainnet.json");
   const j = JSON.parse(readFileSync(path, "utf8"));
   return (j.contracts.executionDelegate7702Impl as Address | null) ?? null;
 }

@@ -60,7 +60,7 @@ Reusable assets:
   OpenClaw gateway through Cloud Run service-to-service auth and an OpenClaw token.
 - [packages/server/src/store.ts](../../packages/server/src/store.ts) already persists intents, package
   snapshots, runtime records, and World ID state in Firestore.
-- [app/src/LaunchFlow.tsx](../../app/src/LaunchFlow.tsx) already has a single-screen launch wizard and
+- [app/web/src/LaunchFlow.tsx](../../app/web/src/LaunchFlow.tsx) already has a single-screen launch wizard and
   an activation gate.
 
 Facts that conflict with the pivot and must be redesigned:

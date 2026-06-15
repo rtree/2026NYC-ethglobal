@@ -14,9 +14,9 @@
 contracts/lib
 contracts/out
 contracts/cache
-deck
-plan
-mock/*.html
-mock/README.md
-mock/index.html
+doc/deck
+doc/plan
+doc/mock/*.html
+doc/mock/README.md
+doc/mock/index.html
 .vscode

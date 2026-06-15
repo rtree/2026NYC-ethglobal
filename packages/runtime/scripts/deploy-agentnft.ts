@@ -1,4 +1,4 @@
-// Redeploys AgentNFT (after the _mint change) and writes the new address into deployments.
+// Redeploys AgentNFT (after the _mint change) and writes the new address into deployment.
 // Usage: tsx packages/runtime/scripts/deploy-agentnft.ts
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -27,11 +27,11 @@ async function main() {
   console.log("AgentNFT:", addr, "tx:", hash);
 
   const here = dirname(fileURLToPath(import.meta.url));
-  const path = resolve(here, "../../../deployments/base-mainnet.json");
+  const path = resolve(here, "../../../deployment/base-mainnet.json");
   const j = JSON.parse(readFileSync(path, "utf8"));
   j.contracts.agentNFT = addr;
   writeFileSync(path, JSON.stringify(j, null, 2) + "\n");
-  console.log("updated deployments/base-mainnet.json");
+  console.log("updated deployment/base-mainnet.json");
 }
 
 main().catch((e) => {

@@ -8,7 +8,7 @@ SA_NAME="${OPENCLAW_SA_NAME:-intentos-openclaw-runtime}"
 SA="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 PANEL_SA="${PANEL_SA:-intentos-panel@${PROJECT}.iam.gserviceaccount.com}"
 SECRET="${OPENCLAW_GATEWAY_TOKEN_SECRET:-intentos-openclaw-gateway-token}"
-SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../openclaw-cloudrun" && pwd)"
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../app/agent/openclaw" && pwd)"
 
 if [[ "${DEPLOY_OPENCLAW_YES:-}" != "1" ]]; then
   cat <<EOF

@@ -6,12 +6,12 @@ Project facts and the **mandatory** safety policy for this repository. Read befo
 - **IntentOS**: post-hackathon maintenance is pivoting to an x402-funded Executor-only TradingAgent.
   The ETHGlobal NYC 2026 MVP proved EIP-7702 guarded execution on Base mainnet with Executor + single
   Watcher; keep that as historical context, not the default next task.
-- Source of truth: [doc/plan/000-northStar.md](doc/plan/000-northStar.md) (JP) /
-  [doc/plan/000-northStar-en.md](doc/plan/000-northStar-en.md) (EN). Maintenance index:
-  [doc/plan/120-maintenance-index.md](doc/plan/120-maintenance-index.md). First pivot Issue:
-  [doc/plan/130-issue-pivot-x402-funded-executor.md](doc/plan/130-issue-pivot-x402-funded-executor.md).
-  Interfaces frozen in [doc/plan/010-interfaces.md](doc/plan/010-interfaces.md). SDD in
-  `doc/plan/020`–`doc/plan/050`. Status in [doc/TASK.md](doc/TASK.md).
+- Source of truth: [doc/plan/000-northStar.md](../doc/plan/000-northStar.md) (JP) /
+  [doc/plan/000-northStar-en.md](../doc/plan/000-northStar-en.md) (EN). Maintenance index:
+  [doc/plan/120-maintenance-index.md](../doc/plan/120-maintenance-index.md). First pivot Issue:
+  [doc/plan/130-issue-pivot-x402-funded-executor.md](../doc/plan/130-issue-pivot-x402-funded-executor.md).
+  Interfaces frozen in [doc/plan/010-interfaces.md](../doc/plan/010-interfaces.md). SDD in
+  `doc/plan/020`–`doc/plan/050`. Status in [doc/TASK.md](../doc/TASK.md).
 
 ## Languages & file conventions
 - `doc/plan/000-northStar.md` stays **Japanese**. Everything else (docs, mocks, code, comments) in **English**.
@@ -21,9 +21,9 @@ Project facts and the **mandatory** safety policy for this repository. Read befo
 JavaScript/Node uses **pnpm** (never npm/yarn). Python uses **uv** (never pip).
 
 Already configured in this repo — keep these on:
-- [.npmrc](.npmrc): `ignore-scripts=true` (block install lifecycle scripts), `audit=true`,
+- [.npmrc](../.npmrc): `ignore-scripts=true` (block install lifecycle scripts), `audit=true`,
   `min-release-age=7` (npm knob; days).
-- [pnpm-workspace.yaml](pnpm-workspace.yaml): `minimumReleaseAge: 10080` (**7 days** in minutes — only
+- [pnpm-workspace.yaml](../pnpm-workspace.yaml): `minimumReleaseAge: 10080` (**7 days** in minutes — only
   install modules ≥7 days old), `trustPolicy: no-downgrade`, `onlyBuiltDependencies: []` (block all
   build scripts unless explicitly allow-listed).
 - `trustPolicyIgnoreAfter: 43200` (**30 days**): exempts the trust-downgrade check for versions
@@ -57,7 +57,7 @@ Already configured in this repo — keep these on:
   `./scripts/build-panel.sh && ./scripts/deploy-panel.sh`
 - Why: a plain/image-only `gcloud run deploy` (or a long comma `--set-env-vars`) **silently drops env
   vars** — it kept turning World ID off and erasing `WORLDID_*`. The scripts pass **every** env from
-  [scripts/panel-env.sh](scripts/panel-env.sh) (the single source of truth) with a `^@@^` delimiter and
+  [scripts/panel-env.sh](../scripts/panel-env.sh) (the single source of truth) with a `^@@^` delimiter and
   re-attach secrets, then **verify `/api/config`** (authRequired + ownerMode:connected + worldIdRequired)
   and fail if anything was dropped.
 - To change panel config (env, secrets, image, sizing) edit `scripts/panel-env.sh`, then redeploy.
