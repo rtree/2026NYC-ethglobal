@@ -5,6 +5,8 @@
 
 ここからは、最終ゴールの実装を最初から動かす。
 
+2026-06-15 追記: 最初の製品導線は、Web画面ではなく **ERC-8004 registry-first** に寄せる。画面は運用・debug・過去MVPの資産として残してよいが、第一入口ではない。AgentはERC-8004/EIP-8004互換のregistryで見つけてもらい、x402でFundを入れてもらい、Receipt NFT / AgentFund / OpenClaw Runtimeがそのまま動く。Intentを固める対話も、画面ではなくx402 prepaidのHTTPS Intent Concierge APIを第一候補にする。
+
 Mockで「動いたように見える」状態を成功扱いしない。Mockは議論の補助や過去の成果物としては残すが、製品進捗の証明には使わない。進捗の証明になるのは、最終アーキテクチャと同じ資金経路・同じContract・同じRuntime authority・同じ停止/返金経路を通った実行だけである。
 
 許される代替は、開発環境としてのローカルサーバとローカルAnvilだけにする。Anvilを使う場合も、Fake successを作らない。実際にx402 payment相当の署名/settlementを作り、AgentFund contractにFundを入れ、Receipt NFTをmintし、AgentFundから実際にswap/executeし、Receipt redeemで本当に停止・返金する。外部サービスやmainnetの都合で詰まったら、その箇所だけPoCで切り分ける。ただしPoCは原因特定の道具であり、製品の成功判定ではない。
@@ -13,11 +15,13 @@ Mockで「動いたように見える」状態を成功扱いしない。Mockは
 
 ```text
 coin in:
-  x402 payment + Intent
+  ERC-8004 registry discovery
+   -> x402 payment + Intent or Concierge session
    -> settlement confirmed
    -> AgentFund credited
-   -> AgentReceiptNFT / Executor Agent NFT minted
-   -> Executor Runtime starts
+   -> AgentReceiptNFT / Executor Agent NFT minted with on-chain image
+   -> Cloud Run starts real OpenClaw Runtime
+   -> OpenClaw ticks AgentLoop internally
    -> AgentFund pays gas + trading capital
    -> guarded trades emit evidence
 
@@ -31,17 +35,70 @@ receipt in:
 
 このループがIntentOSの新しいNorthStarである。ゲームセンターでコインを入れるように、ユーザーはx402で価値とIntentを入れる。返ってくるReceipt NFTは、Agentのidentityであり、Fund claimであり、Runtime authorityの持ち手である。AgentはNFT + Keyとして生まれるが、自由なwalletではない。Agentは自分のAgentFund内の資金だけを、Hard Guardrailsとruntime bindingの内側で使う。
 
+### Registry-first / no-screen-first
+
+第一製品は、Control Panelに来てもらうものではなく、registryで見つけてもらうAgentにする。
+
+```text
+ERC-8004 registry entry
+  -> supported x402 resources / pricing / assets
+  -> Intent Concierge endpoint
+  -> Funded TradingAgent endpoint
+  -> Receipt NFT contract / AgentFund contract
+  -> evidence / status endpoints
+```
+
+UIは不要というより、主導線ではない。必要になったらReceipt holder向けのdebug/status viewとして、実stateだけを読む薄い画面を後から足せばよい。製品の入口は、agent registry、HTTPS API、x402、on-chain Receiptである。
+
+### On-chain Receipt NFT image
+
+AgentReceiptNFTは、IPFSや外部metadataに依存しない。`tokenURI` は `data:application/json;base64,...` を返し、imageも `data:image/svg+xml;base64,...` か完全on-chain rendererで返す。イメージはNounsDAOのように、parts / palette / seedから組み立てる。最初の方向は、ドット絵の可愛い女の子のAgent avatarにする。
+
+重要なのは「かわいい画像」そのものよりも、Receipt NFTが完全オンチェーンで、Fund claim / runtime authority / registry identityと同じtokenIdに結びついていること。画像生成はmint時のseed、intentHash、agent class、statusなどから決めてもよいが、外部ホストやIPFSが落ちてもtoken identityが壊れない形にする。
+
+### Real OpenClaw only
+
+動くAgentは本物のOpenClawを使う。scripted mock loop、server-side dummy decision、固定BUY/HOLDだけの擬似Agentは製品進捗ではない。OpenClawが読み込む `AGENT.md` / tool manifest / guardrail contextを生成し、Cloud Run上のOpenClaw runtimeがAgentLoopをtickし、その出力をadapterがtyped execution requestへ変換する。
+
+### Intent Concierge
+
+Intentが固まるまでのInteractionは、x402 prepaidのHTTPS APIとして提供する。Conciergeは、OpenClawが実際に使える `AGENT.md`、tool manifest、guardrail summary、risk constraints、initial package hashを作るための対話型Agentである。
+
+Conciergeの課金は、Gemini 3.1 flash-lite global相当の推定原価より少し上に置く。厳密なtokenizerを持てない場合は、文字数から入力/出力tokenを保守的に推定する。短いpromptで巨大outputを要求される abuse は、system prompt、固定テンプレート、max output chars、max tool plan size、max AGENT.md section size、x402 prepaid balanceで制約する。Conciergeの成果物は自由作文ではなく、実行可能な固定形式のAgent packageである。
+
+### Cloud Run internal AgentLoop
+
+Cloud Runは「ユーザーのHTTP request中にたまたまloopする場所」ではなく、OpenClaw runtime capsuleを起動してbounded tickを刻む場所にする。まだここは未完成の重要課題である。
+
+最初の完成条件は次の形にする。
+
+```text
+Cloud Run invocation / job / task starts
+  -> loads Receipt tokenId + runtime binding
+  -> loads AGENT.md package
+  -> starts real OpenClaw runtime
+  -> OpenClaw runs one bounded AgentLoop tick or small tick batch
+  -> adapter converts output to guarded action
+  -> AgentFund executes or rejects on-chain
+  -> heartbeat / evidence / spend accounting is persisted
+```
+
+無限loopは禁止する。tick数、wall clock、LLM/token cost、tool calls、trade count、gas、AgentFund spendに上限を置く。
+
 ### Real-firstの作り方
 
 1. 最初に本物の縦スライスを作る。
   - x402 payment receipt
   - AgentFund contract
-  - AgentReceiptNFT mint
+  - AgentReceiptNFT mint with on-chain image
+  - ERC-8004 registry entry
+  - x402 prepaid Intent Concierge
   - Executor package FIX
-  - Runtime tick
+  - real OpenClaw Runtime tick
   - guarded execution
   - redeem stop/refund
-2. UIはこの縦スライスにだけ接続する。
+2. API / registry / optional UIはこの縦スライスにだけ接続する。
+  - Registryが公開するpayment endpoint、Concierge endpoint、status endpointは実contract / runtime stateに対応していること。
   - 「実行中」と表示するなら、RuntimeRecordだけでなく、AgentFund status / tokenId / bindingNonce / last evidenceが本当に読めること。
   - 「Funded」と表示するなら、AgentFund balanceが本当にあること。
   - 「Receipt redeemed」と表示するなら、runtime authority invalidationとrefund txが本当に完了していること。
@@ -57,13 +114,18 @@ receipt in:
 ### 新しい受け入れ条件
 
 - ローカルAnvilで、x402 coin-in相当の支払いからAgentFund creditedまでが再現できる。
+- ERC-8004 registry artifactから、x402 payment resource、Concierge resource、Receipt / Fund contract、evidence endpointを発見できる。
 - 同じAnvil上で、AgentReceiptNFTがmintされ、tokenIdがFund claimを持つ。
+- AgentReceiptNFTのtokenURIとimageはIPFSなしの完全オンチェーン / data URIで返る。
+- x402 prepaid Conciergeが、使用可能なAGENT.md / manifest / guardrail packageを返す。
+- Conciergeは文字数ベースのtoken推定、prepaid残高、max output制約でboundedに動く。
+- Cloud Run上のRuntimeは、本物のOpenClawでbounded AgentLoop tickを実行する。
 - Executor Runtimeが、AgentFund内の残高を使って実際のContract callを出す。
 - AgentFundは、token pair、amount cap、cumulative cap、slippage、expiry、nonce、bindingNonceを機械的に検査する。
 - Relayer / paymaster / gas reserveは、AgentFund内のbudgetからboundedに支払われる。
 - Receipt transfer後、old runtimeはFundを使えない。
 - Receipt redeem後、old runtimeはFundを使えず、残資産がReceipt holderへ返る。
-- UIは上記の実stateだけを表示し、Fake stateで成功表示しない。
+- UIを作る場合は上記の実stateだけを表示し、Fake stateで成功表示しない。
 
 詳細調査は [140-research-x402-receipt-agentfund.md](140-research-x402-receipt-agentfund.md) を参照する。
 
@@ -85,21 +147,25 @@ IntentOSのハッカソンMVPは、AIAgentによる取引の課題を、EIP-7702
 ```text
 x402 payment received
   -> Agent Fund credited
-  -> Intent screen starts
+  -> Intent Concierge API starts or direct Intent is accepted
   -> Intent is FIXed
   -> Executor Agent NFT is spawned
-  -> Cloud Run Executor runtime starts
+  -> ERC-8004 registry publishes the agent resource
+  -> Cloud Run real OpenClaw runtime starts
+  -> OpenClaw ticks AgentLoop internally
   -> gas + trading are paid from the Fund
   -> NFT transfer moves remaining Fund / claim / runtime authority
-  -> ERC-8004 / EIP-8004 publication when stable
 ```
 
 ### 新しい製品仮説
 
 - ユーザーはまず x402 で支払う。これは単なる利用料ではなく、TradingAgentを動かすAgent Fundの起点になる。
-- 支払い受領後にIntent screenを起動し、ユーザーはTradingAgentにやらせたいIntentと境界をFIXする。
+- ユーザーはERC-8004 registryでAgentを発見する。Web画面ではなく、registry metadata、x402 resource、HTTPS APIが第一導線になる。
+- 支払い受領後にIntent Concierge APIを起動し、ユーザーはTradingAgentにやらせたいIntentと境界をFIXする。すでに固定Intentがある場合は、Conciergeを省略して直接fundしてよい。
 - IntentがFIXされたら、Executor Agent NFTをSpawnする。NFTはAgent identity、Runtime usage right、Agent Fundへのclaimを表す。
-- Cloud Run上のExecutor Runtimeが、FIXされたIntentとHard Guardrailsの内側で稼働する。
+- Executor Agent NFTはIPFSに依存しないon-chain metadata / imageを持つ。NounsDAO風にpartsとseedから組むが、最初のavatar方向はドット絵の可愛い女の子にする。
+- Cloud Run上の本物のOpenClaw Runtimeが、FIXされたIntentとHard Guardrailsの内側で稼働する。
+- Cloud RunはOpenClaw AgentLoopを内部でbounded tickする。ブラウザrequestやmock loopに依存しない。
 - gas代、relayer reimbursement、Trading capitalは、支払い済みFundからまかなう。
 - Agent NFTが移転されたら、古いRuntime authorityを失効させ、残りのFund / claim / runtime authorityを新しいNFT ownerへ移す。
 - Watcher Agent、Watcher Runtime、quorum、tighten / freezeは最初の製品パスから外し、研究成果として残す。
@@ -107,8 +173,11 @@ x402 payment received
 ### コードから書き戻す実装事実
 
 - 既存コードには、IntentBuilder、Agent Package FIX、Firestore store、Firebase Auth、World ID gate、OpenClaw Gateway、KMS SessionKey、Relayer、Uniswap quote、EvidenceCommitted、AgentNFT mintの土台がある。
+- ただし、第一導線はWeb画面ではなくregistry/APIへ寄せる。`app/web` はdebug/status資産として残せるが、製品進捗はregistry、x402、AgentFund、Receipt NFT、OpenClaw tickで測る。
 - `ExecutionDelegate7702` はOwner EOA内に資金が残る前提で強いHard Guardを実証した。一方、x402-funded productで「NFT transfer時にFundも移る」を満たすには、Owner EOA残高だけでは足りない。AgentFund contract / escrow / ledger のどれかを新しいauthority境界として設計する必要がある。
 - `AgentNFT` は現在、identityとRuntime usage rightの移転を表すが、Fundの移転は表していない。Pivot後は tokenId とFund、Runtime Binding、current ownerを結び直す必要がある。
+- `AgentNFT.tokenURI` はplaceholderで、on-chain art / data URI metadataをまだ持っていない。Receipt NFTではここを製品要件にする。
+- `packages/server/src/openclaw.ts` と `app/agent/openclaw` はOpenClaw接続の土台だが、製品runtimeはdummy decisionではなく本物のOpenClaw AgentLoopをCloud Run内でtickする必要がある。
 - Cloud Run runtimeは、ブラウザが閉じても動く製品にするため、単一HTTP request内のloopではなく、Scheduler / Tasks / Jobs / dedicated session service のいずれかでbounded tickを継続起動する必要がある。
 - ブラウザwalletから任意のEIP-7702 delegate先へ署名させる道はMetaMask等で詰まった。新しいx402 paid flowは、この制約に依存しない設計を優先する。
 
@@ -119,7 +188,10 @@ x402 payment received
 3. NFT ownerはAgent identity、Runtime usage right、残りFundへのclaimを持つ。
 4. NFT transfer後、old Runtimeは構造的にFundを使えない。
 5. Cloud Runの稼働はboundedで、tick数、gas、trade回数、Vertex costに上限を持つ。
-6. Watcherはfuture moduleであり、最初の製品の必須条件ではない。
+6. 動くAgentは本物のOpenClawであり、mock decision loopは製品の成功条件ではない。
+7. Intent Conciergeはx402 prepaid balance、文字数ベースtoken推定、max output制約でboundedに動く。
+8. AgentReceiptNFTのidentity metadata / imageはIPFSなしで解決できる。
+9. Watcherはfuture moduleであり、最初の製品の必須条件ではない。
 
 ## 解決する課題
 

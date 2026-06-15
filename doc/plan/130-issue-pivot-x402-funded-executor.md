@@ -5,6 +5,7 @@ Priority: P0
 Created: 2026-06-15
 
 Research note: [140-research-x402-receipt-agentfund.md](140-research-x402-receipt-agentfund.md)
+Follow-up implementation track: [150-issue-registry-openclaw-concierge.md](150-issue-registry-openclaw-concierge.md)
 
 ## Problem
 
@@ -28,18 +29,22 @@ Build an x402-funded Executor TradingAgent.
 ```text
 x402 payment accepted
   -> Agent Fund credited
-  -> Intent screen opens
+  -> Intent Concierge API opens or direct Intent is accepted
   -> Owner/buyer fixes the Intent and guardrails
-  -> Executor Agent NFT is spawned
-  -> Cloud Run Executor runtime starts
+  -> Executor Agent NFT is spawned with on-chain metadata / image
+  -> ERC-8004 registry entry exposes the funded Agent resource
+  -> Cloud Run real OpenClaw runtime starts
+  -> OpenClaw ticks AgentLoop internally
   -> gas + trading capital are paid from the Agent Fund
   -> if the NFT transfers, the remaining Fund / claim / runtime authority moves with it
-  -> once stable, publish the agent registration publicly to the ERC-8004 / EIP-8004 ecosystem
 ```
 
 The product should feel like buying and funding a live TradingAgent, not configuring a research demo.
 The NFT is the transferable handle for the agent's identity, runtime right, and remaining funded
 position.
+
+The first entry path is registry/API-first, not screen-first. The existing web panel can remain as a
+debug/status tool, but acceptance should not depend on a screen or mock state.
 
 ## Current code facts
 
@@ -74,6 +79,9 @@ Facts that conflict with the pivot and must be redesigned:
   not first-path product scope.
 - Current runtime loop is still largely driven through the control panel request path. Product runtime
   needs a real bounded Cloud Run driver (Scheduler, Tasks, Jobs, or a dedicated session service).
+- Current `AgentNFT.tokenURI` does not yet provide IPFS-free on-chain image/metadata.
+- Current OpenClaw integration is not yet the product shape where Cloud Run starts real OpenClaw and
+  OpenClaw ticks AgentLoop internally.
 - Browser-wallet arbitrary EIP-7702 activation is blocked by injected-wallet limitations; the product
   should not require that path for the x402 paid flow unless we keep the Local Activation Kit or move to
   a smart-account/module design later.
@@ -85,10 +93,11 @@ This Issue creates the product pivot and the first implementation track. It cove
 - x402 payment acceptance and proof verification;
 - an Agent Fund model credited by x402 payment;
 - Receipt NFT / Agent NFT semantics for stop-and-refund;
-- Intent screen start after successful payment/funding;
+- x402 prepaid Intent Concierge API or direct fixed-Intent funding after successful payment/funding;
 - Executor-only Agent Package flow;
-- Executor Agent NFT spawn after Intent FIX;
-- Cloud Run runtime execution funded from the Agent Fund;
+- Executor Agent NFT spawn after Intent FIX, with IPFS-free on-chain image/metadata;
+- ERC-8004 registry discovery and resource publication;
+- Cloud Run runtime execution through real OpenClaw AgentLoop ticks funded from the Agent Fund;
 - NFT transfer semantics that move the remaining Fund / claim / runtime authority;
 - ERC-8004 / EIP-8004 registration publication after the model is stable.
 
@@ -156,22 +165,35 @@ Implementation options:
 
 ### 3. Executor-only package
 
-The IntentBuilder should generate and FIX only the Executor package for the first path. Semantic guard
-text may remain in the package as human-readable policy, but no Watcher NFT or Watcher runtime is
-spawned.
+The Intent Concierge should generate and FIX only the Executor package for the first path. Semantic
+guard text may remain in the package as human-readable policy, but no Watcher NFT or Watcher runtime is
+spawned. The output is a fixed-form OpenClaw package, including `AGENT.md`, tool manifest, guardrail
+summary, risk constraints, and package hash.
 
-UI implication:
+Primary API implication:
 
 ```text
-Pay with x402
-  -> Intent builder
-  -> Executor package preview / edit / FIX
-  -> Spawn Executor NFT
-  -> Runtime + funding summary
-  -> Live Executor console
+Discover Agent in ERC-8004 registry
+  -> pay with x402 for Concierge or direct funding
+  -> interactive HTTPS Concierge produces executable package
+  -> FIX Executor package
+  -> spawn Receipt / Executor NFT
+  -> registry/status/evidence endpoints expose real state
 ```
 
-### 4. Runtime on Cloud Run
+The web UI, if present, is a thin debug/status view over the same real resources.
+
+### 4. On-chain Receipt metadata and image
+
+The Receipt NFT should not depend on IPFS. `tokenURI` must resolve to a data URI JSON document and the
+image must resolve through a data URI or fully on-chain renderer. The visual direction is a
+NounsDAO-inspired generated avatar assembled from parts, palette, and seed; the first avatar should be
+a cute pixel-art girl Agent.
+
+The image renderer is part of the product contract surface because the same tokenId carries identity,
+Fund claim, runtime authority, and registry identity.
+
+### 5. Runtime on Cloud Run
 
 The product runtime must be bounded and durable:
 
@@ -181,11 +203,12 @@ The product runtime must be bounded and durable:
 - hard caps on ticks, trades, gas, Vertex calls, and total Fund spend;
 - a runtime status source independent of UI state;
 - runtime authority checked against current NFT ownership before each spend.
+- real OpenClaw AgentLoop ticks, not scripted dummy decisions.
 
 The existing OpenClaw gateway can stay private. The control plane can invoke it or a dedicated runtime
 service with Cloud Run IAM plus application-level token auth.
 
-### 5. EIP-8004 / ERC-8004 publication
+### 6. EIP-8004 / ERC-8004 publication
 
 Once the Fund/NFT/runtime model is stable, publish the agent registration publicly. The registration
 should describe:
@@ -211,24 +234,30 @@ Update these after the Issue is accepted:
 - [020-sdd-overview.md](020-sdd-overview.md): new paid product sequence and component boundaries.
 - [030-sdd-contracts.md](030-sdd-contracts.md): AgentFund / AgentNFT transfer semantics / optional
   ExecutionDelegate reuse.
-- [040-sdd-runtime.md](040-sdd-runtime.md): bounded Cloud Run runtime driver and x402-funded spend
-  accounting.
-- [050-sdd-frontend.md](050-sdd-frontend.md): x402 payment entry, Intent screen, Executor-only launch,
-  Fund/NFT transfer UX.
+- [040-sdd-runtime.md](040-sdd-runtime.md): bounded Cloud Run real OpenClaw runtime driver, AgentLoop
+  ticks, and x402-funded spend accounting.
+- [050-sdd-frontend.md](050-sdd-frontend.md): downgrade first-path UI assumptions; document optional
+  debug/status UI only.
 - [070-qa-register.md](070-qa-register.md): close or park Watcher rows; add payment, fund, transfer,
   and runtime-driver QA rows.
 
 ## Acceptance criteria
 
 - A user can complete x402 payment and receive a durable `fundId`.
-- Payment/fund status gates access to the Intent screen.
+- ERC-8004 registry metadata exposes the Agent's x402 resources, Concierge endpoint, status/evidence
+  endpoints, Receipt NFT contract, and AgentFund contract.
+- Payment/fund status gates access to the Intent Concierge API or direct fixed-Intent funding path.
 - The user can FIX an Executor package without creating a Watcher package.
+- Concierge returns a usable OpenClaw `AGENT.md` / manifest / guardrail package and is bounded by
+  x402 prepaid balance, character-based token estimates, and max output caps.
 - The system can spawn an Executor Agent NFT bound to the FIXed package and Fund.
-- The Cloud Run runtime can execute bounded BUY/HOLD ticks using the Fund for gas/trading.
+- The spawned NFT has IPFS-free on-chain metadata and generated image.
+- The Cloud Run runtime can execute bounded real OpenClaw AgentLoop ticks using the Fund for gas/trading.
 - All Fund-spending paths verify current NFT ownership and runtime binding before spending.
 - Transferring the NFT makes the old runtime unable to spend and gives the new owner control over the
   remaining Fund/claim.
-- The Live Console shows payment, Fund, runtime, trade, evidence, and remaining balance state.
+- Optional status UI or API shows payment, Fund, runtime, trade, evidence, and remaining balance state
+  from real sources only.
 - Watcher UI and write paths are hidden or clearly marked as parked/future on the first path.
 - A draft ERC-8004 / EIP-8004 registration artifact exists for the spawned Executor agent.
 
@@ -239,13 +268,14 @@ Update these after the Issue is accepted:
 2. Define `AgentFund` data model and decide escrow vs ledger vs hybrid custody.
 3. Update [010-interfaces.md](010-interfaces.md) with x402 receipt, Fund, transfer, and Executor-only
    lifecycle types.
-4. Add frontend payment gate and post-payment Intent entry.
-5. Simplify IntentBuilder to Executor-only for the first product path.
-6. Add Fund-aware Executor NFT spawn path.
-7. Add runtime ownership/Fund checks before each tick/spend.
-8. Implement transfer invalidation and new-owner rebind semantics.
-9. Update SDD files and QA rows.
-10. Prepare public ERC-8004 / EIP-8004 registration draft.
+4. Define registry-first resource metadata and x402 endpoint discovery.
+5. Implement x402 prepaid Concierge with bounded character-based accounting.
+6. Simplify package generation to Executor-only OpenClaw `AGENT.md` / manifest.
+7. Add Fund-aware Executor NFT spawn path and on-chain metadata renderer.
+8. Add real OpenClaw runtime ownership/Fund checks before each tick/spend.
+9. Implement transfer invalidation and new-owner rebind semantics.
+10. Update SDD files and QA rows.
+11. Prepare public ERC-8004 / EIP-8004 registration draft.
 
 ## Open questions
 

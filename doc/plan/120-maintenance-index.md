@@ -35,6 +35,10 @@ scripts/               Build/deploy/operator scripts
 
 - **Real-first.** Build the final x402 coin-in -> AgentFund -> Receipt NFT -> runtime execution ->
   receipt redeem/refund path from the start.
+- **Registry-first.** The first product entry is ERC-8004 registry + x402 HTTPS API, not a screen. UI is
+  optional debug/status surface over real state.
+- **Real OpenClaw only.** Runtime acceptance requires Cloud Run to run real OpenClaw AgentLoop ticks,
+  not scripted dummy decisions.
 - Local server and local Anvil are allowed development substitutes. Fake balances, fake receipts, fake
   runtime status, sessionStorage gates, or screen-only mocks are not acceptance evidence.
 - PoCs are allowed only to isolate a blocker in the real path. A PoC is not a replacement product path.
@@ -64,17 +68,19 @@ These are implementation facts observed from the codebase at the start of mainte
 ## 4. Current product pivot
 
 Maintenance begins with [130-issue-pivot-x402-funded-executor.md](130-issue-pivot-x402-funded-executor.md).
-The new product direction is an x402-funded Executor-only TradingAgent:
+The concrete first implementation track is
+[150-issue-registry-openclaw-concierge.md](150-issue-registry-openclaw-concierge.md). The new product
+direction is an x402-funded Executor-only TradingAgent discovered through ERC-8004 registry resources:
 
 ```text
-x402 payment received
+ERC-8004 registry discovery
+  -> x402 payment received
   -> Agent Fund is credited
-  -> Intent screen opens
+  -> Intent Concierge API opens or direct Intent is accepted
   -> Intent is FIXed
-  -> Executor Agent NFT is spawned
-  -> Cloud Run Executor runtime trades from the paid Fund
+  -> Executor Agent NFT is spawned with on-chain image
+  -> Cloud Run real OpenClaw runtime trades from the paid Fund
   -> NFT transfer moves the remaining Fund / claim / runtime authority
-  -> public ERC-8004 / EIP-8004 registration is published when stable
 ```
 
 Watcher work is explicitly parked. Existing Watcher code and docs remain useful research, but they are

@@ -10,10 +10,17 @@ Project facts and the **mandatory** safety policy for this repository. Read befo
   runtime status, or sessionStorage gates as product progress. Build the final x402 coin-in ->
   AgentFund -> Receipt NFT -> runtime execution -> receipt redeem/refund path first. Local server and
   local Anvil are allowed; PoCs are only for isolating blockers.
+- Current product entry doctrine is **registry-first**: the first user-visible surface is ERC-8004
+  registry metadata plus x402 HTTPS APIs, not the React panel. The panel may stay as debug/status UI
+  only if it reads real state.
+- Runtime acceptance requires **real OpenClaw**: Cloud Run must start/tick the actual OpenClaw
+  AgentLoop with bounded cost/spend. Scripted dummy decision loops are not product progress.
 - Source of truth: [doc/plan/000-northStar.md](../doc/plan/000-northStar.md) (JP) /
   [doc/plan/000-northStar-en.md](../doc/plan/000-northStar-en.md) (EN). Maintenance index:
   [doc/plan/120-maintenance-index.md](../doc/plan/120-maintenance-index.md). First pivot Issue:
   [doc/plan/130-issue-pivot-x402-funded-executor.md](../doc/plan/130-issue-pivot-x402-funded-executor.md).
+  First registry/OpenClaw/Concierge implementation Issue:
+  [doc/plan/150-issue-registry-openclaw-concierge.md](../doc/plan/150-issue-registry-openclaw-concierge.md).
   Interfaces frozen in [doc/plan/010-interfaces.md](../doc/plan/010-interfaces.md). SDD in
   `doc/plan/020`–`doc/plan/050`. Status in [doc/TASK.md](../doc/TASK.md).
 

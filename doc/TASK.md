@@ -4,6 +4,9 @@
 > x402 Receipt NFT + AgentFund Executor described in [plan/000-northStar.md](plan/000-northStar.md),
 > researched in [plan/140-research-x402-receipt-agentfund.md](plan/140-research-x402-receipt-agentfund.md),
 > and opened from [plan/130-issue-pivot-x402-funded-executor.md](plan/130-issue-pivot-x402-funded-executor.md).
+> The first product entry is now **registry-first**: ERC-8004 registry metadata + x402 HTTPS APIs,
+> especially the prepaid Intent Concierge and funded TradingAgent endpoints. The React panel is not
+> the first product path. Runtime acceptance requires real OpenClaw AgentLoop ticks on Cloud Run.
 > Watcher work is parked for now. Mock-first build order is hackathon history, not the maintenance rule.
 
 This file records **how we build**, so the plan survives across sessions and context resets.
@@ -24,7 +27,8 @@ The maintenance rule is **real implementation first**. A mock is not evidence th
 ```text
 1. North Star / acceptance first
   Define the exact final loop:
-  x402 coin-in -> AgentFund credited -> Receipt NFT minted -> Runtime executes -> Receipt redeem refunds.
+  ERC-8004 discovery -> x402 coin-in -> AgentFund credited -> Receipt NFT minted -> real OpenClaw
+  Runtime executes -> Receipt redeem refunds.
 
 2. Real vertical slice first
   Build the final path directly, using the same contracts, state, runtime authority, and refund path.
@@ -37,7 +41,8 @@ The maintenance rule is **real implementation first**. A mock is not evidence th
     - AgentFund contract execution
     - runtime invocation
     - relayer/paymaster/gas reimbursement
-    - UI state binding
+    - Intent Concierge accounting / output bounds
+    - optional UI state binding
   A PoC explains the failure. It does not replace the final path.
 
 4. SDD is backfilled from what actually runs

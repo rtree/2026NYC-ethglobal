@@ -6,6 +6,13 @@
 
 From here, we build the final-goal implementation first.
 
+2026-06-15 addendum: the first product path is **ERC-8004 registry-first**, not screen-first. The web
+panel may remain as an operational/debug asset and as MVP history, but it is not the primary entry
+point. Users should discover the Agent through an ERC-8004 / EIP-8004-compatible registry, fund it
+through x402, and receive a Receipt NFT / AgentFund / OpenClaw Runtime that actually runs. Intent
+formation should also start as an x402-prepaid HTTPS Intent Concierge API rather than a screen-first
+flow.
+
 We do not count "looks like it works" mock success as product progress. Mocks may remain as discussion
 aids or historical artifacts, but they are not proof. Progress is proven only when the execution passes
 through the same fund path, contracts, runtime authority, and stop/refund path as the target product.
@@ -20,11 +27,13 @@ product acceptance.
 
 ```text
 coin in:
-  x402 payment + Intent
+  ERC-8004 registry discovery
+   -> x402 payment + Intent or Concierge session
    -> settlement confirmed
    -> AgentFund credited
-   -> AgentReceiptNFT / Executor Agent NFT minted
-   -> Executor Runtime starts
+   -> AgentReceiptNFT / Executor Agent NFT minted with on-chain image
+   -> Cloud Run starts real OpenClaw Runtime
+   -> OpenClaw ticks AgentLoop internally
    -> AgentFund pays gas + trading capital
    -> guarded trades emit evidence
 
@@ -41,17 +50,91 @@ value and Intent through x402. The returned Receipt NFT is the Agent identity, t
 handle for runtime authority. The Agent is born as NFT + Key, but not as a free wallet. It can use only
 the assets inside its own AgentFund, within Hard Guardrails and runtime binding.
 
+### Registry-First / No-Screen-First
+
+The first product is not something users primarily enter through the control panel. It is an Agent they
+discover through a registry.
+
+```text
+ERC-8004 registry entry
+  -> supported x402 resources / pricing / assets
+  -> Intent Concierge endpoint
+  -> Funded TradingAgent endpoint
+  -> Receipt NFT contract / AgentFund contract
+  -> evidence / status endpoints
+```
+
+The UI is not forbidden; it is just not the primary path. If needed, add a thin Receipt-holder debug /
+status view later, wired only to real state. The product entry is agent registry, HTTPS API, x402, and
+on-chain Receipt.
+
+### On-Chain Receipt NFT Image
+
+AgentReceiptNFT must not depend on IPFS or external metadata hosting. `tokenURI` returns a
+`data:application/json;base64,...` payload, and the image is either `data:image/svg+xml;base64,...` or a
+fully on-chain renderer. The image direction is NounsDAO-inspired: compose parts / palette / seed into
+a generated avatar. The first avatar direction is a cute pixel-art girl Agent.
+
+The key requirement is stronger than the image style: the Receipt NFT identity must stay available
+on-chain, and the same tokenId must bind Fund claim, runtime authority, and registry identity. The
+renderer may derive traits from mint seed, intentHash, agent class, or status, but token identity must
+not break when an external host or IPFS disappears.
+
+### Real OpenClaw Only
+
+The running Agent must use real OpenClaw. Scripted mock loops, server-side dummy decisions, or fixed
+BUY/HOLD pseudo-agents are not product progress. Generate the `AGENT.md` / tool manifest / guardrail
+context that OpenClaw actually consumes, run the OpenClaw runtime on Cloud Run, tick its AgentLoop, and
+let the adapter translate its output into typed execution requests.
+
+### Intent Concierge
+
+Intent formation should be an x402-prepaid HTTPS API. The Concierge is an interactive Agent that
+creates the usable `AGENT.md`, tool manifest, guardrail summary, risk constraints, and initial package
+hash for OpenClaw.
+
+Pricing should sit slightly above the estimated cost of Gemini 3.1 flash-lite global. If exact
+tokenization is unavailable, estimate input/output tokens conservatively from character counts. Abuse
+where a short prompt asks for huge output is bounded by system prompts, fixed templates, max output
+chars, max tool plan size, max `AGENT.md` section size, and x402 prepaid balance. Concierge output is
+not free-form fiction; it is a fixed-form executable Agent package.
+
+### Cloud Run Internal AgentLoop
+
+Cloud Run should not be a place where an Agent happens to loop inside a user's HTTP request. It should
+start an OpenClaw runtime capsule and run bounded ticks. This is still an important unfinished gap.
+
+The first completion condition is:
+
+```text
+Cloud Run invocation / job / task starts
+  -> loads Receipt tokenId + runtime binding
+  -> loads AGENT.md package
+  -> starts real OpenClaw runtime
+  -> OpenClaw runs one bounded AgentLoop tick or small tick batch
+  -> adapter converts output to guarded action
+  -> AgentFund executes or rejects on-chain
+  -> heartbeat / evidence / spend accounting is persisted
+```
+
+Infinite loops are forbidden. Tick count, wall clock, LLM/token cost, tool calls, trade count, gas, and
+AgentFund spend must be capped.
+
 ### Real-First Build Rule
 
 1. Build the real vertical slice first.
   - x402 payment receipt
   - AgentFund contract
-  - AgentReceiptNFT mint
+  - AgentReceiptNFT mint with on-chain image
+  - ERC-8004 registry entry
+  - x402 prepaid Intent Concierge
   - Executor package FIX
-  - Runtime tick
+  - real OpenClaw Runtime tick
   - guarded execution
   - redeem stop/refund
-2. Connect UI only to that vertical slice.
+2. Connect API / registry / optional UI only to that vertical slice.
+  - Registry-published payment, Concierge, and status endpoints must correspond to real contract /
+    runtime state.
   - If the UI says "running", it must read real AgentFund status / tokenId / bindingNonce / last evidence.
   - If the UI says "funded", AgentFund must actually hold balance.
   - If the UI says "Receipt redeemed", runtime authority invalidation and refund tx must be complete.
@@ -67,13 +150,19 @@ the assets inside its own AgentFund, within Hard Guardrails and runtime binding.
 ### New Acceptance Conditions
 
 - On local Anvil, x402 coin-in equivalent payment can credit AgentFund.
+- An ERC-8004 registry artifact exposes the x402 payment resource, Concierge resource, Receipt / Fund
+  contracts, and evidence endpoint.
 - On the same Anvil, AgentReceiptNFT is minted and tokenId owns the Fund claim.
+- AgentReceiptNFT tokenURI and image resolve without IPFS through full on-chain / data URI metadata.
+- The x402-prepaid Concierge returns a usable AGENT.md / manifest / guardrail package.
+- The Concierge runs bounded by character-based token estimates, prepaid balance, and max output caps.
+- The Cloud Run Runtime executes bounded AgentLoop ticks through real OpenClaw.
 - Executor Runtime sends a real contract call using AgentFund balance.
 - AgentFund mechanically checks token pair, amount cap, cumulative cap, slippage, expiry, nonce, and bindingNonce.
 - Relayer / paymaster / gas reserve is paid from bounded AgentFund budget.
 - After Receipt transfer, the old runtime cannot spend the Fund.
 - After Receipt redeem, the old runtime cannot spend the Fund and remaining assets return to the Receipt holder.
-- UI displays only the real state above, never fake success state.
+- If we build UI, it displays only the real state above, never fake success state.
 
 See [140-research-x402-receipt-agentfund.md](140-research-x402-receipt-agentfund.md) for the research basis.
 
@@ -87,10 +176,11 @@ See [140-research-x402-receipt-agentfund.md](140-research-x402-receipt-agentfund
 The IntentOS hackathon MVP proved a layer protocol for AI-Agent-driven trading: EIP-7702 keeps funds in
 the Owner's wallet and installs guardrails there, while a separate Agent can watch the trading.
 
-In the maintenance phase, we reuse those assets for a paid flow: receive x402 payment, turn it into an
-Agent Fund, launch the Intent screen, spawn an Executor Agent NFT once the Intent is FIXed, and run the
-Executor Runtime on Cloud Run using that Fund for gas and trading. When the Agent NFT transfers, the
-remaining Fund / claim / runtime authority should move with it.
+In the maintenance phase, we reuse those assets for a paid flow: discover the Agent through registry
+metadata, receive x402 payment, turn it into an Agent Fund, use an HTTPS Intent Concierge or direct
+fixed Intent, spawn an Executor Agent NFT once the Intent is FIXed, and run the real OpenClaw Executor
+Runtime on Cloud Run using that Fund for gas and trading. When the Agent NFT transfers, the remaining
+Fund / claim / runtime authority should move with it.
 
 ## 2026-06-15 Maintenance North Star: x402-Funded Executor Agent
 
@@ -99,24 +189,31 @@ The next product subject is an Executor-only TradingAgent.
 ```text
 x402 payment received
   -> Agent Fund credited
-  -> Intent screen starts
+  -> Intent Concierge API starts or direct Intent is accepted
   -> Intent is FIXed
   -> Executor Agent NFT is spawned
-  -> Cloud Run Executor runtime starts
+  -> ERC-8004 registry publishes the agent resource
+  -> Cloud Run real OpenClaw runtime starts
+  -> OpenClaw ticks AgentLoop internally
   -> gas + trading are paid from the Fund
   -> NFT transfer moves remaining Fund / claim / runtime authority
-  -> ERC-8004 / EIP-8004 publication when stable
 ```
 
 ### New Product Hypothesis
 
+- The user discovers the Agent through an ERC-8004 registry. The first path is registry metadata,
+  x402 resources, and HTTPS APIs, not the web screen.
 - The user first pays through x402. This is not only an access fee; it is the starting event for the
   Agent Fund that powers the TradingAgent.
-- After payment is accepted, the Intent screen opens and the user FIXes the TradingAgent's Intent and
-  boundaries.
+- After payment is accepted, the Intent Concierge API opens and the user FIXes the TradingAgent's
+  Intent and boundaries. If a fixed Intent already exists, the user may fund directly without Concierge.
 - Once the Intent is FIXed, the Executor Agent NFT is spawned. The NFT represents Agent identity,
   Runtime usage right, and the claim on the Agent Fund.
-- The Executor Runtime runs on Cloud Run inside the FIXed Intent and Hard Guardrails.
+- The Executor Agent NFT has on-chain metadata / image without IPFS. It is inspired by NounsDAO-style
+  parts and seeds, with an initial cute pixel-art girl avatar direction.
+- The real OpenClaw Executor Runtime runs on Cloud Run inside the FIXed Intent and Hard Guardrails.
+- Cloud Run ticks the OpenClaw AgentLoop internally. It must not depend on a browser request or a mock
+  decision loop.
 - Gas, relayer reimbursement, and trading capital are paid from the funded amount.
 - If the Agent NFT transfers, the old Runtime authority is invalidated and the remaining Fund / claim /
   runtime authority moves to the new NFT owner.

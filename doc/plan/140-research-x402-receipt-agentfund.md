@@ -3,6 +3,7 @@
 Status: Draft research
 Created: 2026-06-15
 Related: [130-issue-pivot-x402-funded-executor.md](130-issue-pivot-x402-funded-executor.md)
+Follow-up: [150-issue-registry-openclaw-concierge.md](150-issue-registry-openclaw-concierge.md)
 
 ## 1. Product metaphor
 
@@ -23,6 +24,22 @@ receipt in: Receipt holder redeems
 The buyer should not feel like they are configuring custody, delegations, gas, relayers, or cloud
 schedulers. They insert value and intent. The system issues a transferable receipt that is also the
 handle for the live agent and its remaining funded balance.
+
+2026-06-15 addendum: the coin slot should be discoverable without a screen. The first surface is an
+ERC-8004 / EIP-8004 registry entry that points to x402 resources, the Intent Concierge endpoint,
+AgentFund / Receipt contracts, and evidence/status endpoints. The web panel can remain an auxiliary
+debug/status surface, but it is not product acceptance.
+
+Additional product requirements:
+
+- AgentReceiptNFT metadata/image must be IPFS-free and resolvable from on-chain/data URI output.
+- The first avatar direction is original NounsDAO-style compositional pixel art: a cute girl Agent.
+- Intent formation can happen through an x402-prepaid HTTPS Concierge that produces OpenClaw-ready
+  `AGENT.md` / manifest / guardrails.
+- Concierge usage is bounded by prepaid balance, conservative character-based token estimates, and max
+  output/package limits.
+- The running Agent must use real OpenClaw. Cloud Run must start/tick the actual OpenClaw AgentLoop;
+  scripted dummy decisions are not acceptance.
 
 ## 2. Feasibility verdict
 
