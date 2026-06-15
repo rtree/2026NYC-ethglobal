@@ -1,6 +1,72 @@
 
 # IntentOS North Star
 
+## 2026-06-15 新NorthStar: Real-first x402 Receipt AgentFund
+
+ここからは、最終ゴールの実装を最初から動かす。
+
+Mockで「動いたように見える」状態を成功扱いしない。Mockは議論の補助や過去の成果物としては残すが、製品進捗の証明には使わない。進捗の証明になるのは、最終アーキテクチャと同じ資金経路・同じContract・同じRuntime authority・同じ停止/返金経路を通った実行だけである。
+
+許される代替は、開発環境としてのローカルサーバとローカルAnvilだけにする。Anvilを使う場合も、Fake successを作らない。実際にx402 payment相当の署名/settlementを作り、AgentFund contractにFundを入れ、Receipt NFTをmintし、AgentFundから実際にswap/executeし、Receipt redeemで本当に停止・返金する。外部サービスやmainnetの都合で詰まったら、その箇所だけPoCで切り分ける。ただしPoCは原因特定の道具であり、製品の成功判定ではない。
+
+### 最終ゴールの1本線
+
+```text
+coin in:
+  x402 payment + Intent
+   -> settlement confirmed
+   -> AgentFund credited
+   -> AgentReceiptNFT / Executor Agent NFT minted
+   -> Executor Runtime starts
+   -> AgentFund pays gas + trading capital
+   -> guarded trades emit evidence
+
+receipt in:
+  Receipt holder redeems
+   -> runtime authority is invalidated unconditionally
+   -> AgentFund stops future execution
+   -> remaining assets are returned to the Receipt holder
+   -> Receipt is burned or marked redeemed
+```
+
+このループがIntentOSの新しいNorthStarである。ゲームセンターでコインを入れるように、ユーザーはx402で価値とIntentを入れる。返ってくるReceipt NFTは、Agentのidentityであり、Fund claimであり、Runtime authorityの持ち手である。AgentはNFT + Keyとして生まれるが、自由なwalletではない。Agentは自分のAgentFund内の資金だけを、Hard Guardrailsとruntime bindingの内側で使う。
+
+### Real-firstの作り方
+
+1. 最初に本物の縦スライスを作る。
+  - x402 payment receipt
+  - AgentFund contract
+  - AgentReceiptNFT mint
+  - Executor package FIX
+  - Runtime tick
+  - guarded execution
+  - redeem stop/refund
+2. UIはこの縦スライスにだけ接続する。
+  - 「実行中」と表示するなら、RuntimeRecordだけでなく、AgentFund status / tokenId / bindingNonce / last evidenceが本当に読めること。
+  - 「Funded」と表示するなら、AgentFund balanceが本当にあること。
+  - 「Receipt redeemed」と表示するなら、runtime authority invalidationとrefund txが本当に完了していること。
+3. 詰まったらPoCで切り分ける。
+  - x402 facilitatorで詰まったら、Anvil上の同じpayment interfaceで切る。
+  - AgentFund executionで詰まったら、Contract testで切る。
+  - Runtime invocationで詰まったら、local serverから同じRuntime APIを叩いて切る。
+  - UIで詰まったら、UIを先にmockするのではなく、API/state contractを先に確定する。
+4. Mockは成功条件に入れない。
+  - Mock screen、dummy balance、fake receipt、fake runtime status、sessionStorage gateは、製品進捗ではない。
+  - それらは調査メモか過去資料として扱う。
+
+### 新しい受け入れ条件
+
+- ローカルAnvilで、x402 coin-in相当の支払いからAgentFund creditedまでが再現できる。
+- 同じAnvil上で、AgentReceiptNFTがmintされ、tokenIdがFund claimを持つ。
+- Executor Runtimeが、AgentFund内の残高を使って実際のContract callを出す。
+- AgentFundは、token pair、amount cap、cumulative cap、slippage、expiry、nonce、bindingNonceを機械的に検査する。
+- Relayer / paymaster / gas reserveは、AgentFund内のbudgetからboundedに支払われる。
+- Receipt transfer後、old runtimeはFundを使えない。
+- Receipt redeem後、old runtimeはFundを使えず、残資産がReceipt holderへ返る。
+- UIは上記の実stateだけを表示し、Fake stateで成功表示しない。
+
+詳細調査は [140-research-x402-receipt-agentfund.md](140-research-x402-receipt-agentfund.md) を参照する。
+
 > 2026-06-15 メンテナンス方針: ETHGlobal NYC 2026 のMVPは、EIP-7702 guarded execution、
 > Cloud Run runtime、Agent NFT、World ID / Firebase / OpenClaw の実証として成功した。
 > ここからの製品方向は **x402-funded Executor TradingAgent** にPivotする。

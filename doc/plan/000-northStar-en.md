@@ -2,6 +2,81 @@
 
 # IntentOS North Star
 
+## 2026-06-15 New North Star: Real-First x402 Receipt AgentFund
+
+From here, we build the final-goal implementation first.
+
+We do not count "looks like it works" mock success as product progress. Mocks may remain as discussion
+aids or historical artifacts, but they are not proof. Progress is proven only when the execution passes
+through the same fund path, contracts, runtime authority, and stop/refund path as the target product.
+
+The only allowed substitutes are a local server and local Anvil. Even on Anvil, no fake success: create
+the x402-payment-equivalent signature / settlement, credit the AgentFund contract, mint the Receipt NFT,
+execute from AgentFund, and redeem the Receipt to actually stop and refund. If an external service or
+mainnet dependency blocks us, build a PoC only for that failing part. A PoC isolates cause; it is not
+product acceptance.
+
+### One Target Loop
+
+```text
+coin in:
+  x402 payment + Intent
+   -> settlement confirmed
+   -> AgentFund credited
+   -> AgentReceiptNFT / Executor Agent NFT minted
+   -> Executor Runtime starts
+   -> AgentFund pays gas + trading capital
+   -> guarded trades emit evidence
+
+receipt in:
+  Receipt holder redeems
+   -> runtime authority is invalidated unconditionally
+   -> AgentFund stops future execution
+   -> remaining assets are returned to the Receipt holder
+   -> Receipt is burned or marked redeemed
+```
+
+This loop is the new IntentOS North Star. Like inserting a coin into an arcade machine, the user inserts
+value and Intent through x402. The returned Receipt NFT is the Agent identity, the Fund claim, and the
+handle for runtime authority. The Agent is born as NFT + Key, but not as a free wallet. It can use only
+the assets inside its own AgentFund, within Hard Guardrails and runtime binding.
+
+### Real-First Build Rule
+
+1. Build the real vertical slice first.
+  - x402 payment receipt
+  - AgentFund contract
+  - AgentReceiptNFT mint
+  - Executor package FIX
+  - Runtime tick
+  - guarded execution
+  - redeem stop/refund
+2. Connect UI only to that vertical slice.
+  - If the UI says "running", it must read real AgentFund status / tokenId / bindingNonce / last evidence.
+  - If the UI says "funded", AgentFund must actually hold balance.
+  - If the UI says "Receipt redeemed", runtime authority invalidation and refund tx must be complete.
+3. Use PoCs only to isolate blockers.
+  - If x402 facilitator blocks us, isolate through the same payment interface on Anvil.
+  - If AgentFund execution blocks us, isolate in contract tests.
+  - If runtime invocation blocks us, call the same runtime API from a local server.
+  - If UI blocks us, finalize API / state contracts before drawing fake state.
+4. Mocks are never acceptance criteria.
+  - Mock screens, dummy balances, fake receipts, fake runtime status, and sessionStorage gates are not product progress.
+  - Treat them as research notes or historical material.
+
+### New Acceptance Conditions
+
+- On local Anvil, x402 coin-in equivalent payment can credit AgentFund.
+- On the same Anvil, AgentReceiptNFT is minted and tokenId owns the Fund claim.
+- Executor Runtime sends a real contract call using AgentFund balance.
+- AgentFund mechanically checks token pair, amount cap, cumulative cap, slippage, expiry, nonce, and bindingNonce.
+- Relayer / paymaster / gas reserve is paid from bounded AgentFund budget.
+- After Receipt transfer, the old runtime cannot spend the Fund.
+- After Receipt redeem, the old runtime cannot spend the Fund and remaining assets return to the Receipt holder.
+- UI displays only the real state above, never fake success state.
+
+See [140-research-x402-receipt-agentfund.md](140-research-x402-receipt-agentfund.md) for the research basis.
+
 > Maintenance direction, 2026-06-15: the ETHGlobal NYC 2026 MVP succeeded as a proof of EIP-7702
 > guarded execution, Cloud Run runtime, Agent NFT, World ID / Firebase / OpenClaw integration.
 > The product direction now pivots to an **x402-funded Executor TradingAgent**. Watcher work is parked;

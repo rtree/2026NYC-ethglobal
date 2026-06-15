@@ -33,6 +33,11 @@ scripts/               Build/deploy/operator scripts
 
 ## 2. Maintenance rules
 
+- **Real-first.** Build the final x402 coin-in -> AgentFund -> Receipt NFT -> runtime execution ->
+  receipt redeem/refund path from the start.
+- Local server and local Anvil are allowed development substitutes. Fake balances, fake receipts, fake
+  runtime status, sessionStorage gates, or screen-only mocks are not acceptance evidence.
+- PoCs are allowed only to isolate a blocker in the real path. A PoC is not a replacement product path.
 - Do not erase hackathon history. Mark superseded assumptions as historical and link the Issue that
   changes them.
 - Each product change starts as an Issue. The Issue decides which SDD files must be updated.

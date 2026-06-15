@@ -54,6 +54,9 @@ pnpm e2e
 The app imports the mock design system from [doc/mock/styles.css](mock/styles.css). Production static
 files are emitted to `app/web/dist`; the server serves that directory by default.
 
+`doc/mock/` is a historical/visual reference only. Maintenance work must prove behavior against the
+real API, contract, runtime, and AgentFund state.
+
 Local Firebase/Vite env files now live under `app/web/`:
 
 ```text

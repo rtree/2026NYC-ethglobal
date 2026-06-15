@@ -1,23 +1,60 @@
 # IntentOS — Task & Workflow
 
-> Maintenance phase started on 2026-06-15. The hackathon MVP scope below is historical context. The
-> current product critical path is the x402-funded Executor-only TradingAgent described in
-> [plan/000-northStar.md](plan/000-northStar.md), organized by [plan/120-maintenance-index.md](plan/120-maintenance-index.md),
-> and opened as [plan/130-issue-pivot-x402-funded-executor.md](plan/130-issue-pivot-x402-funded-executor.md).
-> Watcher work is parked for now; do not treat M3 Watcher as the next default task.
+> Maintenance phase started on 2026-06-15. The current product critical path is the **real-first**
+> x402 Receipt NFT + AgentFund Executor described in [plan/000-northStar.md](plan/000-northStar.md),
+> researched in [plan/140-research-x402-receipt-agentfund.md](plan/140-research-x402-receipt-agentfund.md),
+> and opened from [plan/130-issue-pivot-x402-funded-executor.md](plan/130-issue-pivot-x402-funded-executor.md).
+> Watcher work is parked for now. Mock-first build order is hackathon history, not the maintenance rule.
 
 This file records **how we build**, so the plan survives across sessions and context resets.
 The product target is defined in [plan/000-northStar.md](plan/000-northStar.md) (Japanese, source of truth)
 and mirrored in [plan/000-northStar-en.md](plan/000-northStar-en.md) (English).
 
-MVP scope is **B: Executor + single Watcher** (see North Star section 6):
+Hackathon MVP scope was **B: Executor + single Watcher** (see North Star section 6):
 Owner Natural Intent -> Executor Agent guarded-executes USDC<->WETH on Base mainnet inside
 Hard Guardrails -> a single Watcher Agent reads the evidence and can only tighten / freeze.
 Everything runs on Base mainnet + Cloud Run / GCP; the only thing on the Owner's local PC is the browser.
 
 ---
 
-## Build Order: Seam Freeze -> Mock -> SDD
+## Maintenance Build Order: North Star -> Real Slice -> PoC Only For Blockers -> SDD
+
+The maintenance rule is **real implementation first**. A mock is not evidence that the product works.
+
+```text
+1. North Star / acceptance first
+  Define the exact final loop:
+  x402 coin-in -> AgentFund credited -> Receipt NFT minted -> Runtime executes -> Receipt redeem refunds.
+
+2. Real vertical slice first
+  Build the final path directly, using the same contracts, state, runtime authority, and refund path.
+  Local server and local Anvil are allowed. Fake balances, fake receipts, fake runtime state, and
+  sessionStorage gates are not acceptance evidence.
+
+3. PoC only for blocker isolation
+  If the final path fails, isolate the failing layer:
+    - x402/facilitator/payment payload
+    - AgentFund contract execution
+    - runtime invocation
+    - relayer/paymaster/gas reimbursement
+    - UI state binding
+  A PoC explains the failure. It does not replace the final path.
+
+4. SDD is backfilled from what actually runs
+  Update the seam and SDD after the real slice proves the shape. Do not let speculative SDD fields or
+  mock screen labels invent product state.
+```
+
+Acceptance for any slice must include the real state transition it claims. For example, `running` means
+an actual runtime binding and AgentFund status, `funded` means an actual AgentFund balance, and
+`redeemed` means runtime authority was invalidated and funds were returned.
+
+---
+
+## Hackathon Build Order (Historical): Seam Freeze -> Mock -> SDD
+
+This section records the hackathon strategy. It is retained for context only and is superseded by the
+maintenance build order above.
 
 We do **not** write one big SDD up front. We freeze the shared interfaces first, then mock the
 screens, then write the SDD per component. This keeps each task small enough to fit in one working

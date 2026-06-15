@@ -6,6 +6,10 @@ Project facts and the **mandatory** safety policy for this repository. Read befo
 - **IntentOS**: post-hackathon maintenance is pivoting to an x402-funded Executor-only TradingAgent.
   The ETHGlobal NYC 2026 MVP proved EIP-7702 guarded execution on Base mainnet with Executor + single
   Watcher; keep that as historical context, not the default next task.
+- Current build doctrine is **real-first**: do not count mocks, fake balances, fake receipts, fake
+  runtime status, or sessionStorage gates as product progress. Build the final x402 coin-in ->
+  AgentFund -> Receipt NFT -> runtime execution -> receipt redeem/refund path first. Local server and
+  local Anvil are allowed; PoCs are only for isolating blockers.
 - Source of truth: [doc/plan/000-northStar.md](../doc/plan/000-northStar.md) (JP) /
   [doc/plan/000-northStar-en.md](../doc/plan/000-northStar-en.md) (EN). Maintenance index:
   [doc/plan/120-maintenance-index.md](../doc/plan/120-maintenance-index.md). First pivot Issue:
@@ -16,6 +20,7 @@ Project facts and the **mandatory** safety policy for this repository. Read befo
 ## Languages & file conventions
 - `doc/plan/000-northStar.md` stays **Japanese**. Everything else (docs, mocks, code, comments) in **English**.
 - `doc/plan/` files increment by 10 (`000-`, `010-`, ...).
+- `doc/mock/` is historical/visual reference only. It is not an acceptance target for maintenance work.
 
 ## Supply-chain security (MANDATORY)
 JavaScript/Node uses **pnpm** (never npm/yarn). Python uses **uv** (never pip).
