@@ -71,7 +71,7 @@ pointing to one implementation**. There is **no stacking, no composition** at th
 
 This is a **protocol-level mutual exclusion**, not a bug we can patch in our Solidity. Our `onlyOwner`
 guard depends on it: an Owner self-call must have `msg.sender == address(this)` — i.e. the account is
-running **our** code ([contracts/src/ExecutionDelegate7702.sol](../contracts/src/ExecutionDelegate7702.sol#L51-L55)).
+running **our** code ([contracts/src/ExecutionDelegate7702.sol](../../contracts/src/ExecutionDelegate7702.sol#L51-L55)).
 
 ```mermaid
 graph TD
@@ -164,7 +164,7 @@ signatures**.
   code with **its own storage and funds**.
 - **`delegateAndInitialize(owner, …)` already takes an arbitrary `owner` Account** and merges vault
   funding into the same self-tx (Base allows only 1 in-flight tx for a freshly-delegated account) —
-  [packages/runtime/src/setup7702.ts](../packages/runtime/src/setup7702.ts#L27-L66). This is fork-tested.
+   [packages/runtime/src/setup7702.ts](../../packages/runtime/src/setup7702.ts#L27-L66). This is fork-tested.
 - **Execution stays server-side and is per-account-safe.** The SessionKey can only act inside each
   account's on-chain guard, and only the allow-listed relayer can submit. One shared KMS SessionKey can
   serve many users for the MVP (it can never exceed a user's caps or unfreeze their guard).
@@ -172,9 +172,9 @@ signatures**.
 The **gap** is purely: (a) the owner self-call is currently signed by the demo Owner **on the server**,
 and (b) the server `ctx()` is a **singleton** bound to that one Owner.
 
-- Singleton ctx + demo Owner: [packages/server/src/journey.ts](../packages/server/src/journey.ts#L88-L113).
+- Singleton ctx + demo Owner: [packages/server/src/journey.ts](../../packages/server/src/journey.ts#L88-L113).
 - Owner self-call sign sites (must move to browser): `delegateAndInitialize`, `ownerUpdateGuard`,
-  `fundGasVault` in [packages/server/src/journey.ts](../packages/server/src/journey.ts#L312-L345).
+   `fundGasVault` in [packages/server/src/journey.ts](../../packages/server/src/journey.ts#L312-L345).
 
 ---
 
@@ -195,7 +195,7 @@ into a guarded IntentOS account" — rather than something buried inside the Exe
      is backed by the user's own ETH (no extra `value` transfer). **One signature.**
    - **Why initialize upfront with a default guard:** `initialize()` is **once-only** and `_packageHash`
      is **permanent** (no setter; `ownerUpdateGuard` updates the guard only — verified in
-     [ExecutionDelegate7702.sol](../contracts/src/ExecutionDelegate7702.sol#L77-L103)). This matches how
+   [ExecutionDelegate7702.sol](../../contracts/src/ExecutionDelegate7702.sol#L77-L103)). This matches how
      the system already works (packageHash set once; per-intent specificity comes from the guard + the
      off-chain FIXed draft). Binding a per-intent `packageHash` on-chain is a future refinement.
 1. **Server stops holding owner authority.** `ctx()` becomes **per-connected-address** (uid is already
@@ -252,12 +252,12 @@ UX/honesty cleanups the refactor touches, **P3** = remaining product gaps.
 ### Phase 1 (P1) — per-user EIP-7702 core (`ARCH-001`)
 Build the `connected` path **alongside** `demo` (INTENTOS_OWNER toggle) so the live demo never breaks.
 1.1 **Server `ctx()` → per-address.** Replace the singleton in
-   [journey.ts](../packages/server/src/journey.ts#L88-L113) with a small per-address cache; derive the
+   [journey.ts](../../packages/server/src/journey.ts#L88-L113) with a small per-address cache; derive the
    address from the authenticated uid; in `connected` mode `owner` is a view-only `Address` (no signer).
 1.2 **Add `POST /api/activate/plan`** → returns the unsigned `initialize(...)` params with a **default**
    conservative guard (`guardFromDraft(null)`), SessionKeys, relayer, caps, a small vault, and a generic
    packageHash. (No FIXed package needed — runs before the IntentBuilder.)
-1.3 **New "Activate" step in [app/src/LaunchFlow.tsx](../app/src/LaunchFlow.tsx)** placed **before** the
+1.3 **New "Activate" step in [app/src/LaunchFlow.tsx](../../app/src/LaunchFlow.tsx)** placed **before** the
    Intent step: `signAuthorization` + `initialize` self-tx via wagmi/viem (one type-4 tx); confirm →
    notify server. Gate the rest of the wizard on `state.delegated` for the connected EOA.
 1.4 **Executor step = mint + optional guard update.** Remove delegate+initialize from here; mint the

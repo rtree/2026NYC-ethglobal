@@ -234,5 +234,5 @@ Human "I want..."
 ## 7. 次アクション
 - [ ] この母艦へ FB → 背骨と13枚の流れを確定
 - [ ] 確定後、`pitch-demo-outline.md` を**母艦準拠で再カット**（S2に背骨 / D1に面談を復活）
-- [ ] その後、`deck/pitch.md`（Marp）で前半スライドを作成 → PDF/PPTX 書き出し
+- [ ] その後、`doc/deck/pitch.md`（Marp）で前半スライドを作成 → PDF/PPTX 書き出し
 - [ ] 母艦フル版を 2次登壇用スライドへ展開

@@ -713,7 +713,7 @@ function StartStep({ state, intent, setIntent }: { state: ChainState | null; int
           <input className="input" type="number" min={5} max={60} value={loop} onChange={(e) => setLoop(Number(e.target.value))} />
         </label>
         <label className="field" style={{ marginTop: 12 }}><span>Auto-stop after (minutes) — Cloud Run TTL</span>
-          <input className="input" type="number" min={1} max={5} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} />
+          <input className="input" type="number" min={1} max={30} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} />
         </label>
         <p className="spec-ref" style={{ marginTop: 10 }}>
           This starts a bounded OpenClaw session: one tick every {loop}s after the previous tick

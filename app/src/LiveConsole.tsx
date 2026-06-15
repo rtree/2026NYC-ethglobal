@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import { encodeFunctionData, type Abi } from "viem";
 import { useChainState, activeStatus, hasActiveIntent, invalidateChainState } from "./useChainState";
@@ -20,6 +20,8 @@ export function LiveConsole() {
   const { data: walletClient } = useWalletClient();
   const [history, setHistory] = useState<IntentDoc[]>([]);
   const [runtimeRecord, setRuntimeRecord] = useState<RuntimeRecord | null>(null);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const autoTickMsRef = useRef(12_000);
 
   useEffect(() => {
     api.listIntents().then((r) => setHistory(r.intents)).catch(() => {});
@@ -39,8 +41,49 @@ export function LiveConsole() {
   async function stopRuntime(reason: string) {
     const r = await api.runtimeStop(activeIntentId, reason);
     setRuntimeRecord(r.runtimeRecord);
+    setAutoRunning(false);
     return { ok: true } as const;
   }
+
+  // Browser-driven agent loop (Option B): arm the runtime, then this tab POSTs /api/runtime/tick every
+  // ~loopPeriodSec so the Executor (and the soft Watcher) keep acting until the on-chain cumulativeCap
+  // (0.1 USDC) stops execution, the record bounds are hit, the operator stops, or the tab closes. Each
+  // tick is a short bounded request; the contract is the real safety stop.
+  async function startAutoRun() {
+    if (!activeIntentId) return { ok: false as const, reason: "no active intent in this session" };
+    const r = await api.runtimeStart(activeIntentId);
+    if (r.runtime?.loopPeriodSec) autoTickMsRef.current = Math.max(8_000, r.runtime.loopPeriodSec * 1000);
+    setRuntimeRecord(r.runtimeRecord ?? null);
+    setAutoRunning(true);
+    return { ok: true as const };
+  }
+
+  useEffect(() => {
+    if (!autoRunning || !activeIntentId) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function loop() {
+      if (stopped || !activeIntentId) return;
+      try {
+        const r = await api.runtimeTick(activeIntentId);
+        setRuntimeRecord(r.runtimeRecord);
+        invalidateChainState();
+        const st = r.runtimeRecord?.status;
+        if (st && !(["scheduled", "running"] as string[]).includes(st)) {
+          setAutoRunning(false);
+          return;
+        }
+      } catch {
+        /* transient (RPC/relayer hiccup) — keep looping until a terminal status or operator stop */
+      }
+      if (!stopped) timer = setTimeout(loop, autoTickMsRef.current);
+    }
+    loop();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [autoRunning, activeIntentId]);
 
   async function ownerResume() {
     if (ownerModeCached() === "connected") {
@@ -196,8 +239,13 @@ export function LiveConsole() {
                 <div className="card" style={{ marginBottom: 20 }}>
                   <div className="card-head"><h3>Owner controls</h3><span className="pill role-exec">EXECUTOR</span></div>
                   <ActionButton label="Execute guarded trade (0.001 USDC → WETH)" className="btn primary block" run={() => api.trade(activeIntentId)} />
+                  {autoRunning ? (
+                    <button className="btn danger block" onClick={() => setAutoRunning(false)}>⏹ Stop auto-run</button>
+                  ) : (
+                    <ActionButton label="▶ Auto-run agent loop (Executor + Watcher)" className="btn primary block" run={startAutoRun} />
+                  )}
                   <ActionButton label="Resume / unfreeze (Owner only)" className="btn block" run={ownerResume} />
-                  <p className="spec-ref">Signed by the Executor SessionKey (KMS) and relayed. Only the Owner can loosen / unfreeze.</p>
+                  <p className="spec-ref">{autoRunning ? "Auto-running: this tab ticks the agent every few seconds until the 0.1 USDC cap, an operator stop, or the tab closes." : "Signed by the Executor SessionKey (KMS) and relayed. Only the Owner can loosen / unfreeze."}</p>
                 </div>
                 <div className="card" style={{ marginBottom: 20 }}>
                   <div className="card-head"><h3>Watcher controls</h3><span className="pill role-watch">WATCHER · quorum 1</span></div>

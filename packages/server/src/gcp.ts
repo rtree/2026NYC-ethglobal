@@ -11,18 +11,38 @@ const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-pl
 
 let cachedToken: { value: string; exp: number } | null = null;
 
-/** A cloud-platform OAuth bearer token (cached until ~1 min before expiry). */
-export async function accessToken(): Promise<string> {
+/** A cloud-platform OAuth bearer token. Honors the credential's REAL expiry (not a fixed 50 min) so we
+ *  never keep serving a token the metadata server already rotated/expired — the cause of sticky 401s on
+ *  signJwt ("Request had invalid authentication credentials"). Pass force=true to bypass the cache and
+ *  mint a fresh token (used to retry once after an auth failure). */
+export async function accessToken(force = false): Promise<string> {
   const now = Date.now();
-  if (cachedToken && cachedToken.exp - 60_000 > now) return cachedToken.value;
+  if (!force && cachedToken && cachedToken.exp - 60_000 > now) return cachedToken.value;
   const client = await auth.getClient();
+  // Force the underlying client to re-fetch from the metadata server when we're recovering from a 401.
+  if (force && typeof (client as { refreshAccessToken?: () => Promise<unknown> }).refreshAccessToken === "function") {
+    try {
+      await (client as { refreshAccessToken: () => Promise<unknown> }).refreshAccessToken();
+    } catch {
+      /* fall through to getAccessToken */
+    }
+  }
   const res = await client.getAccessToken();
   const value = typeof res === "string" ? res : res.token;
   if (!value) throw new Error("gcp: failed to obtain ADC access token");
-  // google-auth-library refreshes ~1h tokens; cache for 50 min to be safe.
-  cachedToken = { value, exp: now + 50 * 60_000 };
+  // Honor the credential's real expiry_date when available; otherwise fall back to a conservative 30 min
+  // (metadata tokens live ~1h, but a cached one may have far less left — never assume 50 min).
+  const expiryDate = (client as { credentials?: { expiry_date?: number } }).credentials?.expiry_date;
+  const exp = typeof expiryDate === "number" && expiryDate > now ? expiryDate : now + 30 * 60_000;
+  cachedToken = { value, exp };
   return value;
 }
+
+/** Drop the cached access token so the next accessToken() re-mints from the metadata server. */
+export function invalidateAccessToken(): void {
+  cachedToken = null;
+}
+
 
 /** The service-account email this process runs as (for signJwt iss/sub). Cloud Run: from metadata or
  *  env; local: from INTENTOS_SA_EMAIL. */

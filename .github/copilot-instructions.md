@@ -3,17 +3,19 @@
 Project facts and the **mandatory** safety policy for this repository. Read before editing.
 
 ## What this is
-- **IntentOS**: an EIP-7702 guarded-execution layer protocol. The Owner keeps funds in their own EOA;
-  an Executor Agent trades **USDC↔WETH on Base mainnet** strictly inside Hard Guardrails; a single
-  Watcher Agent (quorum=1) can only tighten / freeze.
-- ETHGlobal NYC 2026. MVP scope = "B". Source of truth: [plan/000-northStar.md](plan/000-northStar.md)
-  (JP) / [plan/000-northStar-en.md](plan/000-northStar-en.md) (EN). Interfaces frozen in
-  [plan/010-interfaces.md](plan/010-interfaces.md). SDD in `plan/020`–`plan/050`. Status in
-  [TASK.md](TASK.md).
+- **IntentOS**: post-hackathon maintenance is pivoting to an x402-funded Executor-only TradingAgent.
+  The ETHGlobal NYC 2026 MVP proved EIP-7702 guarded execution on Base mainnet with Executor + single
+  Watcher; keep that as historical context, not the default next task.
+- Source of truth: [doc/plan/000-northStar.md](doc/plan/000-northStar.md) (JP) /
+  [doc/plan/000-northStar-en.md](doc/plan/000-northStar-en.md) (EN). Maintenance index:
+  [doc/plan/120-maintenance-index.md](doc/plan/120-maintenance-index.md). First pivot Issue:
+  [doc/plan/130-issue-pivot-x402-funded-executor.md](doc/plan/130-issue-pivot-x402-funded-executor.md).
+  Interfaces frozen in [doc/plan/010-interfaces.md](doc/plan/010-interfaces.md). SDD in
+  `doc/plan/020`–`doc/plan/050`. Status in [doc/TASK.md](doc/TASK.md).
 
 ## Languages & file conventions
-- `plan/000-northStar.md` stays **Japanese**. Everything else (docs, mocks, code, comments) in **English**.
-- `plan/` files increment by 10 (`000-`, `010-`, ...).
+- `doc/plan/000-northStar.md` stays **Japanese**. Everything else (docs, mocks, code, comments) in **English**.
+- `doc/plan/` files increment by 10 (`000-`, `010-`, ...).
 
 ## Supply-chain security (MANDATORY)
 JavaScript/Node uses **pnpm** (never npm/yarn). Python uses **uv** (never pip).

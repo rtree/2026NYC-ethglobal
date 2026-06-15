@@ -23,12 +23,12 @@ key are a **manual one-time step only the repo owner can do** (see §6). Links c
 
 | File | What it does now | Gap |
 | --- | --- | --- |
-| [app/src/gate.ts](../app/src/gate.ts) | `WORLDID_APP_ID`/`WORLDID_ACTION` from Vite env; `worldIdVerified()`/`setWorldIdVerified()` persist a `"1"` flag in **sessionStorage**; `useGate()` combines wallet+SIWE+worldId | The proof is **faked client-side** — sessionStorage flag, no real proof, **no server check** |
-| [app/src/Onboarding.tsx](../app/src/Onboarding.tsx) | Renders the gate; when `WORLDID_APP_ID` set shows an empty `<div id="worldid-slot" />`, else a **"Simulate World ID proof (dev)"** button | The IDKit widget is **never mounted** into `#worldid-slot`; dev button just flips the flag |
+| [app/src/gate.ts](../../app/src/gate.ts) | `WORLDID_APP_ID`/`WORLDID_ACTION` from Vite env; `worldIdVerified()`/`setWorldIdVerified()` persist a `"1"` flag in **sessionStorage**; `useGate()` combines wallet+SIWE+worldId | The proof is **faked client-side** — sessionStorage flag, no real proof, **no server check** |
+| [app/src/Onboarding.tsx](../../app/src/Onboarding.tsx) | Renders the gate; when `WORLDID_APP_ID` set shows an empty `<div id="worldid-slot" />`, else a **"Simulate World ID proof (dev)"** button | The IDKit widget is **never mounted** into `#worldid-slot`; dev button just flips the flag |
 | [cloudbuild.yaml](../cloudbuild.yaml) / [Dockerfile](../Dockerfile) | Already pass `VITE_WORLDID_APP_ID` + `VITE_WORLDID_ACTION` build args | Need to also pass `rp_id` to the client and the **RP signing key as a server secret** |
-| [packages/server/src/server.ts](../packages/server/src/server.ts) | Path-routed HTTP server; has `/api/config`, `/api/auth/nonce`, `/api/auth/web3`; write-path gated by Firebase ID token | **No `/api/worldid/*` endpoints**; the gate is not enforced server-side at all |
-| [packages/server/src/store.ts](../packages/server/src/store.ts) | `Store` interface (Memory + Firestore REST), per-uid intents/turns/runtimes | **No nullifier persistence** (needed for one-human-one-action) |
-| [packages/runtime/src/secrets.ts](../packages/runtime/src/secrets.ts) | Secret Manager loader pattern (`accessSecretVersion`) | Need a loader for the **RP signing key** secret |
+| [packages/server/src/server.ts](../../packages/server/src/server.ts) | Path-routed HTTP server; has `/api/config`, `/api/auth/nonce`, `/api/auth/web3`; write-path gated by Firebase ID token | **No `/api/worldid/*` endpoints**; the gate is not enforced server-side at all |
+| [packages/server/src/store.ts](../../packages/server/src/store.ts) | `Store` interface (Memory + Firestore REST), per-uid intents/turns/runtimes | **No nullifier persistence** (needed for one-human-one-action) |
+| [packages/runtime/src/secrets.ts](../../packages/runtime/src/secrets.ts) | Secret Manager loader pattern (`accessSecretVersion`) | Need a loader for the **RP signing key** secret |
 
 **Key finding:** today's gate is cosmetic. A bot can `sessionStorage.setItem("intentos:worldid","1")`
 and walk straight in. Real World ID must be **verified on the server** and the **human-verified state must
@@ -98,9 +98,9 @@ actions so the simulator works for dev QA.
 
 The North Star says World ID gates **runtime creation**. Concrete: require `humanVerified(uid)` in the
 write-path before spawning a Capsule (and/or before mint). Touch points:
-[packages/server/src/server.ts](../packages/server/src/server.ts) runtime/mint routes →
-[packages/server/src/journey.ts](../packages/server/src/journey.ts) (`runtimeRun`/spawn) and
-[packages/server/src/intent.ts](../packages/server/src/intent.ts).
+[packages/server/src/server.ts](../../packages/server/src/server.ts) runtime/mint routes →
+[packages/server/src/journey.ts](../../packages/server/src/journey.ts) (`runtimeRun`/spawn) and
+[packages/server/src/intent.ts](../../packages/server/src/intent.ts).
 
 ---
 

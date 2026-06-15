@@ -5,7 +5,7 @@ import { store } from "./store.js";
 import { chat as llmChat, defaultPackages, type Turn } from "./vertex.js";
 import type { AgentPackageDraft, IntentDoc, StartConfig } from "./intentTypes.js";
 
-const DEFAULT_START: StartConfig = { loopPeriodSec: 10, ttlMinutes: 1, watcherEnabled: true };
+const DEFAULT_START: StartConfig = { loopPeriodSec: 10, ttlMinutes: 20, watcherEnabled: true };
 
 function newIntentId(): string {
   return `intent-${Math.random().toString(36).slice(2, 8)}`;
@@ -96,7 +96,7 @@ export async function setStartConfig(uid: string, intentId: string, cfg: Partial
   if (!doc) throw new Error("intent not found");
   const startConfig: StartConfig = {
     loopPeriodSec: clampInt(cfg.loopPeriodSec, 5, 60, doc.startConfig.loopPeriodSec),
-    ttlMinutes: clampInt(cfg.ttlMinutes, 1, 5, doc.startConfig.ttlMinutes),
+    ttlMinutes: clampInt(cfg.ttlMinutes, 1, 30, doc.startConfig.ttlMinutes),
     watcherEnabled: cfg.watcherEnabled ?? doc.startConfig.watcherEnabled,
   };
   await store().putIntent(uid, { ...doc, startConfig });

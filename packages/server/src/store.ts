@@ -2,7 +2,7 @@
 //   - memory   : Map (dev / e2e; default)
 //   - firestore: REST (firestore.googleapis.com) via ADC, no SDK
 // Docs are scoped users/{uid}/intents/{intentId}; transcript at .../transcript/{turnId}.
-import { accessToken, PROJECT_ID } from "./gcp.js";
+import { accessToken, invalidateAccessToken, PROJECT_ID } from "./gcp.js";
 import { isProductionRuntime } from "./authGate.js";
 import type { IntentDoc, PackageSnapshot, RuntimeRecord, TranscriptTurn } from "./intentTypes.js";
 
@@ -147,11 +147,19 @@ function fieldsToDoc(fields: Record<string, any>): Record<string, any> {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 async function fsFetch(path: string, init?: RequestInit) {
-  const token = await accessToken();
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(init?.headers ?? {}) },
-  });
+  const doFetch = async (force: boolean) => {
+    const token = await accessToken(force);
+    return fetch(`${BASE}${path}`, {
+      ...init,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(init?.headers ?? {}) },
+    });
+  };
+  let res = await doFetch(false);
+  // A rotated/expired ADC token yields 401 ("invalid authentication credentials"); retry once fresh.
+  if (res.status === 401 || res.status === 403) {
+    invalidateAccessToken();
+    res = await doFetch(true);
+  }
   return res;
 }
 

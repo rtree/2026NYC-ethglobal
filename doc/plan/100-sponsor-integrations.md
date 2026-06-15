@@ -39,7 +39,7 @@ Natural ENS fits, smallest → largest effort:
 1. **Reverse-resolve the connected Owner** (read-only, ~1 hour). In the app, after connect, look up the
    primary name of `address` and render it instead of `shortAddr(address)`. Pure UX, no issuance.
    - viem: `publicClient.getEnsName({ address })` (mainnet resolver) + `getEnsAvatar`.
-   - Touch points: [app/src/WalletButton.tsx](../app/src/WalletButton.tsx), [app/src/format.ts](../app/src/format.ts), [app/src/Chrome.tsx](../app/src/Chrome.tsx).
+  - Touch points: [app/src/WalletButton.tsx](../../app/src/WalletButton.tsx), [app/src/format.ts](../../app/src/format.ts), [app/src/Chrome.tsx](../../app/src/Chrome.tsx).
 
 2. **Give every Agent a name** = the headline integration. Mint `executor-<id>.intentos.eth` /
    `watcher-<id>.intentos.eth` when the Agent NFT is minted, and store agent metadata in **text records**:
@@ -96,7 +96,7 @@ ENS judges consistently reward **issuance + records**, not just lookup. Expect:
 
 IntentOS executes swaps via the **on-chain v3 "Smart Contracts (Native)" path**:
 - **Quote**: Uniswap **QuoterV2** (v3), single-hop, fixed fee 500, via `eth_call`
-  — [packages/runtime/src/quote.ts](../packages/runtime/src/quote.ts) (`quoteExactInputSingle`).
+  — [packages/runtime/src/quote.ts](../../packages/runtime/src/quote.ts) (`quoteExactInputSingle`).
 - **Execute**: **SwapRouter02** `exactInputSingle` — and crucially the **hard guard allow-lists exactly
   this target + selector** (`router` + `selector = 0x04e45aaf`) in `HardGuardState`. The contract reverts
   anything else.
@@ -124,7 +124,7 @@ Trading API flow (`/docs/trading/swapping-api/getting-started`):
 
 **Option A — Trading API as the QUOTE/ROUTER brain only (recommended, low risk).**
 Use `/quote` to replace/augment QuoterV2 in the **off-chain reasoning + price-discovery layer**
-([quote.ts](../packages/runtime/src/quote.ts)), getting multi-hop / multi-version best price and a
+([quote.ts](../../packages/runtime/src/quote.ts)), getting multi-hop / multi-version best price and a
 trustworthy `quotedAmountOut` for `minAmountOut` / slippage. **Keep execution exactly as today**:
 the SessionKey still signs an `ExecutionRequest` and the relayer still calls the guard-allow-listed
 `SwapRouter02.exactInputSingle`. The guard is untouched; we just quote smarter.

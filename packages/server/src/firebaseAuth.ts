@@ -7,7 +7,7 @@
 // Verify side: inbound Firebase ID tokens are RS256 JWTs signed by Google's securetoken@system SA.
 // We verify them with node crypto against the published x509 certs (no SDK). See plan/010 §17.
 import { createPublicKey, createVerify } from "node:crypto";
-import { accessToken, serviceAccountEmail, PROJECT_ID } from "./gcp.js";
+import { accessToken, invalidateAccessToken, serviceAccountEmail, PROJECT_ID } from "./gcp.js";
 
 const IDENTITYTOOLKIT_AUD =
   "https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit";
@@ -32,15 +32,25 @@ export async function mintCustomToken(
     uid,
     claims,
   };
-  const token = await accessToken();
-  const res = await fetch(
-    `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(sa)}:signJwt`,
-    {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ payload: JSON.stringify(payload) }),
-    },
-  );
+  // signJwt with the ADC token; if the metadata token was rotated/expired under us the call returns 401
+  // ("Request had invalid authentication credentials"). That is NOT an IAM problem — retry ONCE with a
+  // freshly minted token before surfacing the error.
+  const signOnce = async (force: boolean): Promise<Response> => {
+    const token = await accessToken(force);
+    return fetch(
+      `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(sa)}:signJwt`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ payload: JSON.stringify(payload) }),
+      },
+    );
+  };
+  let res = await signOnce(false);
+  if (res.status === 401 || res.status === 403) {
+    invalidateAccessToken();
+    res = await signOnce(true);
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`signJwt failed (${res.status}): ${body.slice(0, 200)}`);

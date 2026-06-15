@@ -1,9 +1,9 @@
 
 # IntentOS for ETHGlobal NYC 2026
 
-## Please refer to plan folder to detailed plannning document.
+## Please refer to the doc/plan folder for detailed planning documents.
 
-https://github.com/rtree/2026NYC-ethglobal/tree/main/plan
+https://github.com/rtree/2026NYC-ethglobal/tree/main/doc/plan
 
 ---
 
@@ -393,7 +393,7 @@ Server  3. POST /api/worldid/verify  → forwards proof to developer.world.org/a
 - Server: [packages/server/src/worldid.ts](packages/server/src/worldid.ts) (RP signing + server-side verify + signal binding), routes `POST /api/worldid/sign` · `POST /api/worldid/verify` · `GET /api/worldid/status` · `POST /api/worldid/reset` in [packages/server/src/server.ts](packages/server/src/server.ts), nullifier-uniqueness + `humanVerified` persistence in [packages/server/src/store.ts](packages/server/src/store.ts).
 - Client: [app/src/WorldIdButton.tsx](app/src/WorldIdButton.tsx) (IDKit `proofOfHuman`, `signal = address`), gate is **server-driven** (`/api/worldid/status`) in [app/src/gate.ts](app/src/gate.ts) so a stale local flag can't bypass it.
 
-> SDKs: `@worldcoin/idkit@4` (React widget) + `@worldcoin/idkit-core@4` (`signRequest`, `hashSignal`). The IDKit wasm is lazy-loaded so it only downloads when the gate is reached. Design notes: [plan/110-worldid-integration.md](plan/110-worldid-integration.md).
+> SDKs: `@worldcoin/idkit@4` (React widget) + `@worldcoin/idkit-core@4` (`signRequest`, `hashSignal`). The IDKit wasm is lazy-loaded so it only downloads when the gate is reached. Design notes: [doc/plan/110-worldid-integration.md](doc/plan/110-worldid-integration.md).
 
 ---
 

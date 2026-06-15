@@ -15,7 +15,7 @@ the browser, so these mocks double as the **frontend implementation target**.
 Open `index.html` in a browser (no build step, no server required):
 
 ```bash
-xdg-open mock/index.html   # Linux
+xdg-open doc/mock/index.html   # Linux, from the repository root
 ```
 
 ## Screens

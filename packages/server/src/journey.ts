@@ -61,12 +61,12 @@ const erc20 = [
 const AMOUNT_IN = 1_000n; // 0.001 USDC per trade
 const DEMO_CUM_CAP = 100_000n; // 0.1 USDC cumulative — enough for a long demo session
 
-// Watcher VOTE_TIGHTEN softness: narrow amountCapPerTx by this many bps each vote (default 2000 = -20%)
-// instead of halving (-50%), and never below one trade size so continuous DCA isn't starved — the
-// Watcher still monotonically narrows capability (visible, on-chain) but execution survives to the
-// cumulative cap. Override with INTENTOS_WATCHER_TIGHTEN_BPS (e.g. 1000 = gentler, 5000 = harsher).
-const WATCHER_TIGHTEN_BPS = BigInt(process.env.INTENTOS_WATCHER_TIGHTEN_BPS ?? "2000");
-const WATCHER_CAP_FLOOR = AMOUNT_IN; // never tighten per-tx cap below one trade
+// Watcher VOTE_TIGHTEN softness: narrow amountCapPerTx by this many bps each vote (default 1500 = -15%)
+// instead of halving (-50%). It CAN go below one trade size: after ~5 votes the per-tx cap drops under
+// 0.001 USDC, so the next guarded trade is rejected with AmountTooLarge and the runtime self-stops — a
+// visible, on-chain "Watcher tightened it shut" circuit breaker. Override with
+// INTENTOS_WATCHER_TIGHTEN_BPS (e.g. 1000 = gentler/more votes, 3000 = harsher/fewer votes).
+const WATCHER_TIGHTEN_BPS = BigInt(process.env.INTENTOS_WATCHER_TIGHTEN_BPS ?? "1500");
 
 interface Deployments {
   contracts: { executionDelegate7702Impl: Address; agentNFT: Address };
@@ -280,8 +280,12 @@ async function linkIntent(
   await store().putIntent(opts.uid, { ...doc, ...patch });
 }
 
-// Hard ceiling on planned AgentLoop ticks regardless of TTL/period (tiny-amounts + bounded policy).
-const MAX_PLANNED_TICKS = 12;
+// Hard ceiling on planned AgentLoop ticks regardless of TTL/period. The on-chain cumulativeCap
+// (0.1 USDC / 0.001 per trade = 100 trades) is the REAL stop; these bound the browser-driven loop so
+// "tick until the cap" works while staying bounded (tiny-amounts policy). All env-overridable.
+const MAX_PLANNED_TICKS = Number(process.env.INTENTOS_RUNTIME_MAX_TICKS ?? "120");
+const RUNTIME_MAX_TRADES = Number(process.env.INTENTOS_RUNTIME_MAX_TRADES ?? "100");
+const RUNTIME_MAX_WATCHER_ACTIONS = Number(process.env.INTENTOS_RUNTIME_MAX_WATCHER_ACTIONS ?? "100");
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const MAX_VERTEX_COST_USD = Number(process.env.INTENTOS_RUNTIME_MAX_VERTEX_USD ?? "5.00");
 const RUNTIME_FIRST_TICK_BUY = (process.env.INTENTOS_RUNTIME_FIRST_TICK_BUY ?? "1") === "1";
@@ -337,9 +341,9 @@ export async function runtimeStart(opts?: CreateOpts) {
     plannedTicks,
     executedTicks: 0,
     runtimeTradesUsed: 0,
-    maxRuntimeTrades: 1,
+    maxRuntimeTrades: RUNTIME_MAX_TRADES,
     watcherActionsUsed: 0,
-    maxWatcherActions: 1,
+    maxWatcherActions: RUNTIME_MAX_WATCHER_ACTIONS,
     llmCallsUsed: 0,
     estimatedInputTokens: 0,
     estimatedOutputTokens: 0,
@@ -519,7 +523,7 @@ export async function runtimeTick(opts?: CreateOpts) {
     `runtimeTradesUsed=${tradesUsed}`,
     `maxRuntimeTrades=${maxRuntimeTrades}`,
     packagePromptSection("Executor package snapshot", executorSnapshot),
-    tradesUsed >= maxRuntimeTrades ? "Trade budget already used. Reply HOLD." : "If this is the first eligible tick and guard/budget context is acceptable, reply BUY; otherwise HOLD.",
+    tradesUsed >= maxRuntimeTrades ? "Trade budget already used. Reply HOLD." : "This is a recurring DCA strategy: reply BUY to make one more small scheduled buy while trade budget and guardrails allow; the contract enforces the real caps.",
     `intentId=${record.intentId}`,
     `tick=${tick}`,
   ].join("\n");
@@ -543,12 +547,22 @@ export async function runtimeTick(opts?: CreateOpts) {
   let lastWatcherReason = record.lastWatcherReason;
   let lastWatcherTxHash = record.lastWatcherTxHash;
   const shouldBuy = decision === "BUY" || (RUNTIME_FIRST_TICK_BUY && tick === 1 && tradesUsed < maxRuntimeTrades);
+  let tradeBlockedPermanently = false;
   if (!overBudget && shouldBuy && tradesUsed < maxRuntimeTrades) {
     const tradeResult = await trade(opts);
     if (tradeResult.ok === false) {
       failureReason = tradeResult.reason ?? "runtime trade rejected";
       txHash = (tradeResult.txHash as Hex | undefined) ?? null;
       tickStatus = "rejected";
+      // A guard-permanent rejection (Watcher tightened the cap below the trade size, the cumulative cap
+      // is reached, expiry passed, or a freeze) will never recover by retrying — self-stop the loop.
+      // Slippage reverts are transient and keep looping.
+      if (isPermanentGuardStop(tradeResult.reason)) {
+        tradeBlockedPermanently = true;
+        if (/amounttoolarge/i.test(tradeResult.reason ?? "")) {
+          failureReason = "Watcher tightened the per-tx cap below the trade size — execution self-stopped (semantic circuit breaker).";
+        }
+      }
     } else {
       txHash = tradeResult.txHash as Hex;
       runtimeTradesUsed += 1;
@@ -605,7 +619,7 @@ export async function runtimeTick(opts?: CreateOpts) {
       }
     }
   }
-  const status = overBudget ? "self-stopped" : nextExecuted >= record.plannedTicks ? "expired" : "running";
+  const status = overBudget || tradeBlockedPermanently ? "self-stopped" : nextExecuted >= record.plannedTicks ? "expired" : "running";
   const updated: RuntimeRecord = {
     ...record,
     status,
@@ -652,6 +666,14 @@ function normalizeWatcherAction(text: string): "REPORT_OK" | "REPORT_SUSPICIOUS"
   if (/\bVOTE_TIGHTEN\b/.test(t)) return "VOTE_TIGHTEN";
   if (/\bREPORT_SUSPICIOUS\b/.test(t)) return "REPORT_SUSPICIOUS";
   return "REPORT_OK";
+}
+
+// A trade rejection that won't recover by retrying: the Watcher tightened the per-tx cap below the
+// trade size (AmountTooLarge), the cumulative cap is reached, the guard expired, the binding rotated,
+// or it's frozen. These should self-stop the browser-driven loop. Slippage reverts are NOT permanent.
+function isPermanentGuardStop(reason?: string): boolean {
+  if (!reason) return false;
+  return /amounttoolarge|cumulativecapexceeded|expired|frozen|badbindingnonce/i.test(reason);
 }
 
 function selfStopRuntime(record: RuntimeRecord, reason: string): RuntimeRecord {
@@ -972,15 +994,15 @@ export async function watcherTighten(opts?: CreateOpts) {
   const c = await ownerCtx(opts);
   await ensureWatcherVault(c);
   const guard = (await c.pub.readContract({ address: c.delegate, abi, functionName: "guard" })) as HardGuardState;
-  // Soft tighten: narrow the per-tx cap GENTLY (default -20%, was -50%) with a floor at one trade size,
-  // so the Watcher keeps acting (monotonic narrowing, real on-chain evidence) without starving a
-  // continuous DCA. The cumulativeCap stays the real stop. Once at the floor there's nothing left to
-  // narrow, so report that instead of spamming a redundant on-chain vote.
+  // Soft tighten: narrow the per-tx cap GENTLY (default -15%) each vote. It is allowed to go BELOW one
+  // trade size (no floor) so that after ~5 votes the cap drops under 0.001 USDC and the next trade is
+  // rejected (AmountTooLarge) — that's the visible Watcher circuit breaker that self-stops the loop.
+  // The contract still enforces monotonic narrowing; the on-chain cumulativeCap is the other stop.
   const reduced = (guard.amountCapPerTx * (10_000n - WATCHER_TIGHTEN_BPS)) / 10_000n;
-  const target = reduced < WATCHER_CAP_FLOOR ? WATCHER_CAP_FLOOR : reduced;
+  const target = reduced < 1n ? 1n : reduced; // never 0 (the contract minimum is 1 base unit)
   if (target >= guard.amountCapPerTx) {
-    logAction({ at: Date.now(), action: `Watcher held cap (already at floor ${guard.amountCapPerTx})`, ok: true });
-    return { ok: false as const, reason: "amountCapPerTx already at the minimum (one trade size)", newAmountCap: guard.amountCapPerTx.toString() };
+    logAction({ at: Date.now(), action: `Watcher held cap (already at minimum ${guard.amountCapPerTx})`, ok: true });
+    return { ok: false as const, reason: "amountCapPerTx already at the contract minimum", newAmountCap: guard.amountCapPerTx.toString() };
   }
   const patch: GuardPatch = {
     amountCapPerTx: target,

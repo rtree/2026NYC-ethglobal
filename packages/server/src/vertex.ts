@@ -1,7 +1,7 @@
 // IntentBuilder LLM. Vertex AI Gemini via ADC (backend-only — never the API-key Gemini Developer API,
 // plan/010 §18). Falls back to a scripted compile when INTENTOS_LLM!=vertex or Vertex is unreachable,
 // so the demo never hard-fails. The server validates/normalizes whatever the model returns.
-import { accessToken, PROJECT_ID } from "./gcp.js";
+import { accessToken, invalidateAccessToken, PROJECT_ID } from "./gcp.js";
 import { isProductionRuntime } from "./authGate.js";
 import type { AgentPackageDraft } from "./intentTypes.js";
 
@@ -143,21 +143,29 @@ Respond with STRICT JSON only, no markdown, shaped:
 {"reply":"...","executor":{"summary","agents","soul","constraints":{"amountCapPerTx","cumulativeCap","slippageCapBps"},"semantic":[...]},"watcher":{...same...}}`;
 
 async function callVertex(transcript: Turn[]): Promise<ChatResult> {
-  const token = await accessToken();
   const contents = transcript.map((t) => ({
     role: t.role === "owner" ? "user" : "model",
     parts: [{ text: t.text }],
   }));
   const url = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM }] },
-      contents,
-      generationConfig: { temperature: 0.3, maxOutputTokens: MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
-    }),
-  });
+  const callOnce = async (force: boolean) => {
+    const token = await accessToken(force);
+    return fetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents,
+        generationConfig: { temperature: 0.3, maxOutputTokens: MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
+      }),
+    });
+  };
+  let res = await callOnce(false);
+  // Recover from a rotated/expired ADC token (401) with one fresh-token retry before failing.
+  if (res.status === 401 || res.status === 403) {
+    invalidateAccessToken();
+    res = await callOnce(true);
+  }
   if (!res.ok) throw new Error(`vertex ${res.status}: ${(await res.text()).slice(0, 160)}`);
   const data = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];

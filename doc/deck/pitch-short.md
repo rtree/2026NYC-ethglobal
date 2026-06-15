@@ -17,8 +17,8 @@ IntentOS — ULTRA-SHORT deck（2 slides, engineer-friendly）
 台本: 各スライド末尾の HTML コメント = presenter note（自然な口語の EN 原稿。断定調・記号区切りなし）。
 ブランド: pitch.md と同一の明るい light 基調（bg #EAEEF7）+ mint=整合/安全, blue=技術, coral=リスク。
 書き出し:
-  npx @marp-team/marp-cli deck/pitch-short.md -o deck/pitch-short.pdf
-  npx @marp-team/marp-cli deck/pitch-short.md --images png -o deck/pitch-short.png
+  pnpm dlx @marp-team/marp-cli doc/deck/pitch-short.md -o doc/deck/pitch-short.pdf
+  pnpm dlx @marp-team/marp-cli doc/deck/pitch-short.md --images png -o doc/deck/pitch-short.png
 -->
 
 <style>

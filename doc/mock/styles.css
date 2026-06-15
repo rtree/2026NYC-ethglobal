@@ -1,6 +1,6 @@
 /* IntentOS mock design system
-   Shared by every mock/*.html screen. Dark dApp theme.
-   Vocabulary (status names, guardrail fields, tool names) is fixed in plan/010-interfaces.md. */
+  Shared by every doc/mock/*.html screen. Dark dApp theme.
+  Vocabulary (status names, guardrail fields, tool names) is fixed in doc/plan/010-interfaces.md. */
 
 :root {
   --bg: #0a0e14;
